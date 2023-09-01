@@ -13,11 +13,25 @@ from pynn_brainscales.brainscales2.standardmodels.synapses import StaticSynapse
 from shtmbss2.plot import plot_membrane
 
 
+ID_DENDRITE = 0
+ID_SOMA = 1
+
+
 class SHTMBase(ABC):
+    ALPHABET = {'A': 0,
+                'B': 1,
+                'C': 2,
+                'D': 3,
+                'E': 4,
+                'F': 5,
+                'G': 6,
+                'H': 7}
+
     def __init__(self, alphabet_size=14, num_neurons_per_symbol=6):
         # Initialize parameters
         self.alphabet_size = alphabet_size
         self.num_neurons_per_symbol = num_neurons_per_symbol
+        self.isi = 0.04
 
         # Declare neuron populations
         self.neurons_exc = None
@@ -34,27 +48,27 @@ class SHTMBase(ABC):
         # Declare recordings
         self.rec_neurons_exc = None
 
-    def init_network(self):
-        self.init_neurons()
+    def init_network(self, v_threshold=300):
+        self.init_neurons(v_threshold)
         self.init_connections()
         self.init_external_input()
         self.init_rec_exc()
 
-    def init_neurons(self):
+    def init_neurons(self, v_threshold=300):
         self.neurons_exc = []
         for i in range(self.alphabet_size):
-            dendrites, somas = self.init_neurons_exc()
-            self.neurons_exc.append((somas, dendrites))
+            dendrites, somas = self.init_neurons_exc(v_threshold=v_threshold)
+            self.neurons_exc.append((dendrites, somas))
 
         self.neurons_inh = self.init_neurons_inh()
 
         self.neurons_ext = pynn.Population(self.alphabet_size, SpikeSourceArray())
 
-    def init_neurons_exc(self, num_neurons=None):
+    def init_neurons_exc(self, num_neurons=None, v_threshold=300):
         if num_neurons is None:
             num_neurons = self.num_neurons_per_symbol
 
-        all_neurons = pynn.Population(num_neurons * 2, pynn.cells.HXNeuron())
+        all_neurons = pynn.Population(num_neurons * 2, pynn.cells.HXNeuron(threshold_v_threshold=v_threshold))
 
         dendrites = pynn.PopulationView(all_neurons, list(range(0, num_neurons * 2, 2)))
         somas = pynn.PopulationView(all_neurons, list(range(1, num_neurons * 2, 2)))
@@ -67,6 +81,7 @@ class SHTMBase(ABC):
             refractory_period_reset_holdoff=0,
             refractory_period_refractory_time=75,
         )
+        dendrites.get('threshold_v_threshold')
 
         somas.set(
             multicompartment_connect_soma=True,
@@ -98,7 +113,7 @@ class SHTMBase(ABC):
         for i in range(self.alphabet_size):
             self.ext_to_exc.append(pynn.Projection(
                 pynn.PopulationView(self.neurons_ext, [i]),
-                self.neurons_exc[i][0],
+                self.neurons_exc[i][ID_SOMA],
                 pynn.AllToAllConnector(),
                 synapse_type=StaticSynapse(weight=200),
                 receptor_type="excitatory"))
@@ -109,8 +124,8 @@ class SHTMBase(ABC):
                 if i == j:
                     continue
                 self.exc_to_exc.append(pynn.Projection(
-                    self.neurons_exc[i][0],
-                    self.neurons_exc[j][1],
+                    self.neurons_exc[i][ID_SOMA],
+                    self.neurons_exc[j][ID_DENDRITE],
                     pynn.FixedProbabilityConnector(0.8),
                     synapse_type=StaticSynapse(weight=63),
                     receptor_type="excitatory"))
@@ -118,7 +133,7 @@ class SHTMBase(ABC):
         self.exc_to_inh = []
         for i in range(self.alphabet_size):
             self.exc_to_inh.append(pynn.Projection(
-                self.neurons_exc[i][0],
+                self.neurons_exc[i][ID_SOMA],
                 pynn.PopulationView(self.neurons_inh, [i]),
                 pynn.AllToAllConnector(),
                 synapse_type=StaticSynapse(weight=120),
@@ -128,7 +143,7 @@ class SHTMBase(ABC):
         for i in range(self.alphabet_size):
             self.inh_to_exc.append(pynn.Projection(
                 pynn.PopulationView(self.neurons_inh, [i]),
-                self.neurons_exc[i][1],
+                self.neurons_exc[i][ID_SOMA],
                 pynn.AllToAllConnector(),
                 synapse_type=StaticSynapse(weight=-63),
                 receptor_type="inhibitory"))
@@ -145,7 +160,7 @@ class SHTMBase(ABC):
         fig, axs = plt.subplots(self.alphabet_size, 1, sharex="all")
 
         for i in range(self.alphabet_size):
-            soma, _ = self.neurons_exc[i]
+            _, soma = self.neurons_exc[i]
             local_inhibitory = pynn.PopulationView(self.neurons_inh, [i])
 
             soma_spikes = [s.base for s in soma.get_data("spikes").segments[-1].spiketrains]
@@ -185,20 +200,20 @@ class SHTMSingleNeuron(SHTMBase):
         self.proj_soma_in = None
         self.proj_dendrite_in = None
 
-    def init_network(self):
-        self.init_neurons()
+    def init_network(self, v_threshold=300):
+        self.init_neurons(v_threshold)
         self.init_external_input()
         self.init_connections()
         self.init_rec_exc(alphabet_id=0, neuron_id=0, neuron_type=0)
 
-    def init_neurons(self):
+    def init_neurons(self, v_threshold=300):
         self.neurons_exc = []
 
-        dendrite, soma, ref_neuron = self.init_neurons_exc()
+        dendrite, soma, ref_neuron = self.init_neurons_exc(v_threshold)
         self.neurons_exc.append((dendrite, soma, ref_neuron))
 
-    def init_neurons_exc(self, num_neurons=None):
-        pop_ref_neuron = pynn.Population(1, pynn.cells.HXNeuron(threshold_v_threshold=300,
+    def init_neurons_exc(self, num_neurons=None, v_threshold=300):
+        pop_ref_neuron = pynn.Population(1, pynn.cells.HXNeuron(threshold_v_threshold=v_threshold,
                                                                 refractory_period_refractory_time=10))
         ref_neuron = pynn.PopulationView(pop_ref_neuron, [0])
         dendrite, soma = super().init_neurons_exc(1)
@@ -279,14 +294,21 @@ class SHTMStatic(SHTMBase):
     def __init__(self, alphabet_size, num_neurons_per_symbol):
         super().__init__(alphabet_size=alphabet_size, num_neurons_per_symbol=num_neurons_per_symbol)
 
-    def init_external_input(self):
-        spike_times = [[] for i in range(self.alphabet_size)]
-        spike_times[0].append(0.04)
+    def init_external_input(self, sequence=None):
+        spike_times = [list() for i in range(self.alphabet_size)]
 
-        print(spike_times)
+        if sequence is None:
+            spike_times[0].append(0.04)
+        else:
+            for i_element, element in enumerate(sequence):
+                spike_times[self.ALPHABET[element]].append(i_element*self.isi + self.isi)
+
+        print(f'Initialized external input for sequence {sequence}')
+        print(f'Spike times:')
+        for i_letter, letter_spikes in enumerate(spike_times):
+            print(f'{list(self.ALPHABET.keys())[i_letter]}: {spike_times[i_letter]}')
 
         self.neurons_ext.set(spike_times=spike_times)
-        print(self.neurons_ext.get("spike_times"))
 
 
 class SHTMPlasticity(SHTMSingleNeuron):
@@ -338,11 +360,10 @@ class SHTMPlasticity(SHTMSingleNeuron):
         # x = []
         # z = []
 
-
         for idx, pop in enumerate([dendrite, soma]):
             pop.record(["v", "spikes"])
             for t in range(200):
-                print(f'Running emulation step {t+1}/200 for neuron {idx+1}/2')
+                print(f'Running emulation step {t + 1}/200 for neuron {idx + 1}/2')
 
                 pynn.run(self.runtime)
 
@@ -357,7 +378,7 @@ class SHTMPlasticity(SHTMSingleNeuron):
                 # z.append(self.plasticity.z[0])
 
             pop.record(None)
-            pop.record(["spikes"])
+            pop.record(["spikes"])  # Todo: Remove?! Unnecessary?!
 
     def test_plasticity(self):
         # Todo: still needed? Which plasticity initialization did we use?
@@ -394,7 +415,8 @@ class SHTMPlasticity(SHTMSingleNeuron):
         vs_soma = np.concatenate([np.array(self.vs[1][i]) for i in range(200)])
 
         ax_pre.eventplot(
-            np.concatenate([np.array(self.pop_dendrite_in.get("spike_times").value) + i * self.runtime for i in range(200)]),
+            np.concatenate(
+                [np.array(self.pop_dendrite_in.get("spike_times").value) + i * self.runtime for i in range(200)]),
             label="pre", lw=.2)
         ax_pre.legend()
         ax_d.plot(times_dendrite, vs_dendrite, label="dendrite", lw=.2)
@@ -410,7 +432,7 @@ class SHTMPlasticity(SHTMSingleNeuron):
         # ax_w.legend()
         ax_w.set_xlabel("time [ms]")
         plt.savefig("../evaluation/plasticity.pdf")
-        
+
 
 class Plasticity:
     def __init__(self, projection: pynn.Projection, post_somas: pynn.PopulationView):
@@ -468,7 +490,7 @@ class Plasticity:
             permanence += (self.lambda_plus * x * has_post_somatic_spike_I
                            - self.lambda_minus * self.y * has_pre_spike
                            + self.lambda_h * (
-                                       self.target_rate_h - z) * has_post_somatic_spike_I) * self.permanence_max * self.dt
+                                   self.target_rate_h - z) * has_post_somatic_spike_I) * self.permanence_max * self.dt
             if permanence >= threshold:
                 mature = True
         return permanence, x, z, mature
