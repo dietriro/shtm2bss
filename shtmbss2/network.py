@@ -177,7 +177,7 @@ class SHTMBase(ABC):
         self.rec_neurons_exc.record(None)
 
     def plot_events(self, neuron_types="all"):
-        fig, axs = plt.subplots(self.alphabet_size, 1, sharex="all", figsize=(10, 7))
+        fig, axs = plt.subplots(self.alphabet_size, 1, sharex="all", figsize=(12, 10))
 
         for i in range(self.alphabet_size):
             neurons_all = dict()
@@ -194,19 +194,23 @@ class SHTMBase(ABC):
             for neurons_i in neuron_types:
                 # Retrieve and plot spikes from selected neurons
                 spikes = [s.base for s in neurons_all[neurons_i].get_data("spikes").segments[-1].spiketrains]
+                if neurons_i == NeuronType.Inhibitory:
+                    spikes.append([])
+                else:
+                    spikes.insert(0, [])
                 axs[i].eventplot(spikes, label=neurons_i.NAME, color=f"C{neurons_i.ID}")
-
-            # # If enabled, retrieve and plot spikes from inhibitory neurons
-            # spikes_inhibitory = [s.base for s in neurons_inhibitory.get_data("spikes").segments[-1].spiketrains]
-            # axs[i].eventplot(spikes_inhibitory, label="inhibitory", color="C1")
 
             # Configure the plot layout
             axs[i].set_xlim(0., pynn.get_current_time())
-            axs[i].set_ylim(-1, self.num_neurons_per_symbol)
-            axs[i].yaxis.set_ticks([0, 1, 2, 3, 4])
+            axs[i].set_ylim(-1, self.num_neurons_per_symbol + 1)
+            axs[i].yaxis.set_ticks(range(self.num_neurons_per_symbol + 1))
             axs[i].set_ylabel(self.id_to_letter(i), weight='bold')
             axs[i].grid(True, which='both', axis='both')
-            axs[i].set_yticklabels(['0', '', '', '', '4'])
+
+            # Generate y-tick-labels based on number of neurons per symbol
+            y_tick_labels = ['Inh', '0'] + ['' for k in range(self.num_neurons_per_symbol - 2)] + [
+                str(self.num_neurons_per_symbol - 1)]
+            axs[i].set_yticklabels(y_tick_labels)
 
         # Create custom legend for all plots
         custom_lines = [Line2D([0], [0], color=f"C{n.ID}", label=n.NAME, lw=3) for n in neuron_types]
