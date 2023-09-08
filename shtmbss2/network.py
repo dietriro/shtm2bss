@@ -63,16 +63,16 @@ class SHTMBase(ABC):
         # Declare recordings
         self.rec_neurons_exc = None
 
-    def init_network(self, v_threshold=300):
+    def init_network(self):
         self.init_neurons(v_threshold)
         self.init_connections()
         self.init_external_input()
         self.init_rec_exc()
 
-    def init_neurons(self, v_threshold=300):
+    def init_neurons(self):
         self.neurons_exc = []
         for i in range(self.alphabet_size):
-            dendrites, somas = self.init_neurons_exc(v_threshold=v_threshold)
+            dendrites, somas = self.init_neurons_exc()
             dendrites.record(['spikes'])
             somas.record(['spikes'])
             self.neurons_exc.append((dendrites, somas))
@@ -81,42 +81,68 @@ class SHTMBase(ABC):
 
         self.neurons_ext = pynn.Population(self.alphabet_size, SpikeSourceArray())
 
-    def init_neurons_exc(self, num_neurons=None, v_threshold=300):
+        pynn.preprocess()
+
+        for dendrites, somas in self.neurons_exc:
+            self.init_neurons_exc_post_preprocess(dendrites, somas)
+
+    def init_neurons_exc(self, num_neurons=None):
         if num_neurons is None:
             num_neurons = self.num_neurons_per_symbol
 
-        all_neurons = pynn.Population(num_neurons * 2, pynn.cells.HXNeuron(threshold_v_threshold=v_threshold))
+        predictive_mode = True
 
-        dendrites = pynn.PopulationView(all_neurons, list(range(0, num_neurons * 2, 2)))
-        somas = pynn.PopulationView(all_neurons, list(range(1, num_neurons * 2, 2)))
+        # TODO: remove once pynn_brainscales supports float values directly (bug currently)
+        pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_I": 2.}) 
 
-        dendrites.set(
-            multicompartment_enable_conductance=True,
-            multicompartment_i_bias_nmda=30,
-            multicompartment_connect_soma_right=True,
-            reset_v_reset=800,
-            refractory_period_reset_holdoff=0,
-            refractory_period_refractory_time=75,
-        )
-        dendrites.get('threshold_v_threshold')
+        all_neurons = pynn.Population(num_neurons * 2, pynn.cells.CalibHXNeuronCuba(
+            cm=16,
+            tau_m=5,
+            tau_syn_I=[2., 0.5] * num_neurons,
+            tau_syn_E=[2, 5] * num_neurons,
+            v_rest=60,
+            v_reset=[125, 60] * num_neurons,
+            v_thresh=[72 if predictive_mode else 68, 120 if predictive_mode else 75] * num_neurons,
+            tau_refrac=[60, 2] * num_neurons,
+            i_synin_gm_I=700,           # capmem current lsb
+            i_synin_gm_E=700,           # capmem current lsb
+        ))
 
-        somas.set(
-            multicompartment_connect_soma=True,
-            refractory_period_refractory_time=10,
-        )
+        dendrites = pynn.PopulationView(all_neurons, slice(0, num_neurons * 2, 2))
+        somas = pynn.PopulationView(all_neurons, slice(1, num_neurons * 2, 2))
+
         somas.record(["spikes"])
 
         return dendrites, somas
+
+    @staticmethod
+    def init_neurons_exc_post_preprocess(dendrites, somas):
+        for i in range(len(dendrites)):
+            dendrites.actual_hwparams[i].multicompartment.enable_conductance = True
+            dendrites.actual_hwparams[i].multicompartment.i_bias_nmda = 30
+            dendrites.actual_hwparams[i].multicompartment.connect_soma_right = True
+            dendrites.actual_hwparams[i].refractory_period.reset_holdoff = 0
+
+        for i in range(len(somas)):
+            somas.actual_hwparams[i].multicompartment.connect_soma = True
 
     def init_neurons_inh(self, num_neurons=None):
         if num_neurons is None:
             num_neurons = self.alphabet_size
 
-        pop = pynn.Population(num_neurons, pynn.cells.HXNeuron())
+        pop = pynn.Population(num_neurons, pynn.cells.CalibHXNeuronCuba(
+            cm=16,  # [0, 63]
+            tau_m=5,
+            tau_syn_I=10,
+            tau_syn_E=10,
+            v_rest=80,                  # CADC lsb
+            v_reset=80,                 # CADC lsb
+            v_thresh=125,               # CADC lsb
+            i_synin_gm_I=700,           # capmem current lsb
+            i_synin_gm_E=700,           # capmem current lsb
+            tau_refrac=2,
+        ))
 
-        pop.set(
-            refractory_period_refractory_time=2,
-        )
         pop.record(["spikes"])
 
         return pop
@@ -179,7 +205,7 @@ class SHTMBase(ABC):
 
         for i in range(self.alphabet_size):
             neurons_all = dict()
-            neurons_all[NeuronType.Dendrite], neurons_all[NeuronType.Soma] = self.neurons_exc[i]
+            neurons_all[NeuronType.Dendrite], neurons_all[NeuronType.Soma], = self.neurons_exc[i]
             neurons_all[NeuronType.Inhibitory] = pynn.PopulationView(self.neurons_inh, [i])
 
             if type(neuron_types) is str and neuron_types == "all":
@@ -249,21 +275,37 @@ class SHTMSingleNeuron(SHTMBase):
         self.proj_soma_in = None
         self.proj_dendrite_in = None
 
-    def init_network(self, v_threshold=300):
-        self.init_neurons(v_threshold)
+    def init_network(self):
+        self.init_neurons()
         self.init_external_input()
         self.init_connections()
         self.init_rec_exc(alphabet_id=0, neuron_id=0, neuron_type=0)
 
-    def init_neurons(self, v_threshold=300):
+    def init_neurons(self):
         self.neurons_exc = []
 
-        dendrite, soma, ref_neuron = self.init_neurons_exc(v_threshold)
+        dendrite, soma, ref_neuron = self.init_neurons_exc()
         self.neurons_exc.append((dendrite, soma, ref_neuron))
 
-    def init_neurons_exc(self, num_neurons=None, v_threshold=300):
-        pop_ref_neuron = pynn.Population(1, pynn.cells.HXNeuron(threshold_v_threshold=v_threshold,
-                                                                refractory_period_refractory_time=10))
+    def init_neurons_exc(self, num_neurons=None):
+        predictive_mode = True
+
+        # TODO: remove once pynn_brainscales supports float values directly (bug currently)
+        pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_I": 2.}) 
+
+        pop_ref_neuron = pynn.Population(1, pynn.cells.CalibHXNeuronCuba(
+            cm=16,
+            tau_m=5,
+            tau_syn_I=0.5,
+            tau_syn_E=5,
+            v_rest=60,
+            v_reset=60,
+            v_thresh=120 if predictive_mode else 75,
+            tau_refrac=2,
+            i_synin_gm_I=700,
+            i_synin_gm_E=700,
+        ))
+
         ref_neuron = pynn.PopulationView(pop_ref_neuron, [0])
         dendrite, soma = super().init_neurons_exc(1)
 
@@ -518,8 +560,8 @@ class SHTMTotal(SHTMStatic):
         else:
             self.log_weights = log_weights
 
-    def init_neurons(self, v_threshold=300):
-        super().init_neurons(v_threshold=v_threshold)
+    def init_neurons(self):
+        super().init_neurons()
 
     def init_connections(self, debug=False, w_ext_exc=200, w_exc_exc=0.01, w_exc_inh=60, w_inh_exc=-80, p_exc_exc=0.2):
         super().init_connections(w_ext_exc, w_exc_exc, w_exc_inh, w_inh_exc, p_exc_exc)
@@ -563,6 +605,20 @@ class SHTMTotal(SHTMStatic):
 
         axs[-1].set_xlabel("Connection [#]")
         fig.text(0.02, 0.5, "Permanence diff / connection direction", va="center", rotation="vertical")
+
+    def plot_permanence(self):
+        fig, axs = plt.subplots(len(self.log_permanence), 1, sharex="all", figsize=(30, 30))
+
+        for i_perm in self.log_permanence:
+            permanence = self.con_plastic[i_perm].permanences
+            num_connections = len(permanence)
+
+            axs[i_perm].plot(range(num_connections), permanence)
+            axs[i_perm].set_ylabel(self.con_plastic[i_perm].projection.label.split('_')[1], weight='bold')
+            axs[i_perm].grid(True, which='both', axis='both')
+
+        axs[-1].set_xlabel("Connection [#]")
+        fig.text(0.02, 0.5, "Permanence / connection direction", va="center", rotation="vertical")
 
     def plot_weight_diff(self):
         fig, axs = plt.subplots(len(self.log_weights), 1, sharex="all", figsize=(10, 7))
@@ -657,7 +713,6 @@ class Plasticity:
         self.delta_t_max = 80e-3
         self.dt = 0.1e-3
         self.post_somas = post_somas
-        self.post_somas.record(["spikes"])
         self.mature_weight = 63
         self.debug = debug
         # print(self.delta_t_min, self.delta_t_max)
