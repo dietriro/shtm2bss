@@ -400,7 +400,7 @@ class SHTMStatic(SHTMBase):
             sequence_offset = 0
             for i_rep in range(num_repetitions):
                 for i_element, element in enumerate(sequence):
-                    spike_time = sequence_offset + i_element * self.delta_stimulus + self.delta_stimulus
+                    spike_time = sequence_offset + i_element * self.delta_sequence + self.delta_stimulus
                     spike_times[self.ALPHABET[element]].append(spike_time)
                 sequence_offset = spike_time + self.delta_sequence
 
@@ -699,8 +699,8 @@ class Plasticity:
         self.permanence_min = np.asarray(np.random.randint(0, 8, size=(len(self.projection),)), dtype=float)
         self.permanence = copy.copy(self.permanence_min)
         self.permanences = None
-        self.weights = None
         self.permanence_max = 20.
+        self.weights = None
         self.threshold = np.ones((len(self.projection))) * 20.
         self.lambda_plus = 0.08
         self.tau_plus = 20. / 1e3
