@@ -13,7 +13,6 @@ from pynn_brainscales.brainscales2.standardmodels.synapses import StaticSynapse
 
 from shtmbss2.plot import plot_membrane
 
-
 ID_DENDRITE = 0
 ID_SOMA = 1
 
@@ -46,8 +45,8 @@ class SHTMBase(ABC):
         # Initialize parameters
         self.alphabet_size = alphabet_size
         self.num_neurons_per_symbol = num_neurons_per_symbol
-        self.delta_stimulus = 0.04
-        self.delta_sequence = 0.06
+        self.delta_stimulus = 40e-3
+        self.delta_sequence = 100e-3
 
         # Declare neuron populations
         self.neurons_exc = None
@@ -126,14 +125,14 @@ class SHTMBase(ABC):
     def init_external_input(self):
         pass
 
-    def init_connections(self):
+    def init_connections(self, w_ext_exc=200, w_exc_exc=0.01, w_exc_inh=60, w_inh_exc=-80, p_exc_exc=0.2):
         self.ext_to_exc = []
         for i in range(self.alphabet_size):
             self.ext_to_exc.append(pynn.Projection(
                 pynn.PopulationView(self.neurons_ext, [i]),
                 self.neurons_exc[i][ID_SOMA],
                 pynn.AllToAllConnector(),
-                synapse_type=StaticSynapse(weight=200),
+                synapse_type=StaticSynapse(weight=w_ext_exc),
                 receptor_type="excitatory"))
 
         self.exc_to_exc = []
@@ -144,9 +143,8 @@ class SHTMBase(ABC):
                 self.exc_to_exc.append(pynn.Projection(
                     self.neurons_exc[i][ID_SOMA],
                     self.neurons_exc[j][ID_DENDRITE],
-                    pynn.FixedProbabilityConnector(0.8),
-                    # Todo: Do we need to set the weight of all connections to 0 here, i.e. disable them?
-                    synapse_type=StaticSynapse(weight=63),
+                    pynn.FixedProbabilityConnector(p_exc_exc),  # Todo: Maybe replace this with FixedNumberPreConnector
+                    synapse_type=StaticSynapse(weight=w_exc_exc),
                     receptor_type="excitatory",
                     label=f"exc-exc_{self.id_to_letter(i)}>{self.id_to_letter(j)}"))
 
@@ -156,7 +154,7 @@ class SHTMBase(ABC):
                 self.neurons_exc[i][ID_SOMA],
                 pynn.PopulationView(self.neurons_inh, [i]),
                 pynn.AllToAllConnector(),
-                synapse_type=StaticSynapse(weight=120),
+                synapse_type=StaticSynapse(weight=w_exc_inh),
                 receptor_type="excitatory"))
 
         self.inh_to_exc = []
@@ -165,7 +163,7 @@ class SHTMBase(ABC):
                 pynn.PopulationView(self.neurons_inh, [i]),
                 self.neurons_exc[i][ID_SOMA],
                 pynn.AllToAllConnector(),
-                synapse_type=StaticSynapse(weight=-63),
+                synapse_type=StaticSynapse(weight=w_inh_exc),
                 receptor_type="inhibitory"))
 
     def init_rec_exc(self, alphabet_id=1, neuron_id=1, neuron_type=1):
@@ -454,7 +452,7 @@ class SHTMPlasticity(SHTMSingleNeuron):
                                           pynn.standardmodels.synapses.StaticSynapse(weight=0),
                                           receptor_type="excitatory")
 
-        plasticity = Plasticity(test_projection, post_somas=soma)
+        plasticity = PlasticitySingleNeuron(test_projection, post_somas=soma)
 
         plasticity.debug = False
 
@@ -500,7 +498,7 @@ class SHTMPlasticity(SHTMSingleNeuron):
 
 
 class SHTMTotal(SHTMStatic):
-    def __init__(self, alphabet_size, num_neurons_per_symbol, log_permanence=None):
+    def __init__(self, alphabet_size, num_neurons_per_symbol, log_permanence=None, log_weights=None):
         super().__init__(alphabet_size=alphabet_size, num_neurons_per_symbol=num_neurons_per_symbol)
 
         self.runtime = None
@@ -509,28 +507,44 @@ class SHTMTotal(SHTMStatic):
         if log_permanence is None:
             self.log_permanence = list()
         elif type(log_permanence) is str and log_permanence.lower() == "all":
-            self.log_permanence = range(self.alphabet_size**2-self.alphabet_size)
+            self.log_permanence = range(self.alphabet_size ** 2 - self.alphabet_size)
         else:
             self.log_permanence = log_permanence
+
+        if log_weights is None:
+            self.log_weights = list()
+        elif type(log_weights) is str and log_weights.lower() == "all":
+            self.log_weights = range(self.alphabet_size ** 2 - self.alphabet_size)
+        else:
+            self.log_weights = log_weights
 
     def init_neurons(self, v_threshold=300):
         super().init_neurons(v_threshold=v_threshold)
 
-    def init_connections(self, debug=False):
-        super().init_connections()
+    def init_connections(self, debug=False, w_ext_exc=200, w_exc_exc=0.01, w_exc_inh=60, w_inh_exc=-80, p_exc_exc=0.2):
+        super().init_connections(w_ext_exc, w_exc_exc, w_exc_inh, w_inh_exc, p_exc_exc)
 
         self.con_plastic = list()
 
         for i_plastic in range(len(self.exc_to_exc)):
-            self.con_plastic.append(Plasticity(self.exc_to_exc[i_plastic], debug))
+            # Retrieve id (letter) of post synaptic neuron population
+            letter_post = self.exc_to_exc[i_plastic].label.split('_')[1].split('>')[1]
+            # Create population view of all post synaptic somas
+            post_somas = pynn.PopulationView(self.neurons_exc[self.ALPHABET[letter_post]][ID_SOMA],
+                                             list(range(self.num_neurons_per_symbol)))
+
+            self.con_plastic.append(Plasticity(self.exc_to_exc[i_plastic], post_somas=post_somas, debug=debug))
 
         for i_perm in self.log_permanence:
             self.con_plastic[i_perm].enable_permanence_logging()
+        for i_perm in self.log_weights:
+            self.con_plastic[i_perm].enable_weights_logging()
 
     def print_permanence_dif(self):
         for i_perm in self.log_permanence:
             permanence_diff = self.con_plastic[i_perm].permanences[-1] - self.con_plastic[i_perm].permanences[0]
-            print(f"Permanence diff for {self.con_plastic[i_perm].projection.label} ({i_perm}): {list(permanence_diff)}")
+            print(
+                f"Permanence diff for {self.con_plastic[i_perm].projection.label} ({i_perm}): {list(permanence_diff)}")
 
     def plot_permanence_diff(self):
         fig, axs = plt.subplots(len(self.log_permanence), 1, sharex="all", figsize=(10, 7))
@@ -549,6 +563,24 @@ class SHTMTotal(SHTMStatic):
 
         axs[-1].set_xlabel("Connection [#]")
         fig.text(0.02, 0.5, "Permanence diff / connection direction", va="center", rotation="vertical")
+
+    def plot_weight_diff(self):
+        fig, axs = plt.subplots(len(self.log_weights), 1, sharex="all", figsize=(10, 7))
+
+        for i_perm in self.log_weights:
+            weights_diff = self.con_plastic[i_perm].weights[-1] - self.con_plastic[i_perm].weights[0]
+            num_connections = len(weights_diff)
+
+            colors = ['C0' if p >= 0 else 'C1' for p in weights_diff]
+
+            axs[i_perm].bar(range(num_connections), weights_diff, color=colors)
+            axs[i_perm].set_ylabel(self.con_plastic[i_perm].projection.label.split('_')[1], weight='bold')
+            axs[i_perm].yaxis.set_ticks([0])
+            axs[i_perm].xaxis.set_ticks(range(0, num_connections))
+            axs[i_perm].grid(True, which='both', axis='both')
+
+        axs[-1].set_xlabel("Connection [#]")
+        fig.text(0.02, 0.5, "Weights diff / connection direction", va="center", rotation="vertical")
 
     def run(self, runtime=0.1, steps=200, plasticity_enabled=True):
         if type(runtime) is str:
@@ -575,7 +607,7 @@ class SHTMTotal(SHTMStatic):
         # x = []
         # z = []
 
-            # pop.record(["v", "spikes"])
+        # pop.record(["v", "spikes"])
         # Todo: Why do we run multiple steps with 0.1 runtime? Is that 0.1 ms?
         for t in range(steps):
             print(f'Running emulation step {t + 1}/{steps}')
@@ -585,8 +617,9 @@ class SHTMTotal(SHTMStatic):
 
             if plasticity_enabled:
                 print("Starting plasticity calculations")
-                for plasticity in self.con_plastic:
+                for i_plasticity, plasticity in enumerate(self.con_plastic):
                     plasticity(self.runtime)
+                    print(f"Finished plasticity calculation {i_plasticity+1}/{len(self.con_plastic)}")
 
             # Gather data for visualization of single neuron plasticity
             # self.vs[idx].append(pop.get_data("v").segments[-1].irregularlysampledsignals[0])
@@ -602,28 +635,29 @@ class SHTMTotal(SHTMStatic):
         # pop.record(["spikes"])  # Todo: Remove?! Unnecessary?!
 
 
-
 class Plasticity:
-    def __init__(self, projection: pynn.Projection, debug=False):
+    def __init__(self, projection: pynn.Projection, post_somas=None, debug=False):
         self.projection = projection
         # print("inside constructor")
 
         self.permanence_min = np.asarray(np.random.randint(0, 8, size=(len(self.projection),)), dtype=float)
         self.permanence = copy.copy(self.permanence_min)
         self.permanences = None
+        self.weights = None
         self.permanence_max = 20.
         self.threshold = np.ones((len(self.projection))) * 20.
-        self.lambda_plus = 0.08 * 1e3
+        self.lambda_plus = 0.08
         self.tau_plus = 20. / 1e3
-        self.lambda_minus = 0.0015 * 1e3
+        self.lambda_minus = 0.0015
         self.target_rate_h = 1.
-        self.lambda_h = 0.014 * 1e3
+        self.lambda_h = 0.014
         self.tau_h = 440. / 1e3
         self.y = 1.
         self.delta_t_min = 4e-3
-        self.delta_t_max = 8e-3
+        self.delta_t_max = 80e-3
         self.dt = 0.1e-3
-        self.post_somas = self.projection.post
+        self.post_somas = post_somas
+        self.post_somas.record(["spikes"])
         self.mature_weight = 63
         self.debug = debug
         # print(self.delta_t_min, self.delta_t_max)
@@ -631,15 +665,15 @@ class Plasticity:
         self.x = np.zeros((len(self.projection.pre)))
         self.z = np.zeros((len(self.projection.post)))
 
-    def rule(self, permanence, threshold, x, z, runtime, neuron_spikes_pre, neuron_spikes_post_dendrite,
-             neuron_spikes_post_soma):
+    def rule(self, permanence, threshold, x, z, runtime, permanence_min,
+             neuron_spikes_pre, neuron_spikes_post_dendrite, neuron_spikes_post_soma):
         mature = False
         for t in np.linspace(0., runtime, int(runtime / self.dt)):
 
-
+            # Todo: Improve efficiency in case no spikes occured
             # True - if any pre-synaptic neuron spiked
             has_pre_spike = any(t <= spike < t + self.dt for spike in neuron_spikes_pre)
-            # True - if any post
+            # True - if any post dendrite spiked
             has_post_dendritic_spike = any(t <= spike < t + self.dt for spike in neuron_spikes_post_dendrite)
 
             # Indicator function (1st step) - Number of presynaptic spikes within learning time window
@@ -656,24 +690,38 @@ class Plasticity:
             # Spike trace of postsynaptic neuron based on daps
             z += (- z / self.tau_h) * self.dt + has_post_dendritic_spike
 
-            delta_permanence = (self.lambda_plus * x * has_post_somatic_spike_I
-                               - self.lambda_minus * self.y * has_pre_spike
-                               + self.lambda_h * (
-                                   self.target_rate_h - z) * has_post_somatic_spike_I) * self.permanence_max * self.dt
+            dp_a = x * has_post_somatic_spike_I
+            dp_b = self.y * has_pre_spike
+            dp_c = (self.target_rate_h - z) * has_post_somatic_spike_I
+
+            delta_permanence = (
+                    (self.lambda_plus * dp_a
+                     - self.lambda_minus * dp_b
+                     + self.lambda_h * dp_c)
+                    * self.permanence_max * self.dt)
 
             permanence += delta_permanence
 
             if delta_permanence != 0:
                 if self.debug:
-                    print(f"t: {t},  p: {round(permanence, 5)},  dp: {delta_permanence},  x: {round(x, 2)},  z: {round(z, 2)}")
+                    print(
+                        f"t: {t},  p: {round(permanence, 5)},  dp: {delta_permanence},  x: {round(x, 2)},  "
+                        f"z: {round(z, 2)}, dp_a: {round(dp_a, 3)}, dp_b: {round(dp_b, 3)}, dp_c: {round(dp_c, 3)}")
                     print(f"{neuron_spikes_pre}")
 
             if permanence >= threshold:
                 mature = True
+
+            # Todo: Enable again after debugging
+            # permanence = np.clip(permanence, a_min=permanence_min, a_max=self.permanence_max)
+
         return permanence, x, z, mature
 
     def enable_permanence_logging(self):
-        self.permanences = [self.permanence]
+        self.permanences = [np.copy(self.permanence)]
+
+    def enable_weights_logging(self):
+        self.weights = [np.copy(self.projection.get("weight", format="array").flatten())]
 
     def __call__(self, runtime: float):
         if isinstance(self.projection.pre.celltype, pynn.cells.SpikeSourceArray):
@@ -686,6 +734,7 @@ class Plasticity:
         spikes_post_dendrite = self.projection.post.get_data("spikes").segments[-1].spiketrains
         spikes_post_somas = self.post_somas.get_data("spikes").segments[-1].spiketrains
         weight = self.projection.get("weight", format="array")
+
         for c, connection in enumerate(self.projection.connections):
             i = connection.postsynaptic_index
             j = connection.presynaptic_index
@@ -695,6 +744,7 @@ class Plasticity:
 
             permanence, x, z, mature = self.rule(permanence=self.permanence[c], threshold=self.threshold[c],
                                                  runtime=runtime, x=self.x[j], z=self.z[i],
+                                                 permanence_min=self.permanence_min[c],
                                                  neuron_spikes_pre=neuron_spikes_pre,
                                                  neuron_spikes_post_dendrite=neuron_spikes_post_dendrite,
                                                  neuron_spikes_post_soma=neuron_spikes_post_soma)
@@ -702,12 +752,19 @@ class Plasticity:
             self.x[j] = x
             self.z[i] = z
 
+            # Todo: Why do we have the if clause regarding the current weight in here?
             if weight[j, i] != self.mature_weight and mature:
                 weight[j, i] = self.mature_weight
-            # Todo: Add else for setting weight to 0
+            elif not mature:
+                weight[j, i] = 0
+            # Todo: Check if we need to add else for setting weight to 0 for unlearning a connection
+
         self.projection.set(weight=weight)
+
         if self.permanences is not None:
-            self.permanences.append(np.round(self.permanence, 6))
+            self.permanences.append(np.copy(np.round(self.permanence, 6)))
+        if self.weights is not None:
+            self.weights.append(np.copy(np.round(self.projection.get("weight", format="array").flatten(), 6)))
 
 
 class PlasticitySingleNeuron:
