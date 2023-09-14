@@ -96,16 +96,13 @@ class SHTMBase(ABC):
         pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_I": 2.}) 
 
         all_neurons = pynn.Population(num_neurons * 2, pynn.cells.CalibHXNeuronCuba(
-            cm=16,
-            tau_m=5,
-            tau_syn_I=[2., 0.5] * num_neurons,
+            tau_m=10,
+            tau_syn_I=[3, 1] * num_neurons,
             tau_syn_E=[2, 5] * num_neurons,
-            v_rest=60,
-            v_reset=[125, 60] * num_neurons,
-            v_thresh=[72 if predictive_mode else 68, 120 if predictive_mode else 75] * num_neurons,
-            tau_refrac=[60, 2] * num_neurons,
-            i_synin_gm_I=700,           # capmem current lsb
-            i_synin_gm_E=700,           # capmem current lsb
+            v_rest=v_rest,
+            v_reset=v_reset * num_neurons,
+            v_thresh=v_thresh * num_neurons,
+            tau_refrac=[60, 10] * num_neurons,
         ))
 
         dendrites = pynn.PopulationView(all_neurons, slice(0, num_neurons * 2, 2))
@@ -131,15 +128,15 @@ class SHTMBase(ABC):
             num_neurons = self.alphabet_size
 
         pop = pynn.Population(num_neurons, pynn.cells.CalibHXNeuronCuba(
-            cm=16,  # [0, 63]
+        #    cm=63,  # [0, 63]
             tau_m=5,
             tau_syn_I=10,
-            tau_syn_E=10,
-            v_rest=80,                  # CADC lsb
-            v_reset=80,                 # CADC lsb
-            v_thresh=125,               # CADC lsb
-            i_synin_gm_I=700,           # capmem current lsb
-            i_synin_gm_E=700,           # capmem current lsb
+            tau_syn_E=0.5,
+        #    v_rest=80,  # CADC lsb
+        #    v_reset=80,  # CADC lsb
+        #    v_thresh=100,  # CADC lsb
+        #    i_synin_gm_I=500,  # capmem current lsb
+        #    i_synin_gm_E=500,  # capmem current lsb
             tau_refrac=2,
         ))
 
@@ -294,7 +291,6 @@ class SHTMSingleNeuron(SHTMBase):
         pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_I": 2.}) 
 
         pop_ref_neuron = pynn.Population(1, pynn.cells.CalibHXNeuronCuba(
-            cm=16,
             tau_m=5,
             tau_syn_I=0.5,
             tau_syn_E=5,
@@ -302,8 +298,6 @@ class SHTMSingleNeuron(SHTMBase):
             v_reset=60,
             v_thresh=120 if predictive_mode else 75,
             tau_refrac=2,
-            i_synin_gm_I=700,
-            i_synin_gm_E=700,
         ))
 
         ref_neuron = pynn.PopulationView(pop_ref_neuron, [0])
