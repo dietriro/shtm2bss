@@ -101,16 +101,13 @@ class SHTMBase(ABC):
         # pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_I": 2.})
 
         all_neurons = pynn.Population(num_neurons * 2, pynn.cells.CalibHXNeuronCuba(
-            cm=16,
             tau_m=10,
-            tau_syn_I=[2, 1] * num_neurons,
+            tau_syn_I=[3, 1] * num_neurons,
             tau_syn_E=[2, 5] * num_neurons,
             v_rest=v_rest * num_neurons,
             v_reset=v_reset * num_neurons,
             v_thresh=v_thresh * num_neurons,
             tau_refrac=[60, 10] * num_neurons,
-            i_synin_gm_I=700,  # capmem current lsb
-            i_synin_gm_E=700,  # capmem current lsb
         ))
 
         dendrites = pynn.PopulationView(all_neurons, slice(ID_DENDRITE, num_neurons * 2, 2))
@@ -138,15 +135,14 @@ class SHTMBase(ABC):
         pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_E": 2.})
 
         pop = pynn.Population(num_neurons, pynn.cells.CalibHXNeuronCuba(
-            cm=16,  # [0, 63]
             tau_m=5,
             tau_syn_I=10,
             tau_syn_E=0.5,
-            v_rest=60,  # CADC lsb
-            v_reset=60,  # CADC lsb
-            v_thresh=80,  # CADC lsb
-            i_synin_gm_I=700,  # capmem current lsb
-            i_synin_gm_E=700,  # capmem current lsb
+            # v_rest=60,  # CADC lsb
+            # v_reset=60,  # CADC lsb
+            # v_thresh=80,  # CADC lsb
+            # i_synin_gm_I=700,  # capmem current lsb
+            # i_synin_gm_E=700,  # capmem current lsb
             tau_refrac=2,
         ))
 
@@ -319,7 +315,6 @@ class SHTMSingleNeuron(SHTMBase):
         pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_I": 2.})
 
         pop_ref_neuron = pynn.Population(1, pynn.cells.CalibHXNeuronCuba(
-            cm=16,
             tau_m=5,
             tau_syn_I=0.5,
             tau_syn_E=5,
@@ -327,8 +322,6 @@ class SHTMSingleNeuron(SHTMBase):
             v_reset=60,
             v_thresh=120 if predictive_mode else 75,
             tau_refrac=2,
-            i_synin_gm_I=700,
-            i_synin_gm_E=700,
         ))
 
         ref_neuron = pynn.PopulationView(pop_ref_neuron, [0])
