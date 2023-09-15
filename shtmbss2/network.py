@@ -4,6 +4,7 @@ import copy
 
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
+from pyNN.random import NumpyRNG
 from tabulate import tabulate
 from abc import ABC, abstractmethod
 
@@ -48,6 +49,9 @@ class SHTMBase(ABC):
         self.delta_stimulus = 40e-3
         self.delta_sequence = 100e-3
 
+        # Status variables
+        self.runtime = None
+
         # Declare neuron populations
         self.neurons_exc = None
         self.neurons_inh = None
@@ -64,15 +68,15 @@ class SHTMBase(ABC):
         self.rec_neurons_exc = None
 
     def init_network(self):
-        self.init_neurons(v_threshold)
+        self.init_neurons()
         self.init_connections()
         self.init_external_input()
         self.init_rec_exc()
 
-    def init_neurons(self):
+    def init_neurons(self, v_rest=60, v_reset=[125, 60], v_thresh=[68, 75]):
         self.neurons_exc = []
         for i in range(self.alphabet_size):
-            dendrites, somas = self.init_neurons_exc()
+            dendrites, somas = self.init_neurons_exc(v_rest=v_rest, v_reset=v_reset, v_thresh=v_thresh)
             dendrites.record(['spikes'])
             somas.record(['spikes'])
             self.neurons_exc.append((dendrites, somas))
@@ -81,35 +85,36 @@ class SHTMBase(ABC):
 
         self.neurons_ext = pynn.Population(self.alphabet_size, SpikeSourceArray())
 
+        print("Starting preprocessing/calibration...")
         pynn.preprocess()
 
         for dendrites, somas in self.neurons_exc:
             self.init_neurons_exc_post_preprocess(dendrites, somas)
 
-    def init_neurons_exc(self, num_neurons=None):
+    def init_neurons_exc(self, num_neurons=None, v_rest=[60, 60], v_reset=[100, 60], v_thresh=[120, 120]):
         if num_neurons is None:
             num_neurons = self.num_neurons_per_symbol
 
         predictive_mode = True
 
         # TODO: remove once pynn_brainscales supports float values directly (bug currently)
-        pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_I": 2.}) 
+        # pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_I": 2.})
 
         all_neurons = pynn.Population(num_neurons * 2, pynn.cells.CalibHXNeuronCuba(
             cm=16,
-            tau_m=5,
-            tau_syn_I=[2., 0.5] * num_neurons,
+            tau_m=10,
+            tau_syn_I=[2, 1] * num_neurons,
             tau_syn_E=[2, 5] * num_neurons,
-            v_rest=60,
-            v_reset=[125, 60] * num_neurons,
-            v_thresh=[72 if predictive_mode else 68, 120 if predictive_mode else 75] * num_neurons,
-            tau_refrac=[60, 2] * num_neurons,
-            i_synin_gm_I=700,           # capmem current lsb
-            i_synin_gm_E=700,           # capmem current lsb
+            v_rest=v_rest * num_neurons,
+            v_reset=v_reset * num_neurons,
+            v_thresh=v_thresh * num_neurons,
+            tau_refrac=[60, 10] * num_neurons,
+            i_synin_gm_I=700,  # capmem current lsb
+            i_synin_gm_E=700,  # capmem current lsb
         ))
 
-        dendrites = pynn.PopulationView(all_neurons, slice(0, num_neurons * 2, 2))
-        somas = pynn.PopulationView(all_neurons, slice(1, num_neurons * 2, 2))
+        dendrites = pynn.PopulationView(all_neurons, slice(ID_DENDRITE, num_neurons * 2, 2))
+        somas = pynn.PopulationView(all_neurons, slice(ID_SOMA, num_neurons * 2, 2))
 
         somas.record(["spikes"])
 
@@ -130,16 +135,18 @@ class SHTMBase(ABC):
         if num_neurons is None:
             num_neurons = self.alphabet_size
 
+        pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_E": 2.})
+
         pop = pynn.Population(num_neurons, pynn.cells.CalibHXNeuronCuba(
             cm=16,  # [0, 63]
             tau_m=5,
             tau_syn_I=10,
-            tau_syn_E=10,
-            v_rest=80,                  # CADC lsb
-            v_reset=80,                 # CADC lsb
-            v_thresh=125,               # CADC lsb
-            i_synin_gm_I=700,           # capmem current lsb
-            i_synin_gm_E=700,           # capmem current lsb
+            tau_syn_E=0.5,
+            v_rest=60,  # CADC lsb
+            v_reset=60,  # CADC lsb
+            v_thresh=80,  # CADC lsb
+            i_synin_gm_I=700,  # capmem current lsb
+            i_synin_gm_E=700,  # capmem current lsb
             tau_refrac=2,
         ))
 
@@ -162,6 +169,7 @@ class SHTMBase(ABC):
                 receptor_type="excitatory"))
 
         self.exc_to_exc = []
+        num_connections = int(self.num_neurons_per_symbol * p_exc_exc)
         for i in range(self.alphabet_size):
             for j in range(self.alphabet_size):
                 if i == j:
@@ -169,7 +177,7 @@ class SHTMBase(ABC):
                 self.exc_to_exc.append(pynn.Projection(
                     self.neurons_exc[i][ID_SOMA],
                     self.neurons_exc[j][ID_DENDRITE],
-                    pynn.FixedProbabilityConnector(p_exc_exc),  # Todo: Maybe replace this with FixedNumberPreConnector
+                    pynn.FixedNumberPreConnector(num_connections, rng=NumpyRNG(seed=j + i * self.alphabet_size)),
                     synapse_type=StaticSynapse(weight=w_exc_exc),
                     receptor_type="excitatory",
                     label=f"exc-exc_{self.id_to_letter(i)}>{self.id_to_letter(j)}"))
@@ -225,7 +233,11 @@ class SHTMBase(ABC):
                 axs[i].eventplot(spikes, label=neurons_i.NAME, color=f"C{neurons_i.ID}")
 
             # Configure the plot layout
-            axs[i].set_xlim(0., pynn.get_current_time())
+            if self.runtime is not None:
+                max_time = self.runtime
+            else:
+                max_time = pynn.get_current_time()
+            axs[i].set_xlim(0., max_time)
             axs[i].set_ylim(-1, self.num_neurons_per_symbol + 1)
             axs[i].yaxis.set_ticks(range(self.num_neurons_per_symbol + 1))
             axs[i].set_ylabel(self.id_to_letter(i), weight='bold')
@@ -244,13 +256,20 @@ class SHTMBase(ABC):
         axs[-1].set_xlabel("Time [ms]")
         fig.text(0.02, 0.5, "Symbol", va="center", rotation="vertical")
 
-    def plot_v_exc(self, alphabet_range):
+    def plot_v_exc(self, alphabet_range, neuron_range='all', neuron_type=ID_SOMA, runtime=0.1):
         self.reset_rec_exc()
 
+        if type(neuron_range) is str and neuron_range == 'all':
+            neuron_range = range(self.num_neurons_per_symbol)
+        elif type(neuron_range) is list:
+            pass
+        else:
+            return
+
         for alphabet_id in alphabet_range:
-            for neuron_id in range(self.num_neurons_per_symbol):
-                self.init_rec_exc(alphabet_id=alphabet_id, neuron_id=neuron_id)
-                pynn.run(0.1)
+            for neuron_id in neuron_range:
+                self.init_rec_exc(alphabet_id=alphabet_id, neuron_id=neuron_id, neuron_type=neuron_type)
+                pynn.run(runtime)
                 plot_membrane(self.rec_neurons_exc)
                 self.reset_rec_exc()
 
@@ -287,11 +306,17 @@ class SHTMSingleNeuron(SHTMBase):
         dendrite, soma, ref_neuron = self.init_neurons_exc()
         self.neurons_exc.append((dendrite, soma, ref_neuron))
 
+        print("Starting preprocessing/calibration...")
+        pynn.preprocess()
+
+        for dendrites, somas, ref_neuron in self.neurons_exc:
+            self.init_neurons_exc_post_preprocess(dendrites, somas)
+
     def init_neurons_exc(self, num_neurons=None):
         predictive_mode = True
 
         # TODO: remove once pynn_brainscales supports float values directly (bug currently)
-        pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_I": 2.}) 
+        pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_I": 2.})
 
         pop_ref_neuron = pynn.Population(1, pynn.cells.CalibHXNeuronCuba(
             cm=16,
@@ -396,6 +421,8 @@ class SHTMStatic(SHTMBase):
 
         if sequence is None:
             spike_times[0].append(0.04)
+        elif len(sequence) == 0:
+            pass
         else:
             sequence_offset = 0
             for i_rep in range(num_repetitions):
@@ -560,10 +587,8 @@ class SHTMTotal(SHTMStatic):
         else:
             self.log_weights = log_weights
 
-    def init_neurons(self):
-        super().init_neurons()
-
-    def init_connections(self, debug=False, w_ext_exc=200, w_exc_exc=0.01, w_exc_inh=60, w_inh_exc=-80, p_exc_exc=0.2):
+    def init_connections(self, debug=False, w_ext_exc=200, w_exc_exc=0.01, w_exc_inh=60, w_inh_exc=-80, p_exc_exc=0.2,
+                         mature_weight=63, learning_factor=10):
         super().init_connections(w_ext_exc, w_exc_exc, w_exc_inh, w_inh_exc, p_exc_exc)
 
         self.con_plastic = list()
@@ -575,49 +600,77 @@ class SHTMTotal(SHTMStatic):
             post_somas = pynn.PopulationView(self.neurons_exc[self.ALPHABET[letter_post]][ID_SOMA],
                                              list(range(self.num_neurons_per_symbol)))
 
-            self.con_plastic.append(Plasticity(self.exc_to_exc[i_plastic], post_somas=post_somas, debug=debug))
+            self.con_plastic.append(Plasticity(self.exc_to_exc[i_plastic], post_somas=post_somas,
+                                               mature_weight=mature_weight, learning_factor=learning_factor,
+                                               debug=debug))
 
         for i_perm in self.log_permanence:
             self.con_plastic[i_perm].enable_permanence_logging()
         for i_perm in self.log_weights:
             self.con_plastic[i_perm].enable_weights_logging()
 
-    def print_permanence_dif(self):
+    def print_permanence_diff(self):
         for i_perm in self.log_permanence:
             permanence_diff = self.con_plastic[i_perm].permanences[-1] - self.con_plastic[i_perm].permanences[0]
             print(
                 f"Permanence diff for {self.con_plastic[i_perm].projection.label} ({i_perm}): {list(permanence_diff)}")
 
     def plot_permanence_diff(self):
-        fig, axs = plt.subplots(len(self.log_permanence), 1, sharex="all", figsize=(10, 7))
+        fig, axs = plt.subplots(len(self.log_permanence), 1, sharex="all", figsize=(22, 7))
+
+        all_connection_ids = set()
+        for i_perm in self.log_permanence:
+            connection_ids = self.con_plastic[i_perm].get_all_connection_ids()
+            all_connection_ids.update(connection_ids)
+        all_connection_ids = sorted(all_connection_ids)
 
         for i_perm in self.log_permanence:
             permanence_diff = self.con_plastic[i_perm].permanences[-1] - self.con_plastic[i_perm].permanences[0]
-            num_connections = len(permanence_diff)
+            connection_ids = self.con_plastic[i_perm].get_all_connection_ids()
 
-            colors = ['C0' if p >= 0 else 'C1' for p in permanence_diff]
+            all_permanence_diff = np.zeros(len(all_connection_ids))
+            for i_all_cons, con_ids in enumerate(all_connection_ids):
+                if con_ids in connection_ids:
+                    all_permanence_diff[i_all_cons] = permanence_diff[connection_ids.index(con_ids)]
 
-            axs[i_perm].bar(range(num_connections), permanence_diff, color=colors)
+            colors = ['C0' if p >= 0 else 'C1' for p in all_permanence_diff]
+
+            axs[i_perm].bar(range(len(all_connection_ids)), all_permanence_diff, color=colors)
             axs[i_perm].set_ylabel(self.con_plastic[i_perm].projection.label.split('_')[1], weight='bold')
-            axs[i_perm].yaxis.set_ticks([0])
-            axs[i_perm].xaxis.set_ticks(range(0, num_connections))
+            y_min = round(min(all_permanence_diff), 1)
+            y_max = round(max(all_permanence_diff), 1)
+            if y_min == y_max == 0:
+                axs[i_perm].yaxis.set_ticks([0.0])
+            else:
+                axs[i_perm].yaxis.set_ticks([y_min, y_max])
+            axs[i_perm].xaxis.set_ticks(range(len(all_connection_ids)), all_connection_ids, rotation=45)
             axs[i_perm].grid(True, which='both', axis='both')
 
         axs[-1].set_xlabel("Connection [#]")
+        fig.tight_layout(pad=1.0)
         fig.text(0.02, 0.5, "Permanence diff / connection direction", va="center", rotation="vertical")
 
-    def plot_permanence(self):
-        fig, axs = plt.subplots(len(self.log_permanence), 1, sharex="all", figsize=(30, 30))
+    def plot_permanence_history(self, plot_con_ids='all'):
+        if type(plot_con_ids) is str and plot_con_ids == 'all':
+            plot_con_ids = self.log_permanence
+        elif type(plot_con_ids) is list:
+            pass
+        else:
+            return
 
-        for i_perm in self.log_permanence:
+        fig, axs = plt.subplots(len(plot_con_ids), 1, sharex="all", figsize=(14, len(plot_con_ids) * 4))
+
+        for i_perm in plot_con_ids:
             permanence = self.con_plastic[i_perm].permanences
             num_connections = len(permanence)
 
+            # Plot all previous permanences as a line over time
             axs[i_perm].plot(range(num_connections), permanence)
+
             axs[i_perm].set_ylabel(self.con_plastic[i_perm].projection.label.split('_')[1], weight='bold')
             axs[i_perm].grid(True, which='both', axis='both')
 
-        axs[-1].set_xlabel("Connection [#]")
+        axs[-1].set_xlabel("Number of learning phases")
         fig.text(0.02, 0.5, "Permanence / connection direction", va="center", rotation="vertical")
 
     def plot_weight_diff(self):
@@ -649,21 +702,6 @@ class SHTMTotal(SHTMStatic):
 
         self.runtime = runtime
 
-        # dendrite_v = []
-        # soma_v = []
-
-        # self.vs = (dendrite_v, soma_v)
-        # self.permanences = []
-        # self.weight = []
-
-        # Todo: Remove if no longer needed
-        # dendrite_s = []
-        # soma_s = []
-        # spikes = [dendrite_s, soma_s]
-        # x = []
-        # z = []
-
-        # pop.record(["v", "spikes"])
         # Todo: Why do we run multiple steps with 0.1 runtime? Is that 0.1 ms?
         for t in range(steps):
             print(f'Running emulation step {t + 1}/{steps}')
@@ -675,24 +713,12 @@ class SHTMTotal(SHTMStatic):
                 print("Starting plasticity calculations")
                 for i_plasticity, plasticity in enumerate(self.con_plastic):
                     plasticity(self.runtime)
-                    print(f"Finished plasticity calculation {i_plasticity+1}/{len(self.con_plastic)}")
-
-            # Gather data for visualization of single neuron plasticity
-            # self.vs[idx].append(pop.get_data("v").segments[-1].irregularlysampledsignals[0])
-            # self.permanences.append(copy.copy(self.plasticity.permanence))
-            # self.weight.append(self.proj_dendrite_in.get("weight", format="array"))
-
-            # Todo: Remove if no longer needed
-            # spikes[idx].append(pop.get_data("spikes").segments[-1].spiketrains)
-            # x.append(self.plasticity.x[0])
-            # z.append(self.plasticity.z[0])
-
-        # pop.record(None)
-        # pop.record(["spikes"])  # Todo: Remove?! Unnecessary?!
+                    print(f"Finished plasticity calculation {i_plasticity + 1}/{len(self.con_plastic)}")
 
 
 class Plasticity:
-    def __init__(self, projection: pynn.Projection, post_somas=None, debug=False):
+    def __init__(self, projection: pynn.Projection, post_somas=None, mature_weight=63, learning_factor=1,
+                 debug=False):
         self.projection = projection
         # print("inside constructor")
 
@@ -701,21 +727,20 @@ class Plasticity:
         self.permanences = None
         self.weights = None
         self.permanence_max = 20.
-        self.threshold = np.ones((len(self.projection))) * 20.
-        self.lambda_plus = 0.08
-        self.tau_plus = 20. / 1e3
-        self.lambda_minus = 0.0015
+        self.threshold = np.ones((len(self.projection))) * 10.
+        self.lambda_plus = 0.08e3 * learning_factor
+        self.lambda_minus = 0.0015e3 * learning_factor
+        self.lambda_h = 0.014e3 * learning_factor
+        self.tau_plus = 20e-3
+        self.tau_h = 440e-3
         self.target_rate_h = 1.
-        self.lambda_h = 0.014
-        self.tau_h = 440. / 1e3
         self.y = 1.
         self.delta_t_min = 4e-3
         self.delta_t_max = 80e-3
         self.dt = 0.1e-3
         self.post_somas = post_somas
-        self.mature_weight = 63
+        self.mature_weight = mature_weight
         self.debug = debug
-        # print(self.delta_t_min, self.delta_t_max)
 
         self.x = np.zeros((len(self.projection.pre)))
         self.z = np.zeros((len(self.projection.post)))
@@ -760,15 +785,14 @@ class Plasticity:
             if delta_permanence != 0:
                 if self.debug:
                     print(
-                        f"t: {t},  p: {round(permanence, 5)},  dp: {delta_permanence},  x: {round(x, 2)},  "
+                        f"t: {round(t, 5)},  p: {round(permanence, 5)},  dp: {round(delta_permanence, 5)},  x: {round(x, 2)},  "
                         f"z: {round(z, 2)}, dp_a: {round(dp_a, 3)}, dp_b: {round(dp_b, 3)}, dp_c: {round(dp_c, 3)}")
-                    print(f"{neuron_spikes_pre}")
 
             if permanence >= threshold:
                 mature = True
 
             # Todo: Enable again after debugging
-            # permanence = np.clip(permanence, a_min=permanence_min, a_max=self.permanence_max)
+            permanence = np.clip(permanence, a_min=permanence_min, a_max=self.permanence_max)
 
         return permanence, x, z, mature
 
@@ -777,6 +801,17 @@ class Plasticity:
 
     def enable_weights_logging(self):
         self.weights = [np.copy(self.projection.get("weight", format="array").flatten())]
+
+    def get_connection_ids(self, connection_id):
+        connection_ids = (f"{self.projection.connections[0].presynaptic_index}>"
+                          f"{self.projection.connections[0].postsynaptic_index}")
+        return connection_ids
+
+    def get_all_connection_ids(self):
+        connection_ids = []
+        for con in self.projection.connections:
+            connection_ids.append(f"{con.presynaptic_index}>{con.postsynaptic_index}")
+        return connection_ids
 
     def __call__(self, runtime: float):
         if isinstance(self.projection.pre.celltype, pynn.cells.SpikeSourceArray):
@@ -796,6 +831,9 @@ class Plasticity:
             neuron_spikes_pre = spikes_pre[j]
             neuron_spikes_post_dendrite = np.array(spikes_post_dendrite[i])
             neuron_spikes_post_soma = spikes_post_somas[i]
+
+            if self.debug:
+                print(f"Permanence calculation for connection {c} [{i}, {j}]")
 
             permanence, x, z, mature = self.rule(permanence=self.permanence[c], threshold=self.threshold[c],
                                                  runtime=runtime, x=self.x[j], z=self.z[i],
