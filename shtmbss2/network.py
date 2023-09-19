@@ -17,6 +17,13 @@ from shtmbss2.plot import plot_membrane
 ID_DENDRITE = 0
 ID_SOMA = 1
 
+ID_PRE = 0
+ID_POST = 1
+
+
+def symbol_from_label(label, endpoint):
+    return label.split('_')[1].split('>')[endpoint]
+
 
 class NeuronType:
     class Dendrite:
@@ -689,6 +696,27 @@ class SHTMTotal(SHTMStatic):
         axs[-1].set_xlabel("Connection [#]")
         fig.text(0.02, 0.5, "Weights diff / connection direction", va="center", rotation="vertical")
 
+    def get_spike_times(self, runtime, dt):
+        times = np.linspace(0., runtime, int(runtime / dt))
+
+        spike_times_dendrite = np.zeros((self.alphabet_size, self.num_neurons_per_symbol, len(times)), dtype=np.int8)
+        spike_times_soma = np.zeros((self.alphabet_size, self.num_neurons_per_symbol, len(times)), dtype=np.int8)
+
+        for symbol_i in range(self.alphabet_size):
+            dendrites, somas = self.neurons_exc[symbol_i]
+
+            for i_dendrite, dendrite_spikes in enumerate(dendrites.get_data("spikes").segments[-1].spiketrains):
+                for spike_time in dendrite_spikes:
+                    spike_id = int(spike_time / times[1])
+                    spike_times_dendrite[symbol_i, i_dendrite, spike_id] = 1
+
+            for i_soma, soma_spikes in enumerate(somas.get_data("spikes").segments[-1].spiketrains):
+                for spike_time in soma_spikes:
+                    spike_id = int(spike_time / times[1])
+                    spike_times_soma[symbol_i, i_soma, spike_id] = 1
+
+        return spike_times_dendrite, spike_times_soma
+
     def run(self, runtime=0.1, steps=200, plasticity_enabled=True):
         if type(runtime) is str:
             if str(runtime).lower() == 'max':
@@ -724,8 +752,12 @@ class SHTMTotal(SHTMStatic):
 
             if plasticity_enabled:
                 print("Starting plasticity calculations")
+                # Prepare spike time matrices
+                self.spike_times_dendrite, self.spike_times_soma = self.get_spike_times(runtime, 0.1e-3)
+
+                # Calculate plasticity for each synapse
                 for i_plasticity, plasticity in enumerate(self.con_plastic):
-                    plasticity(self.runtime)
+                    plasticity(self.runtime, self.spike_times_dendrite, self.spike_times_soma)
                     print(f"Finished plasticity calculation {i_plasticity + 1}/{len(self.con_plastic)}")
 
 
@@ -748,7 +780,6 @@ class Plasticity:
         self.tau_h = 440e-3
         self.target_rate_h = 1.
         self.lambda_h = 0.014
-        self.tau_h = 440. / 1e3
         self.y = 1.
         self.delta_t_min = 4e-3
         self.delta_t_max = 80e-3
@@ -761,25 +792,33 @@ class Plasticity:
         self.x = np.zeros((len(self.projection.pre)))
         self.z = np.zeros((len(self.projection.post)))
 
+        self.symbol_id_pre = SHTMBase.ALPHABET[symbol_from_label(self.projection.label, ID_PRE)]
+        self.symbol_id_post = SHTMBase.ALPHABET[symbol_from_label(self.projection.label, ID_POST)]
+
+
     def rule(self, permanence, threshold, x, z, runtime, permanence_min,
-             neuron_spikes_pre, neuron_spikes_post_dendrite, neuron_spikes_post_soma):
+             neuron_spikes_pre, neuron_spikes_post_dendrite, neuron_spikes_post_soma, spike_times_dendrite,
+             spike_times_soma, id_pre, id_post):
         mature = False
-        for t in np.linspace(0., runtime, int(runtime / self.dt)):
+        for i, t in enumerate(np.linspace(0., runtime, int(runtime / self.dt))):
 
-            # Todo: Improve efficiency in case no spikes occured
             # True - if any pre-synaptic neuron spiked
-            has_pre_spike = any(t <= spike < t + self.dt for spike in neuron_spikes_pre)
+            has_pre_spike = spike_times_soma[self.symbol_id_pre, id_pre, i]
             # True - if any post dendrite spiked
-            has_post_dendritic_spike = any(t <= spike < t + self.dt for spike in neuron_spikes_post_dendrite)
+            has_post_dendritic_spike = spike_times_dendrite[self.symbol_id_post, id_post, i]
 
-            # Indicator function (1st step) - Number of presynaptic spikes within learning time window
-            # for each postsynaptic spike
-            I = [sum(self.delta_t_min < (spike_post - spike_pre) < self.delta_t_max for spike_pre in neuron_spikes_pre)
-                 for spike_post in neuron_spikes_post_soma]
-            # Indicator function (2nd step) - Number of pairs of pre-/postsynaptic spikes
-            # for which synapses are potentiated
-            has_post_somatic_spike_I = sum(
-                (t <= spike < t + self.dt) and I[n] for n, spike in enumerate(neuron_spikes_post_soma))
+
+            if spike_times_soma[self.symbol_id_post, id_post, i] > 0:
+                # Indicator function (1st step) - Number of presynaptic spikes within learning time window
+                # for each postsynaptic spike
+                I = [sum(self.delta_t_min < (spike_post - spike_pre) < self.delta_t_max for spike_pre in neuron_spikes_pre)
+                     for spike_post in neuron_spikes_post_soma]
+                # Indicator function (2nd step) - Number of pairs of pre-/postsynaptic spikes
+                # for which synapses are potentiated
+                has_post_somatic_spike_I = sum(
+                    (t <= spike < t + self.dt) and I[n] for n, spike in enumerate(neuron_spikes_post_soma))
+            else:
+                has_post_somatic_spike_I = 0
 
             # Spike trace of presynaptic neuron
             x += (- x / self.tau_plus) * self.dt + has_pre_spike
@@ -801,15 +840,14 @@ class Plasticity:
             if delta_permanence != 0:
                 if self.debug:
                     print(
-                        f"t: {round(t, 5)},  p: {round(permanence, 5)},  dp: {round(delta_permanence, 5)},  x: {round(x, 2)},  "
+                        f"t: {round(t, 5)},  p: {round(permanence, 5)},  dp: {round(delta_permanence, 5)},  x: {round(x, 2)},"
                         f"z: {round(z, 2)}, dp_a: {round(dp_a, 3)}, dp_b: {round(dp_b, 3)}, dp_c: {round(dp_c, 3)}")
-                    print(f"{neuron_spikes_pre}")
 
-            if permanence >= threshold:
-                mature = True
 
-            # Todo: Enable again after debugging
             permanence = np.clip(permanence, a_min=permanence_min, a_max=self.permanence_max)
+
+        if permanence >= threshold:
+            mature = True
 
         return permanence, x, z, mature
 
@@ -830,7 +868,7 @@ class Plasticity:
             connection_ids.append(f"{con.presynaptic_index}>{con.postsynaptic_index}")
         return connection_ids
 
-    def __call__(self, runtime: float):
+    def __call__(self, runtime: float, spike_times_dendrite, spike_times_soma):
         if isinstance(self.projection.pre.celltype, pynn.cells.SpikeSourceArray):
             spikes_pre = self.projection.pre.get("spike_times").value
             spikes_pre = np.array(spikes_pre)
@@ -857,7 +895,9 @@ class Plasticity:
                                                  permanence_min=self.permanence_min[c],
                                                  neuron_spikes_pre=neuron_spikes_pre,
                                                  neuron_spikes_post_dendrite=neuron_spikes_post_dendrite,
-                                                 neuron_spikes_post_soma=neuron_spikes_post_soma)
+                                                 neuron_spikes_post_soma=neuron_spikes_post_soma,
+                                                 spike_times_dendrite=spike_times_dendrite,
+                                                 spike_times_soma=spike_times_soma, id_pre=j, id_post=i)
             self.permanence[c] = permanence
             self.x[j] = x
             self.z[i] = z
