@@ -135,12 +135,12 @@ class SHTMBase(ABC):
         pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_E": 2.})
 
         pop = pynn.Population(num_neurons, pynn.cells.CalibHXNeuronCuba(
-            tau_m=5,
+            tau_m=2,
             tau_syn_I=10,
             tau_syn_E=0.5,
-            # v_rest=60,  # CADC lsb
-            # v_reset=60,  # CADC lsb
-            # v_thresh=80,  # CADC lsb
+            v_rest=60,  # CADC lsb
+            v_reset=60,  # CADC lsb
+            v_thresh=75,  # CADC lsb
             # i_synin_gm_I=700,  # capmem current lsb
             # i_synin_gm_E=700,  # capmem current lsb
             tau_refrac=2,
@@ -204,8 +204,15 @@ class SHTMBase(ABC):
     def reset_rec_exc(self):
         self.rec_neurons_exc.record(None)
 
-    def plot_events(self, neuron_types="all"):
-        fig, axs = plt.subplots(self.alphabet_size, 1, sharex="all", figsize=(12, 10))
+    def plot_events(self, neuron_types="all", size=None):
+        if size is None:
+            size = (12, 10)
+        fig, axs = plt.subplots(self.alphabet_size, 1, sharex="all", figsize=size)
+
+        if self.runtime is not None:
+            max_time = self.runtime
+        else:
+            max_time = pynn.get_current_time()
 
         for i in range(self.alphabet_size):
             neurons_all = dict()
@@ -229,10 +236,6 @@ class SHTMBase(ABC):
                 axs[i].eventplot(spikes, label=neurons_i.NAME, color=f"C{neurons_i.ID}")
 
             # Configure the plot layout
-            if self.runtime is not None:
-                max_time = self.runtime
-            else:
-                max_time = pynn.get_current_time()
             axs[i].set_xlim(0., max_time)
             axs[i].set_ylim(-1, self.num_neurons_per_symbol + 1)
             axs[i].yaxis.set_ticks(range(self.num_neurons_per_symbol + 1))
@@ -250,6 +253,7 @@ class SHTMBase(ABC):
         plt.figlegend(handles=custom_lines, loc='upper center', ncol=3, labelspacing=0.)
 
         axs[-1].set_xlabel("Time [ms]")
+        axs[-1].xaxis.set_ticks(np.arange(0.0, max_time, 0.02))
         fig.text(0.02, 0.5, "Symbol", va="center", rotation="vertical")
 
     def plot_v_exc(self, alphabet_range, neuron_range='all', neuron_type=ID_SOMA, runtime=0.1):
@@ -408,25 +412,26 @@ class SHTMStatic(SHTMBase):
     # def init_connections(self):
     #     super().init_connections()
 
-    def init_external_input(self, sequence=None, num_repetitions=1):
+    def init_external_input(self, sequences=None, num_repetitions=1):
         spike_times = [list() for i in range(self.alphabet_size)]
         spike_time = None
 
-        if sequence is None:
+        if sequences is None:
             spike_times[0].append(0.04)
-        elif len(sequence) == 0:
+        elif len(sequences) == 0:
             pass
         else:
             sequence_offset = 0
             for i_rep in range(num_repetitions):
-                for i_element, element in enumerate(sequence):
-                    spike_time = sequence_offset + i_element * self.delta_stimulus + self.delta_stimulus
-                    spike_times[self.ALPHABET[element]].append(spike_time)
-                sequence_offset = spike_time + self.delta_sequence
+                for i_seq, sequence in enumerate(sequences):
+                    for i_element, element in enumerate(sequence):
+                        spike_time = sequence_offset + i_element * self.delta_stimulus + self.delta_stimulus
+                        spike_times[self.ALPHABET[element]].append(spike_time)
+                    sequence_offset = spike_time + self.delta_sequence
 
         self.last_ext_spike_time = spike_time
 
-        print(f'Initialized external input for sequence {sequence}')
+        print(f'Initialized external input for sequence(s) {sequences}')
         print(f'Spike times:')
         for i_letter, letter_spikes in enumerate(spike_times):
             print(f'{list(self.ALPHABET.keys())[i_letter]}: {spike_times[i_letter]}')
