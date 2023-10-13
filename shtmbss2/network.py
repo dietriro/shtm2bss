@@ -208,6 +208,32 @@ class SHTMBase(ABC):
                 synapse_type=StaticSynapse(weight=self.p.Synapses.w_inh_exc),
                 receptor_type="inhibitory"))
 
+    def run_add_calibration(self, v_rest_calib=275):
+        self.reset_rec_exc()
+        for alphabet_id in range(4):
+            for neuron_id in range(15):
+                log.debug(alphabet_id, neuron_id, "start")
+                for v_leak in range(450, 600, 10):
+                    self.neurons_exc[alphabet_id][1].actual_hwparams[neuron_id].leak.v_leak = v_leak
+                    self.init_rec_exc(alphabet_id=alphabet_id, neuron_id=neuron_id, neuron_type=1)
+                    pynn.run(0.02)
+                    membrane = self.rec_neurons_exc.get_data("v").segments[-1].irregularlysampledsignals[0].base[1]
+                    import numpy as np
+                    self.reset_rec_exc()
+                    if v_rest_calib <= membrane.mean():
+                        for v_leak_inner in range(v_leak - 10, v_leak + 10, 1):
+                            self.neurons_exc[alphabet_id][1].actual_hwparams[neuron_id].leak.v_leak = v_leak_inner
+                            self.init_rec_exc(alphabet_id=alphabet_id, neuron_id=neuron_id, neuron_type=1)
+                            pynn.run(0.02)
+                            membrane = \
+                                self.rec_neurons_exc.get_data("v").segments[-1].irregularlysampledsignals[0].base[1]
+                            import numpy as np
+                            self.reset_rec_exc()
+                            if v_rest_calib <= membrane.mean():
+                                log.debug(alphabet_id, neuron_id, v_leak_inner, membrane.mean())
+                                break
+                        break
+
     def init_rec_exc(self, alphabet_id=1, neuron_id=1, neuron_type=1):
         # ToDo: What exactly are we recording here? External or excitatory?
         self.rec_neurons_exc = pynn.PopulationView(self.neurons_exc[alphabet_id][neuron_type], [neuron_id])
