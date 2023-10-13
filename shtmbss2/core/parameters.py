@@ -7,6 +7,7 @@ class Parameters:
     class Experiment:
         type = None
         sequences = None
+        seq_repetitions = None
         runtime = None
         episodes = None
         run_add_calib = None
@@ -29,6 +30,7 @@ class Parameters:
         learning_factor = None
         permanence_max = None
         threshold = None
+        w_mature = None
         y = None
         lambda_plus = None
         lambda_minus = None
@@ -60,6 +62,7 @@ class Parameters:
             tau_refrac = None
 
     class Synapses:
+        dyn_inh_weights = None
         w_ext_exc = None
         w_exc_exc = None
         w_exc_inh = None

@@ -1,6 +1,7 @@
 experiment:
   type: ''
   sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
+  seq_repetitions: 1
   runtime: 0.44
   episodes: 100
   run_add_calib: False
@@ -19,6 +20,7 @@ plasticity:
   learning_factor: 10
   permanence_max: 20.
   threshold: 10.
+  w_mature: 500
   y: 1.
   lambda_plus: 0.08e3
   lambda_minus: 0.0015e3
@@ -47,6 +49,7 @@ neurons:
     tau_syn_E: [2, 5]
     tau_refrac: [60, 10]
 synapses:
+  dyn_inh_weights: False
   w_ext_exc: 200
   w_exc_exc: 0.01
   w_exc_inh: 60
