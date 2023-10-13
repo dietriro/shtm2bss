@@ -1,6 +1,7 @@
 import numpy as np
 import quantities
 import copy
+import pickle
 
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
@@ -15,6 +16,7 @@ from pynn_brainscales.brainscales2.standardmodels.synapses import StaticSynapse
 from shtmbss2.plot import plot_membrane
 from shtmbss2.core.logging import log
 from shtmbss2.core.parameters import Parameters
+from shtmbss2.plot import plot_dendritic_events
 
 ID_DENDRITE = 0
 ID_SOMA = 1
@@ -213,7 +215,8 @@ class SHTMBase(ABC):
     def reset_rec_exc(self):
         self.rec_neurons_exc.record(None)
 
-    def plot_events(self, neuron_types="all", size=None):
+    def plot_events(self, neuron_types="all", size=None, x_lim_lower=None, x_lim_upper=None, seq_start=0, seq_end=None,
+                    file_path=None):
         if size is None:
             size = (12, 10)
         fig, axs = plt.subplots(self.p.Network.num_symbols, 1, sharex="all", figsize=size)
@@ -222,6 +225,11 @@ class SHTMBase(ABC):
             max_time = self.runtime
         else:
             max_time = pynn.get_current_time()
+
+        if x_lim_lower is None:
+            x_lim_lower = 0.
+        if x_lim_upper is None:
+            x_lim_upper = max_time
 
         for i in range(self.p.Network.num_symbols):
             neurons_all = dict()
@@ -242,31 +250,56 @@ class SHTMBase(ABC):
                     spikes.append([])
                 else:
                     spikes.insert(0, [])
-                axs[i].eventplot(spikes, label=neurons_i.NAME, color=f"C{neurons_i.ID}")
+                if neurons_i == NeuronType.Dendrite:
+                    spikes_post = [s.base for s in
+                                   neurons_all[NeuronType.Soma].get_data("spikes").segments[-1].spiketrains]
+                    plot_dendritic_events(axs[i], spikes[1:], spikes_post, color=f"C{neurons_i.ID}",
+                                          label=neurons_i.NAME.capitalize(), seq_start=seq_start, seq_end=seq_end)
+                else:
+                    line_widths = 1.5
+                    line_lengths = 1
+
+                    axs[i].eventplot(spikes, linewidths=line_widths, linelengths=line_lengths,
+                                     label=neurons_i.NAME.capitalize(), color=f"C{neurons_i.ID}")
 
             # Configure the plot layout
-            axs[i].set_xlim(0., max_time)
+            axs[i].set_xlim(x_lim_lower, x_lim_upper)
             axs[i].set_ylim(-1, self.p.Network.num_neurons + 1)
-            axs[i].yaxis.set_ticks(range(self.p.Network.num_neurons + 1))
-            axs[i].set_ylabel(self.id_to_letter(i), weight='bold')
+            axs[i].yaxis.set_ticks(range(self.p.Network.num_neurons + 2))
+            axs[i].set_ylabel(self.id_to_letter(i), weight='bold', fontsize=20)
             axs[i].grid(True, which='both', axis='both')
 
             # Generate y-tick-labels based on number of neurons per symbol
-            y_tick_labels = ['Inh', '0'] + ['' for k in range(self.p.Network.num_neurons - 2)] + [
+            y_tick_labels = ['Inh', '', '0'] + ['' for k in range(self.p.Network.num_neurons - 2)] + [
                 str(self.p.Network.num_neurons - 1)]
-            axs[i].set_yticklabels(y_tick_labels)
+            axs[i].set_yticklabels(y_tick_labels, rotation=45, fontsize=18)
 
         # Create custom legend for all plots
-        custom_lines = [Line2D([0], [0], color=f"C{n.ID}", label=n.NAME, lw=3) for n in neuron_types]
+        custom_lines = [Line2D([0], [0], color=f"C{n.ID}", label=n.NAME.capitalize(), lw=3) for n in neuron_types]
 
-        plt.figlegend(handles=custom_lines, loc='upper center', ncol=3, labelspacing=0.)
+        axs[-1].set_xlabel("Time [ms]", fontsize=26, labelpad=14)
+        axs[-1].xaxis.set_ticks(np.arange(x_lim_lower, x_lim_upper, 0.02))
+        axs[-1].tick_params(axis='x', labelsize=18)
 
-        axs[-1].set_xlabel("Time [ms]")
-        axs[-1].xaxis.set_ticks(np.arange(0.0, max_time, 0.02))
-        fig.text(0.02, 0.5, "Symbol", va="center", rotation="vertical")
+        plt.figlegend(handles=custom_lines, loc=(0.377, 0.885), ncol=3, labelspacing=0., fontsize=18, fancybox=True,
+                      borderaxespad=4)
 
-    def plot_v_exc(self, alphabet_range, neuron_range='all', neuron_type=ID_SOMA, runtime=0.1, show_legend=True):
+        fig.text(0.01, 0.5, "Symbol & Neuron ID", va="center", rotation="vertical", fontsize=26)
+
+        fig.suptitle('Neuronal Events for Sequence {D, C, B} - Before Learning', x=0.5, y=0.99, fontsize=26)
+
+        if file_path is not None:
+            plt.savefig(f"{file_path}.pdf")
+
+            pickle.dump(fig, open(f'{file_path}.fig.pickle',
+                                  'wb'))  # This is for Python 3 - py2 may need `file` instead of `open`
+
+    def plot_v_exc(self, alphabet_range, neuron_range='all', size=None, neuron_type=ID_SOMA, runtime=0.1,
+                   show_legend=False, file_path=None):
         self.reset_rec_exc()
+
+        if size is None:
+            size = (12, 10)
 
         if type(neuron_range) is str and neuron_range == 'all':
             neuron_range = range(self.p.Network.num_neurons)
@@ -278,6 +311,8 @@ class SHTMBase(ABC):
         spike_times = [[]]
         header_spikes = list()
 
+        fig, ax = plt.subplots(figsize=size)
+
         for alphabet_id in alphabet_range:
             for neuron_id in neuron_range:
                 self.init_rec_exc(alphabet_id=alphabet_id, neuron_id=neuron_id, neuron_type=neuron_type)
@@ -288,14 +323,31 @@ class SHTMBase(ABC):
                 spike_times[0].append(np.array(spikes.multiplexed[1]).round(5).tolist())
                 header_spikes.append(f"{self.id_to_letter(alphabet_id)}[{neuron_id}]")
 
-                plot_membrane(self.rec_neurons_exc, label=header_spikes[-1])
+                # plot_membrane(self.rec_neurons_exc, label=header_spikes[-1])
+
+                membrane = self.rec_neurons_exc.get_data("v").segments[-1].irregularlysampledsignals[0]
+                ax.plot(membrane.times, membrane, alpha=0.5, label=header_spikes[-1])
+
                 self.reset_rec_exc()
+
+        # ax.xaxis.set_ticks(np.arange(0.02, 0.06, 0.01))
+        ax.tick_params(axis='x', labelsize=18)
+        ax.tick_params(axis='y', labelsize=18)
+
+        ax.set_xlabel("Time [ms]", labelpad=14, fontsize=26)
+        ax.set_ylabel("Membrane Voltage [a.u.]", labelpad=14, fontsize=26)
 
         if show_legend:
             plt.legend()
 
             # Print spike times
         print(tabulate(spike_times, headers=header_spikes) + '\n')
+
+        if file_path is not None:
+            plt.savefig(f"{file_path}.pdf")
+
+            pickle.dump(fig, open(f'{file_path}.fig.pickle',
+                                  'wb'))  # This is for Python 3 - py2 may need `file` instead of `open`
 
     def id_to_letter(self, id):
         return list(self.ALPHABET.keys())[id]
@@ -767,22 +819,6 @@ class SHTMTotal(SHTMStatic):
 
         self.runtime = runtime
 
-        # dendrite_v = []
-        # soma_v = []
-
-        # self.vs = (dendrite_v, soma_v)
-        # self.permanences = []
-        # self.weight = []
-
-        # Todo: Remove if no longer needed
-        # dendrite_s = []
-        # soma_s = []
-        # spikes = [dendrite_s, soma_s]
-        # x = []
-        # z = []
-
-        # pop.record(["v", "spikes"])
-        # Todo: Why do we run multiple steps with 0.1 runtime? Is that 0.1 ms?
         for t in range(steps):
             log.info(f'Running emulation step {t + 1}/{steps}')
 
