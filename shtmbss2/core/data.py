@@ -15,7 +15,7 @@ def load_yaml(path_yaml, file_name_yaml):
 
 
 def load_config(network_type):
-    config_file_name = f"{CONFIG_PREFIX}_{type(network_type).__name__()}.yaml"
+    config_file_name = f"{CONFIG_PREFIX}_{type(network_type).__name__}.yaml"
     return load_yaml(PATH_CONFIG, config_file_name)
 
 
