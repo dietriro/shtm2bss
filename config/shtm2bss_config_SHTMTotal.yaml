@@ -13,23 +13,23 @@ network:
   num_symbols: 4
   num_neurons: 15
 encoding:
-  dt_stm: 40e-3
-  dt_seq: 100e-3
+  dt_stm: 40.e-3
+  dt_seq: 100.e-3
 plasticity:
   type: 'original'
   learning_factor: 10
   permanence_max: 20.
   threshold: 10.
   w_mature: 500
-  y: 1.
-  lambda_plus: 0.08e3
-  lambda_minus: 0.0015e3
-  lambda_h: 0.014e3
+  y: 1
+  lambda_plus: 0.08e+3
+  lambda_minus: 0.0015e+3
+  lambda_h: 0.014e+3
   target_rate_h: 1.
-  tau_plus: 20e-3
-  tau_h: 440e-3
-  delta_t_min: 4e-3
-  delta_t_max: 80e-3
+  tau_plus: 20.e-3
+  tau_h: 440.e-3
+  delta_t_min: 4.e-3
+  delta_t_max: 80.e-3
   dt: 0.1e-3
 neurons:
   inhibitory:
@@ -41,19 +41,19 @@ neurons:
     tau_syn_E: 0.5
     tau_refrac: 2
   excitatory:
-    v_rest: 60
-    v_reset: 60
-    v_thresh: 120
+    v_rest: [60, 60]
+    v_reset: [100, 60]
+    v_thresh: [120, 120]
     tau_m: 10
     tau_syn_I: [3, 1]
     tau_syn_E: [2, 5]
     tau_refrac: [60, 10]
 synapses:
   dyn_inh_weights: False
-  w_ext_exc: 200
-  w_exc_exc: 0.01
-  w_exc_inh: 60
-  w_inh_exc: -80
-  p_exc_exc: 0.2
+  w_ext_exc: 500
+  w_exc_exc: 0.0
+  w_exc_inh: 220
+  w_inh_exc: -800
+  p_exc_exc: 0.4
 calibration:
   v_rest_calib: 275
