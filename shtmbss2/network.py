@@ -13,7 +13,6 @@ from pynn_brainscales import brainscales2 as pynn
 from pynn_brainscales.brainscales2.standardmodels.cells import SpikeSourceArray
 from pynn_brainscales.brainscales2.standardmodels.synapses import StaticSynapse
 
-from shtmbss2.plot import plot_membrane
 from shtmbss2.core.logging import log
 from shtmbss2.core.parameters import Parameters
 from shtmbss2.plot import plot_dendritic_events
@@ -58,9 +57,6 @@ class SHTMBase(ABC):
         self.p = Parameters(network_type=self, custom_params=kwargs)
         self.load_params()
 
-        # Status variables
-        self.runtime = None
-
         # Declare neuron populations
         self.neurons_exc = None
         self.neurons_inh = None
@@ -97,7 +93,7 @@ class SHTMBase(ABC):
 
         self.neurons_ext = pynn.Population(self.p.Network.num_symbols, SpikeSourceArray())
 
-        log.inf("Starting preprocessing/calibration...")
+        log.info("Starting preprocessing/calibration...")
         pynn.preprocess()
 
         for dendrites, somas in self.neurons_exc:
@@ -115,12 +111,12 @@ class SHTMBase(ABC):
 
         all_neurons = pynn.Population(num_neurons * 2, pynn.cells.CalibHXNeuronCuba(
             tau_m=self.p.Neurons.Excitatory.tau_m,
-            tau_syn_I=self.p.Neurons.Excitatory.tau_syn_I,
-            tau_syn_E=self.p.Neurons.Excitatory.tau_syn_E,
-            v_rest=self.p.Neurons.Excitatory.v_rest,
-            v_reset=self.p.Neurons.Excitatory.v_reset,
-            v_thresh=self.p.Neurons.Excitatory.v_thresh,
-            tau_refrac=self.p.Neurons.Excitatory.tau_refrac,
+            tau_syn_I=self.p.Neurons.Excitatory.tau_syn_I * num_neurons,
+            tau_syn_E=self.p.Neurons.Excitatory.tau_syn_E * num_neurons,
+            v_rest=self.p.Neurons.Excitatory.v_rest * num_neurons,
+            v_reset=self.p.Neurons.Excitatory.v_reset * num_neurons,
+            v_thresh=self.p.Neurons.Excitatory.v_thresh * num_neurons,
+            tau_refrac=self.p.Neurons.Excitatory.tau_refrac * num_neurons,
         ))
 
         dendrites = pynn.PopulationView(all_neurons, slice(ID_DENDRITE, num_neurons * 2, 2))
@@ -254,8 +250,8 @@ class SHTMBase(ABC):
         else:
             return
 
-        if self.runtime is not None:
-            max_time = self.runtime
+        if self.p.Experiment.runtime is not None:
+            max_time = self.p.Experiment.runtime
         else:
             max_time = pynn.get_current_time()
 
@@ -273,6 +269,9 @@ class SHTMBase(ABC):
             fig, axs = plt.subplots(figsize=size)
         else:
             fig, axs = plt.subplots(self.p.Network.num_symbols, 1, sharex="all", figsize=size)
+
+        if seq_end is None:
+            seq_end = seq_start + self.runtime
 
         ax = None
 
@@ -559,7 +558,6 @@ class SHTMPlasticity(SHTMSingleNeuron):
 
         self.weight = None
         self.permanences = None
-        self.runtime = None
         self.vs = None
         self.plasticity = None
 
@@ -586,7 +584,10 @@ class SHTMPlasticity(SHTMSingleNeuron):
     def run(self, runtime=0.1):
         dendrite, soma, ref_neuron = self.neurons_exc[0]
 
-        self.runtime = runtime
+        if runtime is None:
+            runtime = self.p.Experiment.runtime
+        else:
+            self.p.Experiment.runtime = runtime
 
         dendrite_v = []
         soma_v = []
@@ -607,9 +608,9 @@ class SHTMPlasticity(SHTMSingleNeuron):
             for t in range(200):
                 log.info(f'Running emulation step {t + 1}/200 for neuron {idx + 1}/2')
 
-                pynn.run(self.runtime)
+                pynn.run(runtime)
 
-                self.plasticity(self.runtime)
+                self.plasticity(runtime)
 
                 # Gather data for visualization of single neuron plasticity
                 self.vs[idx].append(pop.get_data("v").segments[-1].irregularlysampledsignals[0])
@@ -653,24 +654,26 @@ class SHTMPlasticity(SHTMSingleNeuron):
     def plot_events_plasticity(self):
         fig, (ax_pre, ax_d, ax_s, ax_p, ax_w) = plt.subplots(5, 1, sharex=True)
 
-        times_dendrite = np.concatenate([np.array(self.vs[0][i].times) + self.runtime * i for i in range(200)])
+        times_dendrite = np.concatenate(
+            [np.array(self.vs[0][i].times) + self.p.Experiment.runtime * i for i in range(200)])
         vs_dendrite = np.concatenate([np.array(self.vs[0][i]) for i in range(200)])
-        times_soma = np.concatenate([np.array(self.vs[1][i].times) + self.runtime * i for i in range(200)])
+        times_soma = np.concatenate([np.array(self.vs[1][i].times) + self.p.Experiment.runtime * i for i in range(200)])
         vs_soma = np.concatenate([np.array(self.vs[1][i]) for i in range(200)])
 
         ax_pre.eventplot(
             np.concatenate(
-                [np.array(self.pop_dendrite_in.get("spike_times").value) + i * self.runtime for i in range(200)]),
+                [np.array(self.pop_dendrite_in.get("spike_times").value) + i * self.p.Experiment.runtime for i in
+                 range(200)]),
             label="pre", lw=.2)
         ax_pre.legend()
         ax_d.plot(times_dendrite, vs_dendrite, label="dendrite", lw=.2)
         ax_d.legend()
         ax_s.plot(times_soma, vs_soma, label="soma", lw=.2)
         ax_s.legend()
-        ax_p.plot(np.linspace(0., self.runtime * 200., 200), self.permanences[:200], label="permanence")
+        ax_p.plot(np.linspace(0., self.p.Experiment.runtime * 200., 200), self.permanences[:200], label="permanence")
         ax_p.set_ylabel("P [a.u.]")
         # ax_p.legend()
-        ax_w.plot(np.linspace(0., self.runtime * 200., 200),
+        ax_w.plot(np.linspace(0., self.p.Experiment.runtime * 200., 200),
                   np.array([w for w in np.array(self.weight[:200]).squeeze().T if any(w)]).T, label="weight")
         ax_w.set_ylabel("w [a.u.]")
         # ax_w.legend()
@@ -682,7 +685,6 @@ class SHTMTotal(SHTMStatic):
     def __init__(self, log_permanence=None, log_weights=None, w_exc_inh_dyn=None, **kwargs):
         super().__init__(**kwargs)
 
-        self.runtime = None
         self.con_plastic = None
         self.w_exc_inh_dyn = w_exc_inh_dyn
 
@@ -850,6 +852,8 @@ class SHTMTotal(SHTMStatic):
     def run(self, runtime=None, steps=200, plasticity_enabled=True, dyn_exc_inh=False):
         if runtime is None:
             runtime = self.p.Experiment.runtime
+        else:
+            self.p.Experiment.runtime = runtime
 
         if type(runtime) is str:
             if str(runtime).lower() == 'max':
@@ -859,13 +863,11 @@ class SHTMTotal(SHTMStatic):
         else:
             log.error("Error! Wrong runtime")
 
-        self.p.Experiment.runtime = runtime
-
         for t in range(steps):
             log.info(f'Running emulation step {t + 1}/{steps}')
 
             log.info(f"Current time: {pynn.get_current_time()}")
-            pynn.run(self.runtime)
+            pynn.run(runtime)
 
             active_synapse_post = np.zeros((self.p.Network.num_symbols, self.p.Network.num_neurons))
 
@@ -876,7 +878,7 @@ class SHTMTotal(SHTMStatic):
 
                 # Calculate plasticity for each synapse
                 for i_plasticity, plasticity in enumerate(self.con_plastic):
-                    plasticity(self.runtime, self.spike_times_dendrite, self.spike_times_soma)
+                    plasticity(runtime, self.spike_times_dendrite, self.spike_times_soma)
                     log.info(f"Finished plasticity calculation {i_plasticity + 1}/{len(self.con_plastic)}")
 
                     if dyn_exc_inh:
@@ -941,7 +943,7 @@ class Plasticity:
                 # for each postsynaptic spike
                 I = [sum(
                     self.delta_t_min < (spike_post - spike_pre) < self.delta_t_max for spike_pre in neuron_spikes_pre)
-                     for spike_post in neuron_spikes_post_soma]
+                    for spike_post in neuron_spikes_post_soma]
                 # Indicator function (2nd step) - Number of pairs of pre-/postsynaptic spikes
                 # for which synapses are potentiated
                 has_post_somatic_spike_I = sum(

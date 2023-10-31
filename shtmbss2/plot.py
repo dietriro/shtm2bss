@@ -1,3 +1,5 @@
+import numpy as np
+
 from matplotlib import pyplot as plt
 
 
@@ -29,4 +31,3 @@ def plot_dendritic_events(axis, spikes_dend, spikes_post, color, label, y_offset
 
         axis.plot([spike_dend_i, spike_post_i], [i_neuron + y_offset, i_neuron + y_offset], color=color,
                   label=label)
-
