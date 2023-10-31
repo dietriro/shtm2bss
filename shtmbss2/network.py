@@ -271,7 +271,7 @@ class SHTMBase(ABC):
             fig, axs = plt.subplots(self.p.Network.num_symbols, 1, sharex="all", figsize=size)
 
         if seq_end is None:
-            seq_end = seq_start + self.runtime
+            seq_end = seq_start + self.p.Experiment.runtime
 
         ax = None
 
