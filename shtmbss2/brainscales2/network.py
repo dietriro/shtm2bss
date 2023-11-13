@@ -139,22 +139,33 @@ class SHTMBase(network.SHTMBase, ABC):
             log.error("Cannot get neurons with symbol_id None")
             return
 
-        neurons = None
         if neuron_type == NeuronType.Inhibitory:
-            return self.neurons_inh[symbol_id]
+            return pynn.PopulationView(self.neurons_inh, [symbol_id])
         elif neuron_type in [NeuronType.Dendrite, NeuronType.Soma]:
             return self.neurons_exc[symbol_id][neuron_type.ID]
 
     def get_neuron_data(self, neuron_type, neurons=None, value_type="spikes", symbol_id=None, neuron_id=None,
                         runtime=None):
+        """
+        Returns the recorded data for the given neuron type or neuron population.
+
+        :param neuron_type: The type of the neuron.
+        :type neuron_type: Union[NeuronType.Dendrite, NeuronType.Soma, NeuronType.Inhibitory]
+        :param neurons: Optionally, the neuron population for which the data should be returned
+        :type neurons: pynn.Population
+        :param value_type: The value type (RecType) of the data to be returned ['spikes', 'v'].
+        :type value_type: str
+        :param symbol_id: The id of the symbol for which the data should be returned.
+        :type symbol_id: int
+        :param neuron_id: The index of the neuron within its population.
+        :type neuron_id: int
+        :param runtime: The runtime used during the last experiment.
+        :type runtime: float
+        :return: The specified data, recorded from the neuron for the past experiment.
+        :rtype:
+        """
         if neurons is None:
-            if neuron_type in [NeuronType.Soma, NeuronType.Dendrite]:
-                neurons = self.neurons_exc[symbol_id][neuron_type.ID]
-            elif neuron_type == NeuronType.Inhibitory:
-                neurons = pynn.PopulationView(self.neurons_inh, [symbol_id])
-        # else:
-        #     log.error("Error retrieving neuron data! Neither 'neurons' nor 'neuron_type' was specified.")
-        #     return
+            neurons = self.get_neurons(neuron_type, symbol_id=symbol_id)
 
         if value_type == RecTypes.SPIKES:
             data = neurons.get_data(RECORDING_VALUES[neuron_type][value_type]).segments[-1].spiketrains

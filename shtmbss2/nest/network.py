@@ -122,18 +122,15 @@ class SHTMBase(network.SHTMBase, ABC):
         if symbol_id is None:
             return neurons
         else:
-            return neurons[symbol_id]
+            if neuron_type == NeuronType.Inhibitory:
+                return pynn.PopulationView(self.neurons_inh, [symbol_id])
+            else:
+                return neurons[symbol_id]
 
     def get_neuron_data(self, neuron_type, neurons=None, value_type="spikes", symbol_id=None, neuron_id=None,
                         runtime=None):
         if neurons is None:
-            if neuron_type in [NeuronType.Soma, NeuronType.Dendrite]:
-                neurons = self.neurons_exc[symbol_id]
-            elif neuron_type == NeuronType.Inhibitory:
-                neurons = pynn.PopulationView(self.neurons_inh, [symbol_id])
-        # else:
-        #     log.error("Error retrieving neuron data! Neither 'neurons' nor 'neuron_type' was specified.")
-        #     return
+            neurons = self.get_neurons(neuron_type, symbol_id=symbol_id)
 
         if value_type == RecTypes.SPIKES:
             if neuron_type == NeuronType.Dendrite:
