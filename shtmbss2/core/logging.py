@@ -1,8 +1,6 @@
-import logging
-
 import colorlog
 
-from shtmbss2.core.config import *
+from shtmbss2.common.config import *
 
 
 def addLoggingLevel(levelName, levelNum, methodName=None):

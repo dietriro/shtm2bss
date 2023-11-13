@@ -18,6 +18,8 @@ encoding:
 plasticity:
   type: 'original'
   learning_factor: 10
+  permanence_init_min: 0
+  permanence_init_max: 0
   permanence_max: 20.
   threshold: 10.
   w_mature: 500
@@ -55,5 +57,9 @@ synapses:
   w_exc_inh: 220
   w_inh_exc: -800
   p_exc_exc: 0.4
+  receptor_ext_exc: "excitatory"
+  receptor_exc_exc: "excitatory"
+  receptor_exc_inh: "excitatory"
+  receptor_inh_exc: "inhibitory"
 calibration:
   v_rest_calib: 275

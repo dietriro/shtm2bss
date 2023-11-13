@@ -1,10 +1,19 @@
-from shtmbss2.core.config import *
+from abc import ABC
+
 from shtmbss2.core.logging import log
 from shtmbss2.core.data import load_config
 
 
+class ParameterGroup:
+    @classmethod
+    def dict(cls):
+        p_dict_original = cls.__dict__
+        p_dict = {v: p_dict_original[v] for v, m in vars(cls).items() if not (v.startswith('_') or callable(m))}
+        return p_dict
+
+
 class Parameters:
-    class Experiment:
+    class Experiment(ParameterGroup):
         type = None
         sequences = None
         seq_repetitions = None
@@ -12,20 +21,24 @@ class Parameters:
         episodes = None
         run_add_calib = None
 
-    class Plotting:
+    class Plotting(ParameterGroup):
         size = None
         file_type = None
         save_figure = None
 
-    class Network:
+    class Network(ParameterGroup):
         num_symbols = None
         num_neurons = None
 
-    class Encoding:
+    class Backend(ParameterGroup):
+        module_name = None
+        neuron_name = None
+
+    class Encoding(ParameterGroup):
         dt_stm = None
         dt_seq = None
 
-    class Plasticity:
+    class Plasticity(ParameterGroup):
         type = None
         learning_factor = None
         permanence_max = None
@@ -43,7 +56,8 @@ class Parameters:
         dt = None
 
     class Neurons:
-        class Inhibitory:
+        class Inhibitory(ParameterGroup):
+            c_m = None
             v_rest = None
             v_reset = None
             v_thresh = None
@@ -52,24 +66,37 @@ class Parameters:
             tau_syn_E = None
             tau_refrac = None
 
-        class Excitatory:
+        class Excitatory(ParameterGroup):
+            c_m = None
             v_rest = None
             v_reset = None
             v_thresh = None
             tau_m = None
             tau_syn_I = None
             tau_syn_E = None
+            tau_syn_ext = None
+            tau_syn_den = None
+            tau_syn_inh = None
             tau_refrac = None
 
-    class Synapses:
+        class Dendrite(ParameterGroup):
+            I_p = None
+            tau_dAP = None
+            theta_dAP = None
+
+    class Synapses(ParameterGroup):
         dyn_inh_weights = None
         w_ext_exc = None
         w_exc_exc = None
         w_exc_inh = None
         w_inh_exc = None
         p_exc_exc = None
+        receptor_ext_exc = None
+        receptor_exc_exc = None
+        receptor_exc_inh = None
+        receptor_inh_exc = None
 
-    class Calibration:
+    class Calibration(ParameterGroup):
         v_rest_calib = None
 
     def __init__(self, network_type, custom_params=None):

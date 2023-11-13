@@ -1,10 +1,20 @@
 import shtmbss2
 import logging
+import os
 
 from os.path import join, dirname, split
 
 
+# Workaround to remove "Invalid MIT-MAGIC-COOKIE-1 key" error message caused by import of mpi4py in NumpyRNG (pyNN)
+os.environ["HWLOC_COMPONENTS"] = "-gl"
+
+
 PY_PKG_PATH = split(dirname(shtmbss2.__file__))[0]
+
+
+class Backends:
+    BRAIN_SCALES_2 = 'bss2'
+    NEST = 'nest'
 
 
 class PlotConfig:
@@ -14,6 +24,11 @@ class PlotConfig:
 class LogHandler:
     FILE = 0
     STREAM = 1
+
+
+class RuntimeConfig:
+    backend = None
+    config_prefix = "shtm2bss_config"
 
 
 # Logging
@@ -28,4 +43,4 @@ class Log:
 
 
 PATH_CONFIG = join(PY_PKG_PATH, 'config')
-CONFIG_PREFIX = "shtm2bss_config"
+PATH_MODELS = join(PY_PKG_PATH, 'models')
