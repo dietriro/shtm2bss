@@ -239,10 +239,11 @@ class SHTMBase(ABC):
             # neurons_all[NeuronType.Inhibitory] = pynn.PopulationView(self.neurons_inh, [i_symbol])
 
             for neurons_i in neuron_types:
-                neurons = PopulationView(self.neurons_inh, [i_symbol]) if neurons_i == NeuronType.Inhibitory else self.neurons_exc[i_symbol]
+                # neurons = PopulationView(self.neurons_inh, [i_symbol]) if neurons_i == NeuronType.Inhibitory else self.neurons_exc[i_symbol]
                 # Retrieve and plot spikes from selected neurons
                 spikes = [s.base for s in self.get_neuron_data(neuron_type=neurons_i,
-                                                               neurons=neurons,
+                                                               # neurons=neurons,
+                                                               symbol_id=i_symbol,
                                                                value_type=RecTypes.SPIKES)]
                 if neurons_i == NeuronType.Inhibitory:
                     spikes.append([])
@@ -250,7 +251,8 @@ class SHTMBase(ABC):
                     spikes.insert(0, [])
                 if neurons_i == NeuronType.Dendrite:
                     spikes_post = [s.base for s in self.get_neuron_data(neuron_type=NeuronType.Soma,
-                                                                        neurons=neurons,
+                                                                        # neurons=neurons,
+                                                                        symbol_id=i_symbol,
                                                                         value_type=RecTypes.SPIKES)]
                     plot_dendritic_events(ax, spikes[1:], spikes_post, tau_dap=self.p.Neurons.Dendrite.tau_dAP,
                                           color=f"C{neurons_i.ID}", label=neurons_i.NAME.capitalize(),

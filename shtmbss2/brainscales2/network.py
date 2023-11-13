@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 from tabulate import tabulate
 from abc import ABC
 
+from shtmbss2.brainscales2.config import *
 from shtmbss2.core.logging import log
 import shtmbss2.common.network as network
 from shtmbss2.common.network import NeuronType, RecTypes, symbol_from_label
@@ -126,7 +127,7 @@ class SHTMBase(network.SHTMBase, ABC):
                         break
 
     def init_rec_exc(self, alphabet_id=1, neuron_id=1, neuron_type=NeuronType.Soma):
-        self.rec_neurons_exc = pynn.PopulationView(self.neurons_exc[alphabet_id][neuron_type], [neuron_id])
+        self.rec_neurons_exc = pynn.PopulationView(self.neurons_exc[alphabet_id][neuron_type.ID], [neuron_id])
         self.rec_neurons_exc.record([RECORDING_VALUES[neuron_type][RecTypes.V],
                                      RECORDING_VALUES[neuron_type][RecTypes.SPIKES]])
 
@@ -148,15 +149,15 @@ class SHTMBase(network.SHTMBase, ABC):
                         runtime=None):
         if neurons is None:
             if neuron_type in [NeuronType.Soma, NeuronType.Dendrite]:
-                neurons = self.neurons_exc
+                neurons = self.neurons_exc[symbol_id][neuron_type.ID]
             elif neuron_type == NeuronType.Inhibitory:
-                neurons = self.neurons_inh
+                neurons = pynn.PopulationView(self.neurons_inh, [symbol_id])
         # else:
         #     log.error("Error retrieving neuron data! Neither 'neurons' nor 'neuron_type' was specified.")
         #     return
 
         if value_type == RecTypes.SPIKES:
-                data = neurons.get_data(RECORDING_VALUES[neuron_type][value_type]).segments[-1].spiketrains
+            data = neurons.get_data(RECORDING_VALUES[neuron_type][value_type]).segments[-1].spiketrains
         elif value_type == RecTypes.V:
             if runtime is None:
                 log.error(f"Could not retrieve voltage data for {neuron_type}")
