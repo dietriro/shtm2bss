@@ -370,6 +370,9 @@ class SHTMBase(ABC):
     def id_to_letter(self, id):
         return list(self.ALPHABET.keys())[id]
 
+    def __str__(self):
+        return type(self).__name__
+
 
 class SHTMTotal(SHTMBase, ABC):
     def __init__(self, log_permanence=None, log_weights=None, w_exc_inh_dyn=None, plasticity_cls=None, **kwargs):

@@ -17,8 +17,15 @@ class Backends:
     NEST = 'nest'
 
 
-class PlotConfig:
-    FILE_TYPE = 'pdf'
+class FileType:
+    DATA = 'data'
+    FIGURE = 'figure'
+    MODEL = 'model'
+    OPTIMIZATION = 'optimization'
+
+
+class ExperimentType:
+    EVALUATION = 'evaluation'
 
 
 class LogHandler:
@@ -44,3 +51,17 @@ class Log:
 
 PATH_CONFIG = join(PY_PKG_PATH, 'config')
 PATH_MODELS = join(PY_PKG_PATH, 'models')
+
+EXPERIMENT_FOLDERS = {
+    Backends.NEST: join(PY_PKG_PATH, 'data/evaluation/nest'),
+    Backends.BRAIN_SCALES_2: join(PY_PKG_PATH, 'data/evaluation/bss2')
+}
+EXPERIMENT_SUBFOLDERS = {
+    FileType.DATA: 'data',
+    FileType.FIGURE: 'figures',
+    FileType.MODEL: 'models',
+    FileType.OPTIMIZATION: 'optimizations'
+}
+EXPERIMENT_SETUP_FILE_NAME = {
+    ExperimentType.EVALUATION: 'experiments.csv',
+}

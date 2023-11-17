@@ -1,3 +1,4 @@
+import inspect
 from abc import ABC
 
 from shtmbss2.core.logging import log
@@ -6,13 +7,21 @@ from shtmbss2.core.data import load_config
 
 class ParameterGroup:
     @classmethod
-    def dict(cls):
+    def dict(cls, exclude_none=False):
         p_dict_original = cls.__dict__
-        p_dict = {v: p_dict_original[v] for v, m in vars(cls).items() if not (v.startswith('_') or callable(m))}
+        p_dict = dict()
+        for v_name, v_instance in vars(cls).items():
+            if not (v_name.startswith('_') or inspect.isfunction(v_instance)):
+                if inspect.isclass(v_instance):
+                    p_dict[v_name] = v_instance.dict(exclude_none=exclude_none)
+                else:
+                    if exclude_none and p_dict_original[v_name] is None:
+                        continue
+                    p_dict[v_name] = p_dict_original[v_name]
         return p_dict
 
 
-class Parameters:
+class Parameters(ParameterGroup):
     class Experiment(ParameterGroup):
         type = None
         sequences = None
@@ -55,7 +64,7 @@ class Parameters:
         delta_t_max = None
         dt = None
 
-    class Neurons:
+    class Neurons(ParameterGroup):
         class Inhibitory(ParameterGroup):
             c_m = None
             v_rest = None
@@ -130,3 +139,4 @@ class Parameters:
             else:
                 if hasattr(category_obj, name):
                     setattr(category_obj, name, value)
+
