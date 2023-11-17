@@ -1,0 +1,12 @@
+colorlog
+jupyter
+matplotlib
+numpy
+PyYAML
+setuptools
+pandas
+quantities
+PyNN
+neo
+DateTime
+tabulate

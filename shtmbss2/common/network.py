@@ -90,6 +90,7 @@ class SHTMBase(ABC):
 
         # Declare recordings
         self.rec_neurons_exc = None
+        self.last_ext_spike_time = None
 
     def load_params(self, **kwargs):
         self.p = Parameters(network_type=self, custom_params=kwargs)
@@ -130,9 +131,26 @@ class SHTMBase(ABC):
     def init_neurons_inh(self, num_neurons=None):
         pass
 
-    @abstractmethod
     def init_external_input(self, init_recorder=False):
-        pass
+        spike_times = [list() for i in range(self.p.Network.num_symbols)]
+        spike_time = None
+
+        sequence_offset = 0
+        for i_rep in range(self.p.Experiment.seq_repetitions):
+            for i_seq, sequence in enumerate(self.p.Experiment.sequences):
+                for i_element, element in enumerate(sequence):
+                    spike_time = sequence_offset + i_element * self.p.Encoding.dt_stm + self.p.Encoding.dt_stm
+                    spike_times[self.ALPHABET[element]].append(spike_time)
+                sequence_offset = spike_time + self.p.Encoding.dt_seq
+
+        self.last_ext_spike_time = spike_time
+
+        log.info(f'Initialized external input for sequence(s) {self.p.Experiment.sequences}')
+        log.debug(f'Spike times:')
+        for i_letter, letter_spikes in enumerate(spike_times):
+            log.debug(f'{list(self.ALPHABET.keys())[i_letter]}: {spike_times[i_letter]}')
+
+        self.neurons_ext.set(spike_times=spike_times)
 
     def init_connections(self):
         self.ext_to_exc = []
@@ -353,37 +371,7 @@ class SHTMBase(ABC):
         return list(self.ALPHABET.keys())[id]
 
 
-class SHTMStatic(SHTMBase, ABC):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-        self.last_ext_spike_time = None
-
-    def init_external_input(self, init_recorder=True):
-        spike_times = [list() for i in range(self.p.Network.num_symbols)]
-        spike_time = None
-
-        sequence_offset = 0
-        for i_rep in range(self.p.Experiment.seq_repetitions):
-            for i_seq, sequence in enumerate(self.p.Experiment.sequences):
-                for i_element, element in enumerate(sequence):
-                    spike_time = sequence_offset + i_element * self.p.Encoding.dt_stm + self.p.Encoding.dt_stm
-                    spike_times[self.ALPHABET[element]].append(spike_time)
-                sequence_offset = spike_time + self.p.Encoding.dt_seq
-
-        self.last_ext_spike_time = spike_time
-
-        log.info(f'Initialized external input for sequence(s) {self.p.Experiment.sequences}')
-        log.debug(f'Spike times:')
-        for i_letter, letter_spikes in enumerate(spike_times):
-            log.debug(f'{list(self.ALPHABET.keys())[i_letter]}: {spike_times[i_letter]}')
-
-        self.neurons_ext.set(spike_times=spike_times)
-        if init_recorder:
-            self.neurons_ext.record(["spikes"])
-
-
-class SHTMTotal(SHTMStatic, ABC):
+class SHTMTotal(SHTMBase, ABC):
     def __init__(self, log_permanence=None, log_weights=None, w_exc_inh_dyn=None, plasticity_cls=None, **kwargs):
         super().__init__(**kwargs)
 

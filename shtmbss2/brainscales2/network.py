@@ -242,7 +242,7 @@ class SHTMSingleNeuron(SHTMBase):
 
         return dendrite, soma, ref_neuron
 
-    def init_external_input(self):
+    def init_external_input(self, init_recorder=False):
         # Define input spikes, population and connections for dendritic coincidence spikes
         spikes_coincidence = self.wait_before_experiment + np.arange(10) * self.isi
         spikes_coincidence = np.array(spikes_coincidence.rescale(quantities.ms))
@@ -321,7 +321,7 @@ class SHTMPlasticity(SHTMSingleNeuron):
         self.vs = None
         self.plasticity = None
 
-    def init_external_input(self):
+    def init_external_input(self, init_recorder=False):
         self.pop_dendrite_in = pynn.Population(8, pynn.cells.SpikeSourceArray(spike_times=[14e-3]))
         self.pop_soma_in = pynn.Population(1, pynn.cells.SpikeSourceArray(spike_times=[17e-3]))
 
