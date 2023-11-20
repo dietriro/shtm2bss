@@ -134,7 +134,7 @@ class SHTMBase(network.SHTMBase, ABC):
                 return neurons[symbol_id]
 
     def get_neuron_data(self, neuron_type, neurons=None, value_type="spikes", symbol_id=None, neuron_id=None,
-                        runtime=None):
+                        runtime=None, dtype=None):
         if neurons is None:
             neurons = self.get_neurons(neuron_type, symbol_id=symbol_id)
 
@@ -144,22 +144,31 @@ class SHTMBase(network.SHTMBase, ABC):
                     RECORDING_VALUES[neuron_type][value_type]).segments[-1].analogsignals[0]
                 spike_ids = np.asarray(np.argwhere(np.array(spikes_binary) > 0), dtype=float)
 
-                # ToDo: Improve performance, remove loop
-                spike_list = spike_ids.tolist()
-                spikes = [[] for i_neuron in range(self.p.Network.num_neurons)]
-                for spike_time, spike_id in spike_list:
-                    spikes[int(spike_id)].append(spike_time)
-                for i_spikes in range(len(spikes)):
-                    spikes[i_spikes] = ((np.array(spikes[i_spikes], dtype=float) + 1) *
-                                        neurons.recorder.sampling_interval)
+                if dtype is np.ndarray:
+                    data = spike_ids[:, [1, 0]]
+                    data[:, 1] *= neurons.recorder.sampling_interval
+                else:
+                    spike_list = spike_ids.tolist()
+                    spikes = [[] for i_neuron in range(self.p.Network.num_neurons)]
+                    for spike_time, spike_id in spike_list:
+                        spikes[int(spike_id)].append(spike_time)
+                    for i_spikes in range(len(spikes)):
+                        spikes[i_spikes] = ((np.array(spikes[i_spikes], dtype=float) + 1) *
+                                            neurons.recorder.sampling_interval)
 
-                # spike_ids[:, 0] = (spike_ids[:, 0] + 1) * neurons.recorder.sampling_interval
-                # spikes = np.split(spike_ids[:, 0], np.unique(spike_ids[:, 1], return_index=True)[1][1:])
-                spike_trains = [SpikeTrain(spikes_i * ms, t_start=neurons.get_data().segments[-1].t_start,
-                                           t_stop=neurons.get_data().segments[-1].t_stop) for spikes_i in spikes]
-                data = SpikeTrainList(spike_trains)
+                    if dtype is list:
+                        data = spikes
+                    else:
+                        spike_trains = [SpikeTrain(spikes_i * ms, t_start=neurons.get_data().segments[-1].t_start,
+                                                   t_stop=neurons.get_data().segments[-1].t_stop) for spikes_i in spikes]
+                        data = SpikeTrainList(spike_trains)
             else:
                 data = neurons.get_data(RECORDING_VALUES[neuron_type][value_type]).segments[-1].spiketrains
+                if dtype is np.ndarray:
+                    data = np.array(data.multiplexed).transpose()
+                    data[:, 0] = neurons.id_to_index(data[:, 0])
+                elif dtype is list:
+                    data = [s.base for s in data]
         elif value_type == RecTypes.V:
             # Return the analogsignal of the last segment (only one analogsignal in the list because we specified
             # that we want to have the voltage in get_data())

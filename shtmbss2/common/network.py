@@ -203,7 +203,7 @@ class SHTMBase(ABC):
 
     @abstractmethod
     def get_neuron_data(self, neuron_type, neurons=None, value_type="spikes", symbol_id=None, neuron_id=None,
-                        runtime=None):
+                        runtime=None, dtype=None):
         pass
 
     def plot_events(self, neuron_types="all", symbols="all", size=None, x_lim_lower=None, x_lim_upper=None, seq_start=0,
@@ -257,21 +257,16 @@ class SHTMBase(ABC):
             # neurons_all[NeuronType.Inhibitory] = pynn.PopulationView(self.neurons_inh, [i_symbol])
 
             for neurons_i in neuron_types:
-                # neurons = PopulationView(self.neurons_inh, [i_symbol]) if neurons_i == NeuronType.Inhibitory else self.neurons_exc[i_symbol]
                 # Retrieve and plot spikes from selected neurons
-                spikes = [s.base for s in self.get_neuron_data(neuron_type=neurons_i,
-                                                               # neurons=neurons,
-                                                               symbol_id=i_symbol,
-                                                               value_type=RecTypes.SPIKES)]
+                spikes = self.get_neuron_data(neuron_type=neurons_i, symbol_id=i_symbol,
+                                              value_type=RecTypes.SPIKES, dtype=list)
                 if neurons_i == NeuronType.Inhibitory:
                     spikes.append([])
                 else:
                     spikes.insert(0, [])
                 if neurons_i == NeuronType.Dendrite:
-                    spikes_post = [s.base for s in self.get_neuron_data(neuron_type=NeuronType.Soma,
-                                                                        # neurons=neurons,
-                                                                        symbol_id=i_symbol,
-                                                                        value_type=RecTypes.SPIKES)]
+                    spikes_post = self.get_neuron_data(neuron_type=NeuronType.Soma, symbol_id=i_symbol,
+                                                       value_type=RecTypes.SPIKES, dtype=list)
                     plot_dendritic_events(ax, spikes[1:], spikes_post, tau_dap=self.p.Neurons.Dendrite.tau_dAP,
                                           color=f"C{neurons_i.ID}", label=neurons_i.NAME.capitalize(),
                                           seq_start=seq_start, seq_end=seq_end)
@@ -334,10 +329,11 @@ class SHTMBase(ABC):
 
         for alphabet_id in alphabet_range:
             # retrieve and save spike times
-            spikes = self.get_neuron_data(neuron_type, value_type=RecTypes.SPIKES, symbol_id=alphabet_id)
+            spikes = self.get_neuron_data(neuron_type, value_type=RecTypes.SPIKES,
+                                          symbol_id=alphabet_id, dtype=np.ndarray)
             for neuron_id in neuron_range:
                 # add spikes to list for printing
-                spike_times[0].append(np.array(spikes.multiplexed[1]).round(5).tolist())
+                spike_times[0].append(spikes[:, 1].round(5).tolist())
                 header_spikes.append(f"{self.id_to_letter(alphabet_id)}[{neuron_id}]")
 
                 # retrieve voltage data
@@ -532,6 +528,7 @@ class SHTMTotal(SHTMBase, ABC):
         return spike_times_dendrite, spike_times_soma
 
     def set_weights_exc_exc(self, new_weight, con_id, post_ids=None, p_con=1.0):
+        # ToDo: Find out why this is not working in Nest after one simulation, only before all simulations
         weights = self.con_plastic[con_id].projection.get("weight", format="array")
 
         if post_ids is None:

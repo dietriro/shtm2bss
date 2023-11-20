@@ -145,7 +145,7 @@ class SHTMBase(network.SHTMBase, ABC):
             return self.neurons_exc[symbol_id][neuron_type.ID]
 
     def get_neuron_data(self, neuron_type, neurons=None, value_type="spikes", symbol_id=None, neuron_id=None,
-                        runtime=None):
+                        runtime=None, dtype=None):
         """
         Returns the recorded data for the given neuron type or neuron population.
 
@@ -161,6 +161,8 @@ class SHTMBase(network.SHTMBase, ABC):
         :type neuron_id: int
         :param runtime: The runtime used during the last experiment.
         :type runtime: float
+        :param dtype: The structure type of the returned data. Default is None, i.e. a SpikeTrainList.
+        :type dtype: Union[list, np.ndarray, None]
         :return: The specified data, recorded from the neuron for the past experiment.
         :rtype:
         """
@@ -169,6 +171,13 @@ class SHTMBase(network.SHTMBase, ABC):
 
         if value_type == RecTypes.SPIKES:
             data = neurons.get_data(RECORDING_VALUES[neuron_type][value_type]).segments[-1].spiketrains
+
+            if dtype is np.ndarray:
+                data = np.array(data.multiplexed).transpose()
+                # ToDo: Doub-check if the following line needs to be added here as well to convert from id to index
+                # data[:, 0] = neurons.id_to_index(data[:, 0])
+            elif dtype is list:
+                data = [s.base for s in data]
         elif value_type == RecTypes.V:
             if runtime is None:
                 log.error(f"Could not retrieve voltage data for {neuron_type}")
