@@ -28,6 +28,11 @@ class ExperimentType:
     EVALUATION = 'evaluation'
 
 
+class PerformanceType:
+    ALL_SYMBOLS = "all_symbols"
+    LAST_SYMBOL = "last_symbol"
+
+
 class LogHandler:
     FILE = 0
     STREAM = 1

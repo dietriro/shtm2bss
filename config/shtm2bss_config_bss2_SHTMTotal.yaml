@@ -9,6 +9,9 @@ plotting:
   size: [10, 12]
   file_type: 'pdf'
   save_figure: True
+performance:
+  compute_performance: True
+  method: "all_symbols"
 network:
   num_symbols: 4
   num_neurons: 15

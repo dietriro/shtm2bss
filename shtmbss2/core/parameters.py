@@ -35,6 +35,10 @@ class Parameters(ParameterGroup):
         file_type = None
         save_figure = None
 
+    class Performance(ParameterGroup):
+        compute_performance = None
+        method = None
+
     class Network(ParameterGroup):
         num_symbols = None
         num_neurons = None

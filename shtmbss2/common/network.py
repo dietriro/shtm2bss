@@ -92,6 +92,13 @@ class SHTMBase(ABC):
         self.rec_neurons_exc = None
         self.last_ext_spike_time = None
 
+        # Declare performance containers
+        self.performance_errors = None
+        self.performance_fps = None
+        self.performance_fns = None
+        self.num_active_somas_post = None
+        self.num_active_dendrites_post = None
+
     def load_params(self, **kwargs):
         self.p = Parameters(network_type=self, custom_params=kwargs)
 
@@ -99,7 +106,6 @@ class SHTMBase(ABC):
         self.init_neurons()
         self.init_connections()
         self.init_external_input()
-        self.init_rec_exc()
 
     def init_neurons(self):
         self.neurons_exc = self.init_all_neurons_exc()
@@ -131,8 +137,8 @@ class SHTMBase(ABC):
     def init_neurons_inh(self, num_neurons=None):
         pass
 
-    def init_external_input(self, init_recorder=False):
-        spike_times = [list() for i in range(self.p.Network.num_symbols)]
+    def init_external_input(self, init_recorder=False, init_performance=False):
+        spike_times = [list() for _ in range(self.p.Network.num_symbols)]
         spike_time = None
 
         sequence_offset = 0
@@ -151,6 +157,14 @@ class SHTMBase(ABC):
             log.debug(f'{list(self.ALPHABET.keys())[i_letter]}: {spike_times[i_letter]}')
 
         self.neurons_ext.set(spike_times=spike_times)
+
+        if init_performance or self.performance_errors is None:
+            # Initialize performance containers
+            self.performance_errors = [[] for _ in self.p.Experiment.sequences]
+            self.performance_fps = [[] for _ in self.p.Experiment.sequences]
+            self.performance_fns = [[] for _ in self.p.Experiment.sequences]
+            self.num_active_somas_post = [[] for _ in self.p.Experiment.sequences]
+            self.num_active_dendrites_post = [[] for _ in self.p.Experiment.sequences]
 
     def init_connections(self):
         self.ext_to_exc = []
@@ -363,8 +377,128 @@ class SHTMBase(ABC):
             pickle.dump(fig, open(f'{file_path}.fig.pickle',
                                   'wb'))  # This is for Python 3 - py2 may need `file` instead of `open`
 
-    def id_to_letter(self, id):
-        return list(self.ALPHABET.keys())[id]
+    def plot_performance(self, sequences="mean"):
+        performance_metrics = [self.performance_errors, self.performance_fps, self.performance_fns]
+
+        fig, axs = plt.subplots(1, len(performance_metrics), figsize=[12, 5])
+
+        sequence_range = None
+
+        if type(sequences) is str:
+            if sequences == "mean":
+                self.__plot_performance_seq(axs, np.mean(self.performance_errors, axis=0),
+                                            np.mean(self.performance_fps, axis=0),
+                                            np.mean(self.performance_fns, axis=0),
+                                            np.mean(self.num_active_somas_post, axis=0), i_col=1)
+            elif sequences == "all":
+                sequence_range = range(len(self.p.Experiment.sequences))
+        elif type(sequences) in [range, list]:
+            sequence_range = sequences
+
+        if sequence_range is not None:
+            for i_seq in sequence_range:
+                self.__plot_performance_seq(axs, self.performance_errors[i_seq],
+                                            self.performance_fps[i_seq],
+                                            self.performance_fns[i_seq],
+                                            self.num_active_somas_post[i_seq], i_col=i_seq)
+
+        axs[0].set_ylabel("prediction error")
+        axs[0].set_xlabel("# Training Episodes")
+
+        axs[1].set_ylabel("rel. frequency")
+        axs[1].set_xlabel("# Training Episodes")
+
+        axs[2].set_ylabel("rel. no. of active neurons")
+        axs[2].set_xlabel("# Training Episodes")
+
+        for i_metric, metric in enumerate(performance_metrics):
+            for i_seq_perf, seq_perf in enumerate(metric):
+                axs[i_metric].plot(seq_perf, color=f"C{i_seq_perf}")
+
+        fig.tight_layout()
+        fig.show()
+
+    def __plot_performance_seq(self, axs, perf_errors, perf_fps, perf_fns, num_active_somas_post, i_col=1):
+        # Plot 1: Performance error
+        axs[0].plot(perf_errors, color=f"C{i_col}")
+
+        # Plot 2: False positives/negatives
+        axs[1].plot(perf_fps, color=f"C{i_col}")
+        axs[1].plot(perf_fns, linestyle="dashed", color=f"C{i_col}")
+
+        # Plot 3: Number of active neurons
+        rel_num_active_neurons = np.array(num_active_somas_post) / self.p.Network.num_neurons
+        axs[2].plot(rel_num_active_neurons, color=f"C{i_col}")
+
+    def id_to_letter(self, index):
+        return list(self.ALPHABET.keys())[index]
+
+    def compute_prediction_performance(self, method=PerformanceType.ALL_SYMBOLS):
+        log.info(f"Computing performance for {len(self.p.Experiment.sequences)} Sequences.")
+
+        ratio_fp_activation = 0.5
+        ratio_fn_activation = 0.5
+
+        for i_seq, seq in enumerate(self.p.Experiment.sequences):
+            seq_error = list()
+            seq_fp = list()
+            seq_fn = list()
+            seq_num_active_somas_post = list()
+            seq_num_active_dendrites_post = list()
+            for i_element, element in enumerate(seq[1:]):
+                if method == PerformanceType.LAST_SYMBOL and i_element < len(seq) - 2:
+                    continue
+
+                # define min/max for time window of spikes
+                t_min = (i_element + 1) * self.p.Encoding.dt_stm + i_seq * self.p.Encoding.dt_seq
+                t_max = t_min + self.p.Encoding.dt_stm
+
+                # calculate target vector
+                output = np.zeros(self.p.Network.num_symbols)
+                target = np.zeros(self.p.Network.num_symbols)
+                target[self.ALPHABET[element]] = 1
+
+                num_dAPs = np.zeros(self.p.Network.num_symbols)
+                num_som_spikes = np.zeros(self.p.Network.num_symbols)
+                counter_correct = 0
+
+                for i_symbol in range(self.p.Network.num_symbols):
+                    # get dAP's per subpopulation
+                    dAPs_symbol = self.get_neuron_data(NeuronType.Dendrite, value_type=RecTypes.SPIKES,
+                                                       symbol_id=i_symbol, dtype=np.ndarray)
+                    num_dAPs[i_symbol] = len(np.unique(dAPs_symbol[np.where((dAPs_symbol[:, 1] > t_min) &
+                                                                            (dAPs_symbol[:, 1] < t_max))[0], 0]))
+
+                    # get somatic spikes per subpopulation
+                    som_spikes_symbol = np.array(self.get_neuron_data(NeuronType.Soma, value_type=RecTypes.SPIKES,
+                                                                      symbol_id=i_symbol))
+                    num_som_spikes[i_symbol] = len(np.unique(np.where((som_spikes_symbol > t_min) &
+                                                                      (som_spikes_symbol < t_max))[0]))
+
+                    # ToDo: Replace constant value '3' with new parameter
+                    if i_symbol != self.ALPHABET[element] and num_dAPs[i_symbol] >= (ratio_fp_activation * 3):
+                        output[i_symbol] = 1
+                    elif i_symbol == self.ALPHABET[element] and num_dAPs[i_symbol] >= (ratio_fn_activation * 3):
+                        counter_correct += 1
+                        output[i_symbol] = 1
+
+                # calculate Euclidean distance between output and target vector
+                # determine prediction error, FP and FN
+                error = np.sqrt(sum((output - target) ** 2))
+                false_positive = sum(np.heaviside(output - target, 0))
+                false_negative = sum(np.heaviside(target - output, 0))
+
+                seq_error.append(error)
+                seq_fp.append(false_positive)
+                seq_fn.append(false_negative)
+                seq_num_active_somas_post.append(num_som_spikes[self.ALPHABET[element]])
+                seq_num_active_dendrites_post.append(num_dAPs[self.ALPHABET[element]])
+
+            self.performance_errors[i_seq].append(np.mean(seq_error))
+            self.performance_fps[i_seq].append(np.mean(seq_fp))
+            self.performance_fns[i_seq].append(np.mean(seq_fn))
+            self.num_active_somas_post[i_seq].append(np.mean(seq_num_active_somas_post))
+            self.num_active_dendrites_post[i_seq].append(np.mean(seq_num_active_dendrites_post))
 
     def __str__(self):
         return type(self).__name__
@@ -567,6 +701,9 @@ class SHTMTotal(SHTMBase, ABC):
             log.info(f"Current time: {sim_start_time}")
 
             pynn.run(runtime)
+
+            if self.p.Performance.compute_performance:
+                self.compute_prediction_performance(method=self.p.Performance.method)
 
             active_synapse_post = np.zeros((self.p.Network.num_symbols, self.p.Network.num_neurons))
 

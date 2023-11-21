@@ -107,8 +107,8 @@ class SHTMBase(network.SHTMBase, ABC):
 
         return pop
 
-    def init_external_input(self, init_recorder=False):
-        network.SHTMBase.init_external_input(self, init_recorder=init_recorder)
+    def init_external_input(self, init_recorder=False, init_performance=False):
+        network.SHTMBase.init_external_input(self, init_recorder=init_recorder, init_performance=init_performance)
 
         if init_recorder:
             self.neurons_ext.record(["spikes"])
@@ -116,7 +116,7 @@ class SHTMBase(network.SHTMBase, ABC):
     def reset(self):
         pynn.reset()
         # re-initialize external input, but not the recorders (doesn't work with nest)
-        self.init_external_input(init_recorder=False)
+        self.init_external_input(init_recorder=False, init_performance=False)
 
     def get_neurons(self, neuron_type, symbol_id=None):
         neurons = None
