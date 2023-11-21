@@ -12,6 +12,7 @@ from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
 from shtmbss2.core.parameters import Parameters
 from shtmbss2.common.plot import plot_dendritic_events
+from shtmbss2.core.data import save_config, save_experimental_setup, save_performance_data
 
 if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
     import pynn_brainscales.brainscales2 as pynn
@@ -98,6 +99,8 @@ class SHTMBase(ABC):
         self.performance_fns = None
         self.num_active_somas_post = None
         self.num_active_dendrites_post = None
+
+        self.experiment_num = None
 
     def load_params(self, **kwargs):
         self.p = Parameters(network_type=self, custom_params=kwargs)
@@ -499,6 +502,14 @@ class SHTMBase(ABC):
             self.performance_fns[i_seq].append(np.mean(seq_fn))
             self.num_active_somas_post[i_seq].append(np.mean(seq_num_active_somas_post))
             self.num_active_dendrites_post[i_seq].append(np.mean(seq_num_active_dendrites_post))
+
+    def save_full_state(self):
+        self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num)
+        save_config(net=self, experiment_num=self.experiment_num)
+        data = [self.performance_errors, self.performance_fps, self.performance_fns, self.num_active_somas_post,
+                self.num_active_dendrites_post]
+        metric_names = ["pf_error", "pf_fps", "pf_fns", "pf_active_somas", "pf_active_dend"]
+        save_performance_data(data, metric_names, self, self.experiment_num)
 
     def __str__(self):
         return type(self).__name__

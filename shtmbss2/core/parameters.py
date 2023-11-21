@@ -24,11 +24,13 @@ class ParameterGroup:
 class Parameters(ParameterGroup):
     class Experiment(ParameterGroup):
         type = None
+        id = None
         sequences = None
         seq_repetitions = None
         runtime = None
         episodes = None
         run_add_calib = None
+        autosave = None
 
     class Plotting(ParameterGroup):
         size = None

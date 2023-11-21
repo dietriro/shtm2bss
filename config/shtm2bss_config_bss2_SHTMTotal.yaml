@@ -1,10 +1,12 @@
 experiment:
-  type: ''
+  type: 'prediction'
+  id: 'a'
   sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
   seq_repetitions: 1
   runtime: 0.44
   episodes: 100
   run_add_calib: False
+  autosave: True
 plotting:
   size: [10, 12]
   file_type: 'pdf'

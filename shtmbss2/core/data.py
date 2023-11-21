@@ -1,5 +1,6 @@
 import csv
 import inspect
+import numpy as np
 import yaml
 import datetime
 from copy import copy
@@ -125,7 +126,10 @@ def save_setup(data, experiment_type, experiment_num, create_eval_file, do_updat
     return experiment_num
 
 
-def save_config(net, experiment_id, experiment_num):
+def save_config(net, experiment_num):
+    experiment_id = net.p.Experiment.id
+    experiment_num = net.experiment_num
+
     folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend], f"{str(net)}_{experiment_id}_{experiment_num:02d}")
     file_path = join(folder_path, f"{RuntimeConfig.config_prefix}_{str(net)}_{experiment_id}_{experiment_num:02d}.yaml")
 
@@ -133,9 +137,23 @@ def save_config(net, experiment_id, experiment_num):
         yaml.dump(net.p.dict(exclude_none=True), file)
 
 
-def save_experimental_setup(net, experiment_id, experiment_type, experiment_num=None,
+def save_performance_data(data, metric_names, net, experiment_num):
+    experiment_id = net.p.Experiment.id
+
+    folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend], f"{str(net)}_{experiment_id}_{experiment_num:02d}")
+
+    for i_metric, metric in enumerate(data):
+        file_path = join(folder_path,
+                         f"{str(net)}_{experiment_id}_{experiment_num:02d}_{metric_names[i_metric]}")
+
+        np.save(file_path, metric)
+
+
+def save_experimental_setup(net, experiment_num=None,
                             **kwargs):
     params = flatten_dict(net.p.dict(exclude_none=True))
+    experiment_type = net.p.Experiment.type
+    experiment_id = net.p.Experiment.id
 
     file_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend], EXPERIMENT_SETUP_FILE_NAME[experiment_type])
 
@@ -161,8 +179,6 @@ def save_experimental_setup(net, experiment_id, experiment_type, experiment_num=
     data = {**data, **params}
 
     save_setup(data, experiment_type, experiment_num, create_eval_file, do_update, **kwargs)
-
-    save_config(net, experiment_id, experiment_num)
 
     return experiment_num
 
