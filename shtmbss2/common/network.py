@@ -112,7 +112,7 @@ class SHTMBase(ABC):
 
         self.neurons_inh = self.init_neurons_inh()
 
-        self.neurons_ext =  Population(self.p.Network.num_symbols, SpikeSourceArray())
+        self.neurons_ext = Population(self.p.Network.num_symbols, SpikeSourceArray())
 
     @abstractmethod
     def init_all_neurons_exc(self, num_neurons=None):
@@ -299,7 +299,7 @@ class SHTMBase(ABC):
             # ax.grid(True, which='both', axis='both')
 
             # Generate y-tick-labels based on number of neurons per symbol
-            y_tick_labels = ['Inh', '', '0'] + ['' for k in range(self.p.Network.num_neurons - 2)] + [
+            y_tick_labels = ['Inh', '', '0'] + ['' for _ in range(self.p.Network.num_neurons - 2)] + [
                 str(self.p.Network.num_neurons - 1)]
             ax.set_yticklabels(y_tick_labels, rotation=45, fontsize=18)
 
@@ -307,7 +307,7 @@ class SHTMBase(ABC):
         custom_lines = [Line2D([0], [0], color=f"C{n.ID}", label=n.NAME.capitalize(), lw=3) for n in neuron_types]
 
         ax.set_xlabel("Time [ms]", fontsize=26, labelpad=14)
-        ax.xaxis.set_ticks(np.arange(x_lim_lower, x_lim_upper, self.p.Encoding.dt_stm/2))
+        ax.xaxis.set_ticks(np.arange(x_lim_lower, x_lim_upper, self.p.Encoding.dt_stm / 2))
         ax.tick_params(axis='x', labelsize=18)
 
         plt.figlegend(handles=custom_lines, loc=(0.377, 0.885), ncol=3, labelspacing=0., fontsize=18, fancybox=True,
@@ -508,6 +508,8 @@ class SHTMTotal(SHTMBase, ABC):
     def __init__(self, log_permanence=None, log_weights=None, w_exc_inh_dyn=None, plasticity_cls=None, **kwargs):
         super().__init__(**kwargs)
 
+        self.spike_times_soma = None
+        self.spike_times_dendrite = None
         self.con_plastic = None
         self.w_exc_inh_dyn = w_exc_inh_dyn
 
@@ -547,8 +549,8 @@ class SHTMTotal(SHTMBase, ABC):
                 proj_post_soma_inh = None
 
             self.con_plastic.append(self.plasticity_cls(self.exc_to_exc[i_plastic], post_somas=post_somas, shtm=self,
-                                                       proj_post_soma_inh=proj_post_soma_inh,
-                                                       debug=debug, **self.p.Plasticity.dict()))
+                                                        proj_post_soma_inh=proj_post_soma_inh,
+                                                        debug=debug, **self.p.Plasticity.dict()))
 
         for i_perm in self.log_permanence:
             self.con_plastic[i_perm].enable_permanence_logging()
@@ -648,7 +650,7 @@ class SHTMTotal(SHTMBase, ABC):
 
         for symbol_i in range(self.p.Network.num_symbols):
             for i_dendrite, dendrite_spikes in enumerate(self.get_neuron_data(NeuronType.Dendrite, symbol_id=symbol_i,
-                                                                              value_type=RecTypes.SPIKES)):
+                                                                              value_type=RecTypes.SPIKES, dtype=list)):
                 for spike_time in dendrite_spikes:
                     spike_id = int(spike_time / times[1])
                     spike_times_dendrite[symbol_i, i_dendrite, spike_id] = 1
@@ -731,13 +733,15 @@ class SHTMTotal(SHTMBase, ABC):
 
 class Plasticity(ABC):
     def __init__(self, projection: Projection, post_somas, shtm, proj_post_soma_inh=None, debug=False,
-                 learning_factor=None, permanence_init_min=None, permanence_init_max=None, permanence_max=None, threshold=None, w_mature=None, y=None, lambda_plus=None,
+                 learning_factor=None, permanence_init_min=None, permanence_init_max=None, permanence_max=None,
+                 threshold=None, w_mature=None, y=None, lambda_plus=None,
                  lambda_minus=None, lambda_h=None, target_rate_h=None, tau_plus=None, tau_h=None, delta_t_min=None,
                  delta_t_max=None, dt=None, **kwargs):
         self.projection = projection
         self.proj_post_soma_inh = proj_post_soma_inh
 
-        self.permanence_min = np.asarray(np.random.randint(0, 8, size=(len(self.projection),)), dtype=float)
+        self.permanence_min = np.asarray(np.random.randint(permanence_init_min, permanence_init_max,
+                                                           size=(len(self.projection),)), dtype=float)
         self.permanence = copy.copy(self.permanence_min)
         self.permanences = None
         self.weights = None
@@ -766,26 +770,26 @@ class Plasticity(ABC):
         self.symbol_id_post = SHTMBase.ALPHABET[symbol_from_label(self.projection.label, ID_POST)]
 
     def rule(self, permanence, threshold, x, z, runtime, permanence_min,
-             neuron_spikes_pre, neuron_spikes_post_dendrite, neuron_spikes_post_soma, spike_times_dendrite,
+             neuron_spikes_pre, neuron_spikes_post_soma, spike_times_dendrite,
              spike_times_soma, id_pre, id_post, sim_start_time=0.0):
         mature = False
-        for i, t in enumerate(np.linspace(sim_start_time, sim_start_time+runtime, int(runtime / self.dt))):
+        for i_t, t in enumerate(np.linspace(sim_start_time, sim_start_time + runtime, int(runtime / self.dt))):
 
             # True - if any pre-synaptic neuron spiked
-            has_pre_spike = spike_times_soma[self.symbol_id_pre, id_pre, i]
+            has_pre_spike = spike_times_soma[self.symbol_id_pre, id_pre, i_t]
             # True - if any post dendrite spiked
-            has_post_dendritic_spike = spike_times_dendrite[self.symbol_id_post, id_post, i]
+            has_post_dendritic_spike = spike_times_dendrite[self.symbol_id_post, id_post, i_t]
 
-            if spike_times_soma[self.symbol_id_post, id_post, i] > 0:
+            if spike_times_soma[self.symbol_id_post, id_post, i_t] > 0:
                 # Indicator function (1st step) - Number of presynaptic spikes within learning time window
                 # for each postsynaptic spike
-                I = [sum(
+                ind = [sum(
                     self.delta_t_min < (spike_post - spike_pre) < self.delta_t_max for spike_pre in neuron_spikes_pre)
                     for spike_post in neuron_spikes_post_soma]
                 # Indicator function (2nd step) - Number of pairs of pre-/postsynaptic spikes
                 # for which synapses are potentiated
                 has_post_somatic_spike_I = sum(
-                    (t <= spike < t + self.dt) and I[n] for n, spike in enumerate(neuron_spikes_post_soma))
+                    (t <= spike < t + self.dt) and ind[n] for n, spike in enumerate(neuron_spikes_post_soma))
             else:
                 has_post_somatic_spike_I = 0
 
@@ -809,8 +813,9 @@ class Plasticity(ABC):
             if delta_permanence != 0:
                 if self.debug:
                     log.debug(
-                        f"t: {round(t, 5)},  p: {round(permanence, 5)},  dp: {round(delta_permanence, 5)},  x: {round(x, 2)},"
-                        f"z: {round(z, 2)}, dp_a: {round(dp_a, 3)}, dp_b: {round(dp_b, 3)}, dp_c: {round(dp_c, 3)}")
+                        f"t: {round(t, 5)},  p: {round(permanence, 5)},  dp: {round(delta_permanence, 5)},  "
+                        f"x: {round(x, 2)}, z: {round(z, 2)}, dp_a: {round(dp_a, 3)}, dp_b: {round(dp_b, 3)}, "
+                        f"dp_c: {round(dp_c, 3)}")
 
             permanence = np.clip(permanence, a_min=permanence_min, a_max=self.permanence_max)
 
@@ -861,15 +866,12 @@ class Plasticity(ABC):
             if spikes_pre.ndim == 1:
                 spikes_pre = np.array([spikes_pre] * len(self.projection.pre))
         else:
-            # spikes_pre = self.projection.pre.get_data("spikes").segments[-1].spiketrains
             spikes_pre = self.shtm.get_neuron_data(NeuronType.Soma, neurons=self.projection.pre,
                                                    value_type=RecTypes.SPIKES)
-        # spikes_post_dendrite = self.projection.post.get_data("spikes").segments[-1].spiketrains
         spikes_post_dendrite = self.shtm.get_neuron_data(NeuronType.Dendrite, neurons=self.projection.post,
-                                                         value_type=RecTypes.SPIKES)
-        # spikes_post_somas = self.post_somas.get_data("spikes").segments[-1].spiketrains
+                                                         value_type=RecTypes.SPIKES, dtype=list)
         spikes_post_somas = self.shtm.get_neuron_data(NeuronType.Soma, neurons=self.post_somas,
-                                                         value_type=RecTypes.SPIKES)
+                                                      value_type=RecTypes.SPIKES)
         weight = self.projection.get("weight", format="array")
 
         for c, connection in enumerate(self.get_connections()):
@@ -889,7 +891,6 @@ class Plasticity(ABC):
                                                  runtime=runtime, x=self.x[j], z=self.z[i],
                                                  permanence_min=self.permanence_min[c],
                                                  neuron_spikes_pre=neuron_spikes_pre,
-                                                 neuron_spikes_post_dendrite=neuron_spikes_post_dendrite,
                                                  neuron_spikes_post_soma=neuron_spikes_post_soma,
                                                  spike_times_dendrite=spike_times_dendrite,
                                                  spike_times_soma=spike_times_soma, id_pre=j, id_post=i,
