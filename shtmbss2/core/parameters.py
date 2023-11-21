@@ -56,6 +56,8 @@ class Parameters(ParameterGroup):
     class Plasticity(ParameterGroup):
         type = None
         learning_factor = None
+        permanence_init_min = None
+        permanence_init_max = None
         permanence_max = None
         threshold = None
         w_mature = None

@@ -24,7 +24,7 @@ plasticity:
   type: 'original'
   learning_factor: 10
   permanence_init_min: 0
-  permanence_init_max: 0
+  permanence_init_max: 8
   permanence_max: 20.
   threshold: 10.
   w_mature: 500

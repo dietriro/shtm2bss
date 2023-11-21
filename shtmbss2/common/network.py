@@ -473,10 +473,11 @@ class SHTMBase(ABC):
                                                                             (dAPs_symbol[:, 1] < t_max))[0], 0]))
 
                     # get somatic spikes per subpopulation
-                    som_spikes_symbol = np.array(self.get_neuron_data(NeuronType.Soma, value_type=RecTypes.SPIKES,
-                                                                      symbol_id=i_symbol))
-                    num_som_spikes[i_symbol] = len(np.unique(np.where((som_spikes_symbol > t_min) &
-                                                                      (som_spikes_symbol < t_max))[0]))
+                    som_spikes_symbol = self.get_neuron_data(NeuronType.Soma, value_type=RecTypes.SPIKES,
+                                                             symbol_id=i_symbol, dtype=np.ndarray)
+                    num_som_spikes[i_symbol] = len(np.unique(
+                        som_spikes_symbol[np.where((som_spikes_symbol[:, 1] > t_min) &
+                                                   (som_spikes_symbol[:, 1] < t_max))[0], 0]))
 
                     # ToDo: Replace constant value '3' with new parameter
                     if i_symbol != self.ALPHABET[element] and num_dAPs[i_symbol] >= (ratio_fp_activation * 3):
@@ -809,14 +810,10 @@ class Plasticity(ABC):
             # Spike trace of postsynaptic neuron based on daps
             z += (- z / self.tau_h) * self.dt + has_post_dendritic_spike
 
-            dp_a = x * has_post_somatic_spike_I
-            dp_b = self.y * has_pre_spike
-            dp_c = (self.target_rate_h - z) * has_post_somatic_spike_I
-
             delta_permanence = (
-                    (self.lambda_plus * dp_a
-                     - self.lambda_minus * dp_b
-                     + self.lambda_h * dp_c)
+                    (self.lambda_plus * x * has_post_somatic_spike_I
+                     - self.lambda_minus * self.y * has_pre_spike
+                     + self.lambda_h * (self.target_rate_h - z) * has_post_somatic_spike_I)
                     * self.permanence_max * self.dt)
 
             permanence += delta_permanence
@@ -825,10 +822,9 @@ class Plasticity(ABC):
                 if self.debug:
                     log.debug(
                         f"t: {round(t, 5)},  p: {round(permanence, 5)},  dp: {round(delta_permanence, 5)},  "
-                        f"x: {round(x, 2)}, z: {round(z, 2)}, dp_a: {round(dp_a, 3)}, dp_b: {round(dp_b, 3)}, "
-                        f"dp_c: {round(dp_c, 3)}")
+                        f"x: {round(x, 2)}, z: {round(z, 2)}")
 
-            permanence = np.clip(permanence, a_min=permanence_min, a_max=self.permanence_max)
+            permanence = max(min(permanence, self.permanence_max), permanence_min)
 
         if permanence >= threshold:
             mature = True
