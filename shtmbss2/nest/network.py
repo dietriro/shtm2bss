@@ -358,8 +358,8 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
 
 
 class Plasticity(network.Plasticity):
-    def __init__(self, projection: pynn.Projection, post_somas, shtm, **kwargs):
-        super().__init__(projection, post_somas, shtm, **kwargs)
+    def __init__(self, projection: pynn.Projection, post_somas, shtm, index, **kwargs):
+        super().__init__(projection, post_somas, shtm, index, **kwargs)
 
     def get_connection_id_pre(self, connection):
         return self.projection.pre.id_to_index(connection.source)

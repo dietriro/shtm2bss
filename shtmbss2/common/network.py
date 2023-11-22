@@ -536,7 +536,7 @@ class SHTMTotal(SHTMBase, ABC):
                 proj_post_soma_inh = None
 
             self.con_plastic.append(self.plasticity_cls(self.exc_to_exc[i_plastic], post_somas=post_somas, shtm=self,
-                                                        proj_post_soma_inh=proj_post_soma_inh, id=i_plastic,
+                                                        proj_post_soma_inh=proj_post_soma_inh, index=i_plastic,
                                                         debug=debug, **self.p.Plasticity.dict()))
 
         for i_perm in self.log_permanence:
