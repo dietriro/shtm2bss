@@ -686,7 +686,10 @@ class SHTMTotal(SHTMBase, ABC):
             if pynn.get_current_time() > 0 and t > 0:
                 self.reset()
 
-            sim_start_time = pynn.get_current_time()
+            # set start time to 0.0 because
+            # - nest is reset and always starts with 0.0
+            # - bss2 resets the time itself after each run to 0.0
+            sim_start_time = 0.0
             log.info(f"Current time: {sim_start_time}")
 
             pynn.run(runtime)
