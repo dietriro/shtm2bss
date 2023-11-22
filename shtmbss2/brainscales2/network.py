@@ -26,6 +26,14 @@ class SHTMBase(network.SHTMBase, ABC):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def load_params(self, **kwargs):
+        super().load_params(**kwargs)
+
+        # ToDo: Fix this and remove temporary hack
+        self.p.Neurons.Dendrite.theta_dAP = self.p.Neurons.Excitatory.v_thresh[NeuronType.Dendrite.ID]
+        self.p.Neurons.Dendrite.I_p = self.p.Neurons.Excitatory.v_reset[NeuronType.Dendrite.ID]
+        self.p.Neurons.Dendrite.tau_dAP = self.p.Neurons.Excitatory.tau_refrac[NeuronType.Dendrite.ID]
+
     def init_neurons(self):
         super().init_neurons()
 
