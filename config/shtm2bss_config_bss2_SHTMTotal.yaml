@@ -7,6 +7,7 @@ experiment:
   episodes: 100
   run_add_calib: False
   autosave: True
+  autosave_epoches: 5
 plotting:
   size: [10, 12]
   file_type: 'pdf'

@@ -131,7 +131,7 @@ def save_config(net, experiment_num):
     experiment_num = net.experiment_num
 
     folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend], f"{str(net)}_{experiment_id}_{experiment_num:02d}")
-    file_path = join(folder_path, f"{RuntimeConfig.config_prefix}_{str(net)}_{experiment_id}_{experiment_num:02d}.yaml")
+    file_path = join(folder_path, f"config.yaml")
 
     with open(file_path, 'w') as file:
         yaml.dump(net.p.dict(exclude_none=True), file)
@@ -144,9 +144,37 @@ def save_performance_data(data, metric_names, net, experiment_num):
 
     for i_metric, metric in enumerate(data):
         file_path = join(folder_path,
-                         f"{str(net)}_{experiment_id}_{experiment_num:02d}_{metric_names[i_metric]}")
+                         f"{metric_names[i_metric]}")
 
         np.save(file_path, metric)
+
+
+def save_network_data(net, experiment_num):
+    experiment_id = net.p.Experiment.id
+
+    folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend], f"{str(net)}_{experiment_id}_{experiment_num:02d}")
+    file_path = join(folder_path, "weights")
+
+    weights_dict = {var_name: getattr(net, var_name) for var_name in RuntimeConfig.saved_network_vars}
+    for con_name, connections in weights_dict.items():
+        weights_all = list()
+        for connection in connections:
+            weights_all.append(connection.get("weight", format="array"))
+        weights_dict[con_name] = np.array(weights_all)
+
+    np.savez(file_path, **weights_dict)
+
+    file_path = join(folder_path, "plasticity")
+
+    plasticity_dict = {var_name: list() for var_name in RuntimeConfig.saved_plasticity_vars}
+    for con_plastic in net.con_plastic:
+        for var_name in plasticity_dict.keys():
+            plasticity_dict[var_name].append(getattr(con_plastic, var_name))
+
+    for var_name in plasticity_dict.keys():
+        plasticity_dict[var_name] = np.array(plasticity_dict[var_name])
+
+    np.savez(file_path, **plasticity_dict)
 
 
 def save_experimental_setup(net, experiment_num=None,
@@ -163,7 +191,8 @@ def save_experimental_setup(net, experiment_num=None,
     do_update = False
     if experiment_num is None:
         experiment_num = last_experiment_num + 1
-        folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend], f"{str(net)}_{experiment_id}_{experiment_num}")
+        folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend],
+                           f"{str(net)}_{experiment_id}_{experiment_num:02d}")
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
     elif experiment_num == last_experiment_num:

@@ -31,6 +31,7 @@ class Parameters(ParameterGroup):
         episodes = None
         run_add_calib = None
         autosave = None
+        autosave_epoches = None
 
     class Plotting(ParameterGroup):
         size = None

@@ -9,7 +9,7 @@ from abc import ABC
 from shtmbss2.brainscales2.config import *
 from shtmbss2.core.logging import log
 import shtmbss2.common.network as network
-from shtmbss2.common.network import NeuronType, RecTypes, symbol_from_label
+from shtmbss2.core.helpers import NeuronType, RecTypes
 
 from pynn_brainscales import brainscales2 as pynn
 
@@ -509,12 +509,12 @@ class PlasticitySingleNeuron:
 
             # Indicator function (1st step) - Number of presynaptic spikes within learning time window
             # for each postsynaptic spike
-            I = [sum(self.delta_t_min < (spike_post - spike_pre) < self.delta_t_max for spike_pre in neuron_spikes_pre)
-                 for spike_post in neuron_spikes_post_soma]
+            ind = [sum(self.delta_t_min < (spike_post - spike_pre) < self.delta_t_max
+                       for spike_pre in neuron_spikes_pre) for spike_post in neuron_spikes_post_soma]
             # Indicator function (2nd step) - Number of pairs of pre-/postsynaptic spikes
             # for which synapses are potentiated
             has_post_somatic_spike_I = sum(
-                (t <= spike < t + self.dt) and I[n] for n, spike in enumerate(neuron_spikes_post_soma))
+                (t <= spike < t + self.dt) and ind[n] for n, spike in enumerate(neuron_spikes_post_soma))
 
             # Spike trace of presynaptic neuron
             x += (- x / self.tau_plus) * self.dt + has_pre_spike

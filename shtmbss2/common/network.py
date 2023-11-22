@@ -12,9 +12,9 @@ from abc import ABC, abstractmethod
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
 from shtmbss2.core.parameters import Parameters
-from shtmbss2.core.helpers import Process
+from shtmbss2.core.helpers import Process, symbol_from_label, NeuronType, RecTypes, id_to_symbol
 from shtmbss2.common.plot import plot_dendritic_events
-from shtmbss2.core.data import save_config, save_experimental_setup, save_performance_data
+from shtmbss2.core.data import save_config, save_experimental_setup, save_performance_data, save_network_data
 
 if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
     import pynn_brainscales.brainscales2 as pynn
@@ -36,45 +36,12 @@ else:
     raise Exception(f"Backend {RuntimeConfig.backend} not implemented yet. "
                     f"Please choose among [{Backends.BRAIN_SCALES_2}, {Backends.NEST}]")
 
-
 ID_PRE = 0
 ID_POST = 1
 NON_PICKLE_OBJECTS = ["post_somas", "projection", "shtm"]
 
 
-def symbol_from_label(label, endpoint):
-    return label.split('_')[1].split('>')[endpoint]
-
-
-class NeuronType:
-    class Dendrite:
-        ID = 0
-        NAME = "dendrite"
-
-    class Soma:
-        ID = 1
-        NAME = "soma"
-
-    class Inhibitory:
-        ID = 2
-        NAME = "inhibitory"
-
-
-class RecTypes:
-    SPIKES = "spikes"
-    V = "v"
-
-
 class SHTMBase(ABC):
-    ALPHABET = {'A': 0,
-                'B': 1,
-                'C': 2,
-                'D': 3,
-                'E': 4,
-                'F': 5,
-                'G': 6,
-                'H': 7}
-
     def __init__(self, **kwargs):
         # Load pre-defined parameters
         self.p = Parameters(network_type=self, custom_params=kwargs)
@@ -152,7 +119,7 @@ class SHTMBase(ABC):
             for i_seq, sequence in enumerate(self.p.Experiment.sequences):
                 for i_element, element in enumerate(sequence):
                     spike_time = sequence_offset + i_element * self.p.Encoding.dt_stm + self.p.Encoding.dt_stm
-                    spike_times[self.ALPHABET[element]].append(spike_time)
+                    spike_times[SYMBOLS[element]].append(spike_time)
                 sequence_offset = spike_time + self.p.Encoding.dt_seq
 
         self.last_ext_spike_time = spike_time
@@ -160,7 +127,7 @@ class SHTMBase(ABC):
         log.info(f'Initialized external input for sequence(s) {self.p.Experiment.sequences}')
         log.debug(f'Spike times:')
         for i_letter, letter_spikes in enumerate(spike_times):
-            log.debug(f'{list(self.ALPHABET.keys())[i_letter]}: {spike_times[i_letter]}')
+            log.debug(f'{list(SYMBOLS.keys())[i_letter]}: {spike_times[i_letter]}')
 
         self.neurons_ext.set(spike_times=spike_times)
 
@@ -194,7 +161,7 @@ class SHTMBase(ABC):
                     FixedNumberPreConnector(num_connections, rng=NumpyRNG(seed=j + i * self.p.Network.num_symbols)),
                     synapse_type=StaticSynapse(weight=self.p.Synapses.w_exc_exc),
                     receptor_type=self.p.Synapses.receptor_exc_exc,
-                    label=f"exc-exc_{self.id_to_letter(i)}>{self.id_to_letter(j)}"))
+                    label=f"exc-exc_{id_to_symbol(i)}>{id_to_symbol(j)}"))
 
         self.exc_to_inh = []
         for i in range(self.p.Network.num_symbols):
@@ -301,7 +268,7 @@ class SHTMBase(ABC):
             ax.set_xlim(x_lim_lower, x_lim_upper)
             ax.set_ylim(-1, self.p.Network.num_neurons + 1)
             ax.yaxis.set_ticks(range(self.p.Network.num_neurons + 2))
-            ax.set_ylabel(self.id_to_letter(i_symbol), weight='bold', fontsize=20)
+            ax.set_ylabel(id_to_symbol(i_symbol), weight='bold', fontsize=20)
             # ax.grid(True, which='both', axis='both')
 
             # Generate y-tick-labels based on number of neurons per symbol
@@ -354,7 +321,7 @@ class SHTMBase(ABC):
             for neuron_id in neuron_range:
                 # add spikes to list for printing
                 spike_times[0].append(spikes[:, 1].round(5).tolist())
-                header_spikes.append(f"{self.id_to_letter(alphabet_id)}[{neuron_id}]")
+                header_spikes.append(f"{id_to_symbol(alphabet_id)}[{neuron_id}]")
 
                 # retrieve voltage data
                 data_v = self.get_neuron_data(neuron_type, value_type=RecTypes.V, symbol_id=alphabet_id,
@@ -391,9 +358,9 @@ class SHTMBase(ABC):
         if type(sequences) is str:
             if sequences == "mean":
                 axs = self.__plot_performance_seq(axs, np.mean(self.performance_errors, axis=0),
-                                            np.mean(self.performance_fps, axis=0),
-                                            np.mean(self.performance_fns, axis=0),
-                                            np.mean(self.num_active_somas_post, axis=0), i_col=1)
+                                                  np.mean(self.performance_fps, axis=0),
+                                                  np.mean(self.performance_fns, axis=0),
+                                                  np.mean(self.num_active_somas_post, axis=0), i_col=1)
             elif sequences == "all":
                 sequence_range = range(len(self.p.Experiment.sequences))
         elif type(sequences) in [range, list]:
@@ -432,9 +399,6 @@ class SHTMBase(ABC):
 
         return axs
 
-    def id_to_letter(self, index):
-        return list(self.ALPHABET.keys())[index]
-
     def compute_prediction_performance(self, method=PerformanceType.ALL_SYMBOLS):
         log.info(f"Computing performance for {len(self.p.Experiment.sequences)} Sequences.")
 
@@ -466,7 +430,7 @@ class SHTMBase(ABC):
                 # calculate target vector
                 output = np.zeros(self.p.Network.num_symbols)
                 target = np.zeros(self.p.Network.num_symbols)
-                target[self.ALPHABET[element]] = 1
+                target[SYMBOLS[element]] = 1
 
                 num_dAPs = np.zeros(self.p.Network.num_symbols)
                 num_som_spikes = np.zeros(self.p.Network.num_symbols)
@@ -483,13 +447,14 @@ class SHTMBase(ABC):
                     som_spikes_symbol = self.get_neuron_data(NeuronType.Soma, value_type=RecTypes.SPIKES,
                                                              symbol_id=i_symbol, dtype=np.ndarray)
                     num_som_spikes[i_symbol] = len(np.unique(
-                        som_spikes_symbol[np.where((som_spikes_symbol[:, 1] > (t_min+self.p.Encoding.dt_stm)) &
-                                                   (som_spikes_symbol[:, 1] < (t_max+self.p.Encoding.dt_stm)))[0], 0]))
+                        som_spikes_symbol[np.where((som_spikes_symbol[:, 1] > (t_min + self.p.Encoding.dt_stm)) &
+                                                   (som_spikes_symbol[:, 1] < (t_max + self.p.Encoding.dt_stm)))[
+                            0], 0]))
 
                     # ToDo: Replace constant value '3' with new parameter
-                    if i_symbol != self.ALPHABET[element] and num_dAPs[i_symbol] >= (ratio_fp_activation * 3):
+                    if i_symbol != SYMBOLS[element] and num_dAPs[i_symbol] >= (ratio_fp_activation * 3):
                         output[i_symbol] = 1
-                    elif i_symbol == self.ALPHABET[element] and num_dAPs[i_symbol] >= (ratio_fn_activation * 3):
+                    elif i_symbol == SYMBOLS[element] and num_dAPs[i_symbol] >= (ratio_fn_activation * 3):
                         counter_correct += 1
                         output[i_symbol] = 1
 
@@ -502,8 +467,8 @@ class SHTMBase(ABC):
                 seq_error.append(error)
                 seq_fp.append(false_positive)
                 seq_fn.append(false_negative)
-                seq_num_active_somas_post.append(num_som_spikes[self.ALPHABET[element]])
-                seq_num_active_dendrites_post.append(num_dAPs[self.ALPHABET[element]])
+                seq_num_active_somas_post.append(num_som_spikes[SYMBOLS[element]])
+                seq_num_active_dendrites_post.append(num_dAPs[SYMBOLS[element]])
 
             self.performance_errors[i_seq].append(np.mean(seq_error))
             self.performance_fps[i_seq].append(np.mean(seq_fp))
@@ -512,12 +477,15 @@ class SHTMBase(ABC):
             self.num_active_dendrites_post[i_seq].append(np.mean(seq_num_active_dendrites_post))
 
     def save_full_state(self):
+        log.debug("Saving full state of network and experiment.")
+
         self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num)
         save_config(net=self, experiment_num=self.experiment_num)
         data = [self.performance_errors, self.performance_fps, self.performance_fns, self.num_active_somas_post,
                 self.num_active_dendrites_post]
         metric_names = ["pf_error", "pf_fps", "pf_fns", "pf_active_somas", "pf_active_dend"]
         save_performance_data(data, metric_names, self, self.experiment_num)
+        save_network_data(self, self.experiment_num)
 
     def __str__(self):
         return type(self).__name__
@@ -560,10 +528,10 @@ class SHTMTotal(SHTMBase, ABC):
             # Retrieve id (letter) of post synaptic neuron population
             symbol_post = self.exc_to_exc[i_plastic].label.split('_')[1].split('>')[1]
             # Create population view of all post synaptic somas
-            post_somas = PopulationView(self.get_neurons(NeuronType.Soma, symbol_id=self.ALPHABET[symbol_post]),
+            post_somas = PopulationView(self.get_neurons(NeuronType.Soma, symbol_id=SYMBOLS[symbol_post]),
                                         list(range(self.p.Network.num_neurons)))
             if self.p.Synapses.dyn_inh_weights:
-                proj_post_soma_inh = self.exc_to_inh[self.ALPHABET[symbol_post]]
+                proj_post_soma_inh = self.exc_to_inh[SYMBOLS[symbol_post]]
             else:
                 proj_post_soma_inh = None
 
@@ -699,7 +667,7 @@ class SHTMTotal(SHTMBase, ABC):
 
         return self.con_plastic[con_id].projection.get("weight", format="array")
 
-    def run(self, runtime=None, steps=200, plasticity_enabled=True, dyn_exc_inh=False):
+    def run(self, runtime=None, steps=200, plasticity_enabled=True, dyn_exc_inh=False, run_type=RunType.MULTI):
         if runtime is None:
             runtime = self.p.Experiment.runtime
 
@@ -726,13 +694,20 @@ class SHTMTotal(SHTMBase, ABC):
             if self.p.Performance.compute_performance:
                 self.compute_prediction_performance(method=self.p.Performance.method)
 
-            active_synapse_post = np.zeros((self.p.Network.num_symbols, self.p.Network.num_neurons))
-
             if plasticity_enabled:
-                self.__run_plasticity_parallel(runtime, sim_start_time, dyn_exc_inh=dyn_exc_inh)
+                if run_type == RunType.MULTI:
+                    self.__run_plasticity_parallel(runtime, sim_start_time, dyn_exc_inh=dyn_exc_inh)
+                elif run_type == RunType.SINGLE:
+                    log.warn(f"Singular version of plasticity calculation is currently not working. Please choose the "
+                             f"multi-core version. Not calculating plasticity.")
+                    # self.__run_plasticity_singular(runtime, sim_start_time, dyn_exc_inh=dyn_exc_inh)
 
+            if self.p.Experiment.autosave and self.p.Experiment.autosave_epoches > 0:
+                if t % self.p.Experiment.autosave_epoches == 0:
+                    self.save_full_state()
 
     def __run_plasticity_singular(self, runtime, sim_start_time, dyn_exc_inh=False):
+        # ToDo: Make the singular version work, currently not working due to missing queue
         log.info("Starting plasticity calculations")
 
         # Prepare spike time matrices
@@ -742,12 +717,13 @@ class SHTMTotal(SHTMBase, ABC):
 
         # Calculate plasticity for each synapse
         for i_plasticity, plasticity in enumerate(self.con_plastic):
-            plasticity(runtime, self.spike_times_dendrite, self.spike_times_soma, sim_start_time=sim_start_time)
+            plasticity(plasticity, runtime, self.spike_times_dendrite, self.spike_times_soma,
+                       sim_start_time=sim_start_time)
             log.info(f"Finished plasticity calculation {i_plasticity + 1}/{len(self.con_plastic)}")
 
             if dyn_exc_inh:
                 w = self.exc_to_exc[i_plasticity].get("weight", format="array")
-                letter_id = self.ALPHABET[plasticity.get_post_symbol()]
+                letter_id = SYMBOLS[plasticity.get_post_symbol()]
                 active_synapse_post[letter_id, :] = np.logical_or(active_synapse_post[letter_id, :],
                                                                   np.any(w > 0, axis=0))
 
@@ -795,7 +771,7 @@ class SHTMTotal(SHTMBase, ABC):
 
             if dyn_exc_inh:
                 w = self.exc_to_exc[i_plasticity].get("weight", format="array")
-                letter_id = self.ALPHABET[plasticity.get_post_symbol()]
+                letter_id = SYMBOLS[plasticity.get_post_symbol()]
                 active_synapse_post[letter_id, :] = np.logical_or(active_synapse_post[letter_id, :],
                                                                   np.any(w > 0, axis=0))
 
@@ -822,7 +798,7 @@ class SHTMTotal(SHTMBase, ABC):
 
 
 class Plasticity(ABC):
-    def __init__(self, projection: Projection, post_somas, shtm, id, proj_post_soma_inh=None, debug=False,
+    def __init__(self, projection: Projection, post_somas, shtm, index, proj_post_soma_inh=None, debug=False,
                  learning_factor=None, permanence_init_min=None, permanence_init_max=None, permanence_max=None,
                  threshold=None, w_mature=None, y=None, lambda_plus=None,
                  lambda_minus=None, lambda_h=None, target_rate_h=None, tau_plus=None, tau_h=None, delta_t_min=None,
@@ -843,7 +819,7 @@ class Plasticity(ABC):
         self.z = np.zeros((len(self.projection.post)))
 
         self.debug = debug
-        self.id = id
+        self.id = index
         self.projection_weight = None
 
         # parameters - loaded from file
@@ -861,8 +837,8 @@ class Plasticity(ABC):
         self.lambda_minus = lambda_minus * learning_factor
         self.lambda_h = lambda_h * learning_factor
 
-        self.symbol_id_pre = SHTMBase.ALPHABET[symbol_from_label(self.projection.label, ID_PRE)]
-        self.symbol_id_post = SHTMBase.ALPHABET[symbol_from_label(self.projection.label, ID_POST)]
+        self.symbol_id_pre = SYMBOLS[symbol_from_label(self.projection.label, ID_PRE)]
+        self.symbol_id_post = SYMBOLS[symbol_from_label(self.projection.label, ID_POST)]
 
     @staticmethod
     def rule(plasticity, permanence, threshold, x, z, runtime, permanence_min,
@@ -981,7 +957,6 @@ class Plasticity(ABC):
                 log.debug(f"Spikes post [dend]: {neuron_spikes_post_dendrite}")
                 log.debug(f"Spikes post [soma]: {neuron_spikes_post_soma}")
 
-
             permanence, x, z, mature = plasticity.rule(plasticity=plasticity, permanence=plasticity.permanence[c],
                                                        threshold=plasticity.threshold[c],
                                                        runtime=runtime, x=plasticity.x[j], z=plasticity.z[i],
@@ -1018,7 +993,8 @@ class Plasticity(ABC):
         if plasticity.permanences is not None:
             plasticity.permanences.append(np.copy(np.round(plasticity.permanence, 6)))
         if plasticity.weights is not None:
-            plasticity.weights.append(np.copy(np.round(plasticity.projection.get("weight", format="array").flatten(), 6)))
+            plasticity.weights.append(
+                np.copy(np.round(plasticity.projection.get("weight", format="array").flatten(), 6)))
 
         # remove non-pickleable objects
         for obj_name in NON_PICKLE_OBJECTS:

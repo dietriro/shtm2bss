@@ -1,6 +1,7 @@
 import shtmbss2
 import logging
 import os
+import string
 
 from os.path import join, dirname, split
 
@@ -15,6 +16,11 @@ PY_PKG_PATH = split(dirname(shtmbss2.__file__))[0]
 class Backends:
     BRAIN_SCALES_2 = 'bss2'
     NEST = 'nest'
+
+
+class RunType:
+    MULTI = "multi"
+    SINGLE = "single"
 
 
 class FileType:
@@ -41,6 +47,8 @@ class LogHandler:
 class RuntimeConfig:
     backend = None
     config_prefix = "shtm2bss_config"
+    saved_network_vars = ["exc_to_exc", "exc_to_inh"]
+    saved_plasticity_vars = ["permanence", "permanence_min", "permanences", "weights", "x", "z"]
 
 
 # Logging
@@ -70,3 +78,5 @@ EXPERIMENT_SUBFOLDERS = {
 EXPERIMENT_SETUP_FILE_NAME = {
     ExperimentType.EVALUATION: 'experiments.csv',
 }
+
+SYMBOLS = {symbol: index for index, symbol in enumerate(string.ascii_uppercase)}

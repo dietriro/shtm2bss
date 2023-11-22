@@ -7,7 +7,7 @@ from neo.core.spiketrainlist import SpikeTrain, SpikeTrainList
 from shtmbss2.nest.config import *
 from shtmbss2.core.logging import log
 import shtmbss2.common.network as network
-from shtmbss2.common.network import NeuronType, RecTypes, symbol_from_label
+from shtmbss2.core.helpers import NeuronType, RecTypes, id_to_symbol
 
 import nest
 import pyNN.nest as pynn
@@ -78,7 +78,7 @@ class SHTMBase(network.SHTMBase, ABC):
         ), initial_values={
             "V_m": self.p.Neurons.Excitatory.v_rest,
             # "I_dend": 0
-        }, label=f"exc_{self.id_to_letter(symbol_id)}")
+        }, label=f"exc_{id_to_symbol(symbol_id)}")
 
         return all_neurons
 
@@ -149,7 +149,7 @@ class SHTMBase(network.SHTMBase, ABC):
                     data[:, 1] *= neurons.recorder.sampling_interval
                 else:
                     spike_list = spike_ids.tolist()
-                    spikes = [[] for i_neuron in range(self.p.Network.num_neurons)]
+                    spikes = [[] for _ in range(self.p.Network.num_neurons)]
                     for spike_time, spike_id in spike_list:
                         spikes[int(spike_id)].append(spike_time)
                     for i_spikes in range(len(spikes)):
@@ -160,7 +160,8 @@ class SHTMBase(network.SHTMBase, ABC):
                         data = spikes
                     else:
                         spike_trains = [SpikeTrain(spikes_i * ms, t_start=neurons.get_data().segments[-1].t_start,
-                                                   t_stop=neurons.get_data().segments[-1].t_stop) for spikes_i in spikes]
+                                                   t_stop=neurons.get_data().segments[-1].t_stop)
+                                        for spikes_i in spikes]
                         data = SpikeTrainList(spike_trains)
             else:
                 data = neurons.get_data(RECORDING_VALUES[neuron_type][value_type]).segments[-1].spiketrains
@@ -184,7 +185,8 @@ class SHTMBase(network.SHTMBase, ABC):
             return None
         return data
 
-    # def plot_events(self, neuron_types="all", symbols="all", size=None, x_lim_lower=None, x_lim_upper=None, seq_start=0,
+    # def plot_events(self, neuron_types="all", symbols="all", size=None, x_lim_lower=None,
+    #                 x_lim_upper=None, seq_start=0,
     #                 seq_end=None, fig_title="", file_path=None, window="initial"):
     #     if size is None:
     #         size = (12, 10)
@@ -235,7 +237,8 @@ class SHTMBase(network.SHTMBase, ABC):
     #         # neurons_all[NeuronType.Inhibitory] = pynn.PopulationView(self.neurons_inh, [i_symbol])
     #
     #         for neurons_i in neuron_types:
-    #             neurons = PopulationView(self.neurons_inh, [i_symbol]) if neurons_i == NeuronType.Inhibitory else self.neurons_exc[i_symbol]
+    #             neurons = PopulationView(self.neurons_inh, [i_symbol]) if neurons_i ==
+    #             NeuronType.Inhibitory else self.neurons_exc[i_symbol]
     #             # Retrieve and plot spikes from selected neurons
     #             spikes = [s.base for s in self.get_neuron_data(neuron_type=neurons_i,
     #                                                            neurons=neurons,
@@ -366,5 +369,3 @@ class Plasticity(network.Plasticity):
 
     def get_connections(self):
         return self.projection.nest_connections
-
-
