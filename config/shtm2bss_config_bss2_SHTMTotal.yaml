@@ -1,5 +1,5 @@
 experiment:
-  type: 'prediction'
+  type: 'evaluation'
   id: 'a'
   sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
   seq_repetitions: 1
