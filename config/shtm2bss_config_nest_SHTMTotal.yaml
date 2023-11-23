@@ -1,0 +1,80 @@
+experiment:
+  type: 'evaluation'
+  id: 'a'
+  sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
+#  sequences: [['A', 'C', 'B']]
+  seq_repetitions: 1
+  runtime: 440.
+  episodes: 100
+  run_add_calib: False
+  autosave: True
+  autosave_epoches: 5
+plotting:
+  size: [10, 12]
+  file_type: 'pdf'
+  save_figure: True
+performance:
+  compute_performance: True
+  method: "all_symbols"
+network:
+  num_symbols: 4
+  num_neurons: 15
+backend:
+  module_name: "nestml_mc01_module"
+  neuron_name: "iaf_psc_exp_nonlineardendritemc01_nestml"
+encoding:
+  dt_stm: 40
+  dt_seq: 100
+plasticity:
+  type: 'original'
+  learning_factor: 1
+  permanence_init_min: 0
+  permanence_init_max: 8
+  permanence_max: 20.
+  threshold: 10.
+  w_mature: 10
+  y: 1
+  lambda_plus: 0.08
+  lambda_minus: 0.0015
+  lambda_h: 0.014
+  target_rate_h: 1.
+  tau_plus: 20
+  tau_h: 440
+  delta_t_min: 4
+  delta_t_max: 80
+  dt: 0.1
+neurons:
+  inhibitory:
+    c_m: 250.e-3      # nF in pyNN, pF in nest -> * 1/1000
+    v_rest: 0
+    v_reset: 0
+    v_thresh: 15
+    tau_m: 5
+    tau_syn_I: 1.0
+    tau_syn_E: 0.5
+    tau_refrac: 2
+  excitatory:
+    c_m: 250
+    v_rest: 0
+    v_reset: 0
+    v_thresh: 20
+    tau_m: 10
+    tau_syn_ext: 2
+    tau_syn_den: 5
+    tau_syn_inh: 1
+    tau_refrac: 10
+  dendrite:
+    I_p: 200
+    tau_dAP: 60
+    theta_dAP: 59
+synapses:
+  dyn_inh_weights: False
+  w_ext_exc: 4
+  w_exc_exc: 0.0
+  w_exc_inh: 4
+  w_inh_exc: 1
+  p_exc_exc: 0.4
+  receptor_ext_exc: "I_1"
+  receptor_exc_exc: "I_2"
+  receptor_exc_inh: "excitatory"
+  receptor_inh_exc: "I_3"
