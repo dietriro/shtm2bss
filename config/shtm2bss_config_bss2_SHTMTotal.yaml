@@ -69,3 +69,6 @@ synapses:
   receptor_inh_exc: "inhibitory"
 calibration:
   v_rest_calib: 275
+  padi_bus_dacen_extension: 0
+  correlation_amplitude: 1.5
+  correlation_time_constant: 30

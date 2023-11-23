@@ -116,6 +116,9 @@ class Parameters(ParameterGroup):
 
     class Calibration(ParameterGroup):
         v_rest_calib = None
+        padi_bus_dacen_extension = None
+        correlation_amplitude = None
+        correlation_time_constant = None
 
     def __init__(self, network_type, custom_params=None):
         self.load_default_params(network_type)
