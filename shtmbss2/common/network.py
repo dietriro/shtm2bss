@@ -8,6 +8,7 @@ from matplotlib.lines import Line2D
 from pyNN.random import NumpyRNG
 from tabulate import tabulate
 from abc import ABC, abstractmethod
+from quantities import ms
 
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
@@ -75,6 +76,10 @@ class SHTMBase(ABC):
     def load_params(self, **kwargs):
         self.p = Parameters(network_type=self, custom_params=kwargs)
 
+        self.p.Plasticity.tau_h = self.__compute_time_constant_dendritic_rate(dt_stm=self.p.Encoding.dt_stm,
+                                                                              dt_seq=self.p.Encoding.dt_seq,
+                                                                              target_firing_rate=self.p.Plasticity.y)
+
     def init_network(self):
         self.init_neurons()
         self.init_connections()
@@ -114,11 +119,11 @@ class SHTMBase(ABC):
         spike_times = [list() for _ in range(self.p.Network.num_symbols)]
         spike_time = None
 
-        sequence_offset = 0
+        sequence_offset = self.p.Encoding.t_exc_start
         for i_rep in range(self.p.Experiment.seq_repetitions):
             for i_seq, sequence in enumerate(self.p.Experiment.sequences):
                 for i_element, element in enumerate(sequence):
-                    spike_time = sequence_offset + i_element * self.p.Encoding.dt_stm + self.p.Encoding.dt_stm
+                    spike_time = sequence_offset + i_element * self.p.Encoding.dt_stm
                     spike_times[SYMBOLS[element]].append(spike_time)
                 sequence_offset = spike_time + self.p.Encoding.dt_seq
 
@@ -146,7 +151,7 @@ class SHTMBase(ABC):
                 PopulationView(self.neurons_ext, [i]),
                 self.get_neurons(NeuronType.Soma, symbol_id=i),
                 AllToAllConnector(),
-                synapse_type=StaticSynapse(weight=self.p.Synapses.w_ext_exc),
+                synapse_type=StaticSynapse(weight=self.p.Synapses.w_ext_exc, delay=self.p.Synapses.delay_ext_exc),
                 receptor_type=self.p.Synapses.receptor_ext_exc))
 
         self.exc_to_exc = []
@@ -159,7 +164,7 @@ class SHTMBase(ABC):
                     self.get_neurons(NeuronType.Soma, symbol_id=i),
                     self.get_neurons(NeuronType.Dendrite, symbol_id=j),
                     FixedNumberPreConnector(num_connections, rng=NumpyRNG(seed=j + i * self.p.Network.num_symbols)),
-                    synapse_type=StaticSynapse(weight=self.p.Synapses.w_exc_exc),
+                    synapse_type=StaticSynapse(weight=self.p.Synapses.w_exc_exc, delay=self.p.Synapses.delay_exc_exc),
                     receptor_type=self.p.Synapses.receptor_exc_exc,
                     label=f"exc-exc_{id_to_symbol(i)}>{id_to_symbol(j)}"))
 
@@ -169,7 +174,7 @@ class SHTMBase(ABC):
                 self.get_neurons(NeuronType.Soma, symbol_id=i),
                 PopulationView(self.neurons_inh, [i]),
                 AllToAllConnector(),
-                synapse_type=StaticSynapse(weight=self.p.Synapses.w_exc_inh),
+                synapse_type=StaticSynapse(weight=self.p.Synapses.w_exc_inh, delay=self.p.Synapses.delay_exc_inh),
                 receptor_type=self.p.Synapses.receptor_exc_inh))
 
         self.inh_to_exc = []
@@ -178,8 +183,33 @@ class SHTMBase(ABC):
                 PopulationView(self.neurons_inh, [i]),
                 self.get_neurons(NeuronType.Soma, symbol_id=i),
                 AllToAllConnector(),
-                synapse_type=StaticSynapse(weight=self.p.Synapses.w_inh_exc),
+                synapse_type=StaticSynapse(weight=self.p.Synapses.w_inh_exc, delay=self.p.Synapses.delay_inh_exc),
                 receptor_type=self.p.Synapses.receptor_inh_exc))
+
+    def __compute_time_constant_dendritic_rate(self, dt_stm, dt_seq, target_firing_rate, calibration=0):
+        """ Adapted from Bouhadjour et al. 2022
+        Compute time constant of the dendritic AP rate,
+
+        The time constant is set such that the rate captures how many dAPs a neuron generated
+        all along the period of a batch
+
+        Parameters
+        ----------
+        calibration : float
+        target_firing_rate : float
+
+        Returns
+        -------
+        float
+           time constant of the dendritic AP rate
+        """
+
+        t_exc = (((len(self.p.Experiment.sequences[0]) - 1) * dt_stm + dt_seq + calibration)
+                 * len(self.p.Experiment.sequences))
+
+        print("\nDuration of a sequence set %d ms" % t_exc)
+
+        return target_firing_rate * t_exc
 
     def reset(self):
         pass
@@ -373,13 +403,14 @@ class SHTMBase(ABC):
                                             self.performance_fns[i_seq],
                                             self.num_active_somas_post[i_seq], i_col=i_seq)
 
-        axs[0].set_ylabel("prediction error")
+        axs[0].set_ylabel("Prediction error")
         axs[0].set_xlabel("# Training Episodes")
 
-        axs[1].set_ylabel("rel. frequency")
+        axs[1].set_ylabel("Rel. frequency")
         axs[1].set_xlabel("# Training Episodes")
+        axs[1].legend(["False-positives", "False-negatives"])
 
-        axs[2].set_ylabel("rel. no. of active neurons")
+        axs[2].set_ylabel("Rel. no. of active neurons")
         axs[2].set_xlabel("# Training Episodes")
 
         fig.tight_layout()
@@ -405,7 +436,7 @@ class SHTMBase(ABC):
         ratio_fp_activation = 0.5
         ratio_fn_activation = 0.5
 
-        t_min = 0
+        t_min = self.p.Encoding.t_exc_start
 
         for i_seq, seq in enumerate(self.p.Experiment.sequences):
             seq_error = list()
@@ -421,7 +452,8 @@ class SHTMBase(ABC):
                     continue
 
                 # define min/max for time window of spikes
-                t_min += self.p.Encoding.dt_stm
+                if i_element > 0:
+                    t_min += self.p.Encoding.dt_stm
                 # t_min = (i_element + 1) * self.p.Encoding.dt_stm + i_seq * self.p.Encoding.dt_seq
                 t_max = t_min + self.p.Encoding.dt_stm
 
@@ -541,8 +573,10 @@ class SHTMTotal(SHTMBase, ABC):
 
         for i_perm in self.log_permanence:
             self.con_plastic[i_perm].enable_permanence_logging()
-        for i_perm in self.log_weights:
-            self.con_plastic[i_perm].enable_weights_logging()
+        # ToDo: Find out why accessing the weights before first simulation causes switch in connections between symbols.
+        # This seems to be a nest issue.
+        # for i_perm in self.log_weights:
+        #     self.con_plastic[i_perm].enable_weights_logging()
 
     def print_permanence_diff(self):
         for i_perm in self.log_permanence:
@@ -629,6 +663,8 @@ class SHTMTotal(SHTMBase, ABC):
         fig.text(0.02, 0.5, "Weights diff / connection direction", va="center", rotation="vertical")
 
     def get_spike_times(self, runtime, dt):
+        log.detail("Calculating spike times")
+
         times = np.linspace(0., runtime, int(runtime / dt))
 
         spike_times_dendrite = np.zeros((self.p.Network.num_symbols, self.p.Network.num_neurons, len(times)),
@@ -673,11 +709,16 @@ class SHTMTotal(SHTMBase, ABC):
 
         if type(runtime) is str:
             if str(runtime).lower() == 'max':
-                runtime = self.last_ext_spike_time + 0.1
+                runtime = self.last_ext_spike_time + (self.p.Encoding.dt_seq - self.p.Encoding.t_exc_start)
         elif type(runtime) is float or type(runtime) is int:
             pass
+        elif runtime is None:
+            log.debug("No runtime specified. Setting runtime to last spike time + 2xdt_stm")
+            runtime = self.last_ext_spike_time + (self.p.Encoding.dt_seq - self.p.Encoding.t_exc_start)
         else:
             log.error("Error! Wrong runtime")
+
+        self.p.Experiment.runtime = runtime
 
         for t in range(steps):
             log.info(f'Running emulation step {t + 1}/{steps}')
@@ -691,8 +732,17 @@ class SHTMTotal(SHTMBase, ABC):
             # - bss2 resets the time itself after each run to 0.0
             sim_start_time = 0.0
             log.info(f"Current time: {sim_start_time}")
+            log.detail(f"Current time: {sim_start_time}")
 
             pynn.run(runtime)
+
+            # for i_exc_to_exc, exc_to_exc in enumerate(self.exc_to_exc):
+            #     cons = nest.GetStatus(exc_to_exc.nest_connections)
+            #     for i_con, con in enumerate(cons):
+            #         if con['source'] not in exc_to_exc.pre.all_cells:
+            #             print(f"{exc_to_exc.label}[{i_con}] has wrong source: {con['source']}")
+            #         if con['target'] not in exc_to_exc.post.all_cells:
+            #             print(f"{exc_to_exc.label}[{i_con}] has wrong target: {con['target']}")
 
             if self.p.Performance.compute_performance:
                 self.compute_prediction_performance(method=self.p.Performance.method)
@@ -739,7 +789,6 @@ class SHTMTotal(SHTMBase, ABC):
         log.info("Starting plasticity calculations")
 
         active_synapse_post = np.zeros((self.p.Network.num_symbols, self.p.Network.num_neurons))
-
         # Prepare spike time matrices
         self.spike_times_dendrite, self.spike_times_soma = self.get_spike_times(runtime, self.p.Plasticity.dt)
 
@@ -748,7 +797,7 @@ class SHTMTotal(SHTMBase, ABC):
         # Calculate plasticity for each synapse
         processes = []
         for i_plasticity, plasticity in enumerate(self.con_plastic):
-            log.debug(f'>>> Starting plasticity calculation for {i_plasticity}')
+            log.debug(f'Starting plasticity calculation for {i_plasticity}')
             processes.append(Process(target=plasticity,
                                      args=(plasticity, runtime, self.spike_times_dendrite, self.spike_times_soma,
                                            sim_start_time, q_plasticity)))
@@ -764,7 +813,7 @@ class SHTMTotal(SHTMBase, ABC):
         for i_plasticity, plasticity in enumerate(self.con_plastic):
             processes[i_plasticity].join()
 
-            log.info(f"Finished plasticity calculation {i_plasticity + 1}/{len(self.con_plastic)}")
+            log.debug(f"Finished plasticity calculation {i_plasticity + 1}/{len(self.con_plastic)}")
 
             # Check if an exception occurred in the sub-process, then raise this exception
             if processes[i_plasticity].exception:
@@ -855,17 +904,21 @@ class Plasticity(ABC):
             # True - if any post dendrite spiked
             has_post_dendritic_spike = spike_times_dendrite[plasticity.symbol_id_post, id_post, i_t]
 
-            if spike_times_soma[plasticity.symbol_id_post, id_post, i_t] > 0:
-                # Indicator function (1st step) - Number of presynaptic spikes within learning time window
-                # for each postsynaptic spike
-                ind = [sum(
-                    plasticity.delta_t_min < (spike_post - spike_pre) < plasticity.delta_t_max
-                    for spike_pre in neuron_spikes_pre)
-                    for spike_post in neuron_spikes_post_soma]
-                # Indicator function (2nd step) - Number of pairs of pre-/postsynaptic spikes
-                # for which synapses are potentiated
-                has_post_somatic_spike_I = sum(
-                    (t <= spike < t + plasticity.dt) and ind[n] for n, spike in enumerate(neuron_spikes_post_soma))
+            if i_t > 20:
+                if spike_times_soma[plasticity.symbol_id_post, id_post, i_t-int(1/plasticity.dt*delay)] > 0:
+                    # Indicator function (1st step) - Number of presynaptic spikes within learning time window
+                    # for each postsynaptic spike
+                    ind = [sum(
+                        plasticity.delta_t_min < (spike_post + delay*ms - spike_pre) < plasticity.delta_t_max
+                        for spike_pre in neuron_spikes_pre)
+                        for spike_post in neuron_spikes_post_soma]
+                    # Indicator function (2nd step) - Number of pairs of pre-/postsynaptic spikes
+                    # for which synapses are potentiated
+                    has_post_somatic_spike_I = sum(
+                        (t <= spike + delay*ms < t + plasticity.dt) and ind[n]
+                        for n, spike in enumerate(neuron_spikes_post_soma))
+                else:
+                    has_post_somatic_spike_I = 0
             else:
                 has_post_somatic_spike_I = 0
 
@@ -878,7 +931,7 @@ class Plasticity(ABC):
                     (plasticity.lambda_plus * x * has_post_somatic_spike_I
                      - plasticity.lambda_minus * plasticity.y * has_pre_spike
                      + plasticity.lambda_h * (plasticity.target_rate_h - z) * has_post_somatic_spike_I)
-                    * plasticity.permanence_max * plasticity.dt)
+                    * plasticity.permanence_max)
 
             permanence += delta_permanence
 

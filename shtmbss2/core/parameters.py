@@ -53,6 +53,7 @@ class Parameters(ParameterGroup):
     class Encoding(ParameterGroup):
         dt_stm = None
         dt_seq = None
+        t_exc_start = None
 
     class Plasticity(ParameterGroup):
         type = None
@@ -113,6 +114,10 @@ class Parameters(ParameterGroup):
         receptor_exc_exc = None
         receptor_exc_inh = None
         receptor_inh_exc = None
+        delay_ext_exc = None
+        delay_exc_exc = None
+        delay_exc_inh = None
+        delay_inh_exc = None
 
     class Calibration(ParameterGroup):
         v_rest_calib = None

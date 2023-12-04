@@ -1,13 +1,15 @@
 experiment:
   type: 'evaluation'
-  id: 'a'
+  id: 'org-1'
+#  sequences: [[A, D, B, E], [F, D, B, C]]
+#  sequences: [['A', 'C', 'B'], ['D', 'C', 'B'], ['C', 'B', 'A'], ['B', 'D', 'A']]
   sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
-#  sequences: [['A', 'C', 'B']]
+#  sequences: [['A', 'B', 'C']]
   seq_repetitions: 1
-  runtime: 440.
+  runtime: null
   episodes: 100
   run_add_calib: False
-  autosave: True
+  autosave: False
   autosave_epoches: 5
 plotting:
   size: [10, 12]
@@ -25,6 +27,7 @@ backend:
 encoding:
   dt_stm: 40
   dt_seq: 100
+  t_exc_start: 30
 plasticity:
   type: 'original'
   learning_factor: 1
@@ -32,14 +35,14 @@ plasticity:
   permanence_init_max: 8
   permanence_max: 20.
   threshold: 10.
-  w_mature: 10
+  w_mature: 0.129
   y: 1
   lambda_plus: 0.08
   lambda_minus: 0.0015
   lambda_h: 0.014
   target_rate_h: 1.
   tau_plus: 20
-  tau_h: 440
+  tau_h: null       # computed during runtime based on sequence length
   delta_t_min: 4
   delta_t_max: 80
   dt: 0.1
@@ -69,12 +72,16 @@ neurons:
     theta_dAP: 59
 synapses:
   dyn_inh_weights: False
-  w_ext_exc: 4
-  w_exc_exc: 0.0
-  w_exc_inh: 4
-  w_inh_exc: 1
-  p_exc_exc: 0.4
+  w_ext_exc: 4.1
+  w_exc_exc: 0.01e-3
+  w_exc_inh: 2.3
+  w_inh_exc: 12.9
+  p_exc_exc: 0.2
   receptor_ext_exc: "I_1"
   receptor_exc_exc: "I_2"
   receptor_exc_inh: "excitatory"
   receptor_inh_exc: "I_3"
+  delay_ext_exc: 0.1
+  delay_exc_exc: 2
+  delay_exc_inh: 0.1
+  delay_inh_exc: 0.1

@@ -14,7 +14,7 @@ import pyNN.nest as pynn
 
 
 # setup(timestep=0.001, spike_precision='on_grid')
-pynn.setup(timestep=0.1, t_flush=500)
+pynn.setup(timestep=0.1, t_flush=500, spike_precision="on_grid")
 
 
 RECORDING_VALUES = {
@@ -166,8 +166,12 @@ class SHTMBase(network.SHTMBase, ABC):
             else:
                 data = neurons.get_data(RECORDING_VALUES[neuron_type][value_type]).segments[-1].spiketrains
                 if dtype is np.ndarray:
-                    data = np.array(data.multiplexed).transpose()
-                    data[:, 0] = neurons.id_to_index(data[:, 0])
+                    spike_times = data.multiplexed
+                    if len(spike_times[0]) > 0:
+                        data = np.array(spike_times).transpose()
+                        data[:, 0] = neurons.id_to_index(data[:, 0])
+                    else:
+                        data = np.empty((0, 2))
                 elif dtype is list:
                     data = [s.base for s in data]
         elif value_type == RecTypes.V:

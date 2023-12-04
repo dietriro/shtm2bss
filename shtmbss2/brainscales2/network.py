@@ -181,9 +181,11 @@ class SHTMBase(network.SHTMBase, ABC):
             data = neurons.get_data(RECORDING_VALUES[neuron_type][value_type]).segments[-1].spiketrains
 
             if dtype is np.ndarray:
-                data = np.array(data.multiplexed).transpose()
-                # ToDo: Doub-check if the following line needs to be added here as well to convert from id to index
-                # data[:, 0] = neurons.id_to_index(data[:, 0])
+                spike_times = data.multiplexed
+                if len(spike_times[0]) > 0:
+                    data = np.array(spike_times).transpose()
+                else:
+                    data = np.empty((0, 2))
             elif dtype is list:
                 data = [s.base for s in data]
         elif value_type == RecTypes.V:
