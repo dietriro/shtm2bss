@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
 from shtmbss2.core.parameters import Parameters
-from shtmbss2.core.helpers import Process, symbol_from_label, NeuronType, RecTypes, id_to_symbol
+from shtmbss2.core.helpers import Process, symbol_from_label, NeuronType, RecTypes, id_to_symbol, moving_average
 from shtmbss2.common.plot import plot_dendritic_events
 from shtmbss2.core.data import save_config, save_experimental_setup, save_performance_data, save_network_data
 
@@ -387,14 +387,14 @@ class SHTMBase(ABC):
 
     def __plot_performance_seq(self, axs, perf_errors, perf_fps, perf_fns, num_active_somas_post, i_col=1):
         # Plot 1: Performance error
-        axs[0].plot(perf_errors, color=f"C{i_col}")
+        axs[0].plot(moving_average(perf_errors), color=f"C{i_col}")
 
         # Plot 2: False positives/negatives
-        axs[1].plot(perf_fps, color=f"C{i_col}")
-        axs[1].plot(perf_fns, linestyle="dashed", color=f"C{i_col}")
+        axs[1].plot(moving_average(perf_fps), color=f"C{i_col}", label="False-positives")
+        axs[1].plot(moving_average(perf_fns), linestyle="dashed", color=f"C{i_col}", label="False-negatives")
 
         # Plot 3: Number of active neurons
-        rel_num_active_neurons = np.array(num_active_somas_post) / self.p.Network.num_neurons
+        rel_num_active_neurons = moving_average(np.array(num_active_somas_post) / self.p.Network.num_neurons)
         axs[2].plot(rel_num_active_neurons, color=f"C{i_col}")
 
         return axs

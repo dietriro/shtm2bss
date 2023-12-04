@@ -191,16 +191,18 @@ def save_experimental_setup(net, experiment_num=None,
     do_update = False
     if experiment_num is None:
         experiment_num = last_experiment_num + 1
-        folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend],
-                           f"{str(net)}_{experiment_id}_{experiment_num:02d}")
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
     elif experiment_num == last_experiment_num:
         do_update = True
     elif experiment_num < last_experiment_num:
         log.warning(f'Defined experiment num \'{experiment_num}\' is smaller than \'{last_experiment_num}\'. Aborting '
                     f'save process in order to prevent data loss.')
         return None
+
+    # create folder if it doesn't exist
+    folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend],
+                       f"{str(net)}_{experiment_id}_{experiment_num:02d}")
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
 
     data = {'experiment_id': experiment_id, 'experiment_num': f'{experiment_num:02d}',
             'network_type': str(net), 'time_finished': datetime.datetime.now().strftime('%d.%m.%y - %H:%M')}

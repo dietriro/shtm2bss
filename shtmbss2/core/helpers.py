@@ -1,5 +1,6 @@
 import multiprocessing as mp
 import traceback
+import numpy as np
 
 from shtmbss2.common.config import SYMBOLS
 
@@ -50,3 +51,9 @@ def symbol_from_label(label, endpoint):
 
 def id_to_symbol(index):
     return list(SYMBOLS.keys())[index]
+
+
+def moving_average(a, n=4):
+    ret = np.cumsum(a, dtype=float)
+    ret[n:] = ret[n:] - ret[:-n]
+    return ret[n - 1:] / n
