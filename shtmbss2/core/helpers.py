@@ -59,3 +59,16 @@ def moving_average(a, n=4):
     ret = np.cumsum(a, dtype=float)
     ret[n:] = ret[n:] - ret[:-n]
     return ret[n - 1:] / n
+
+
+def calculate_trace(start_value, t_start, t_end, t_events, decay_factor):
+    trace_new = start_value
+    for t_event in t_events:
+        if not t_start < t_event < t_end:
+            continue
+        trace_new = trace_new * np.exp(-(t_event-t_start) / decay_factor) + 1.0
+        t_start = t_event
+
+    trace_new = trace_new * np.exp(-(t_end-t_start) / decay_factor)
+
+    return trace_new

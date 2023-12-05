@@ -13,7 +13,8 @@ from quantities import ms
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
 from shtmbss2.core.parameters import Parameters
-from shtmbss2.core.helpers import Process, symbol_from_label, NeuronType, RecTypes, id_to_symbol, moving_average
+from shtmbss2.core.helpers import (Process, symbol_from_label, NeuronType, RecTypes, id_to_symbol, moving_average,
+                                   calculate_trace)
 from shtmbss2.common.plot import plot_dendritic_events
 from shtmbss2.core.data import save_config, save_experimental_setup, save_performance_data, save_network_data
 
@@ -531,6 +532,8 @@ class SHTMTotal(SHTMBase, ABC):
         self.spike_times_dendrite = None
         self.con_plastic = None
         self.w_exc_inh_dyn = w_exc_inh_dyn
+        self.trace_dendrites = self.trace_dendrites = np.zeros(shape=(self.p.Network.num_symbols,
+                                                                      self.p.Network.num_neurons))
 
         if plasticity_cls is None:
             self.plasticity_cls = Plasticity
@@ -671,20 +674,29 @@ class SHTMTotal(SHTMBase, ABC):
                                         dtype=np.int8)
         spike_times_soma = np.zeros((self.p.Network.num_symbols, self.p.Network.num_neurons, len(times)), dtype=np.int8)
 
-        for symbol_i in range(self.p.Network.num_symbols):
-            for i_dendrite, dendrite_spikes in enumerate(self.get_neuron_data(NeuronType.Dendrite, symbol_id=symbol_i,
+        for i_symbol in range(self.p.Network.num_symbols):
+            for i_dendrite, dendrite_spikes in enumerate(self.get_neuron_data(NeuronType.Dendrite, symbol_id=i_symbol,
                                                                               value_type=RecTypes.SPIKES, dtype=list)):
                 for spike_time in dendrite_spikes:
                     spike_id = int(spike_time / times[1])
-                    spike_times_dendrite[symbol_i, i_dendrite, spike_id] = 1
+                    spike_times_dendrite[i_symbol, i_dendrite, spike_id] = 1
 
-            for i_soma, soma_spikes in enumerate(self.get_neuron_data(NeuronType.Soma, symbol_id=symbol_i,
+            for i_soma, soma_spikes in enumerate(self.get_neuron_data(NeuronType.Soma, symbol_id=i_symbol,
                                                                       value_type=RecTypes.SPIKES)):
                 for spike_time in soma_spikes:
                     spike_id = int(spike_time / times[1])
-                    spike_times_soma[symbol_i, i_soma, spike_id] = 1
+                    spike_times_soma[i_symbol, i_soma, spike_id] = 1
 
         return spike_times_dendrite, spike_times_soma
+
+    def __update_dendritic_trace(self):
+        for i_symbol in range(self.p.Network.num_symbols):
+            for i_neuron in range(self.p.Network.num_neurons):
+                events = self.get_neuron_data(NeuronType.Dendrite, symbol_id=i_symbol, value_type=RecTypes.SPIKES,
+                                              dtype=list)[i_neuron]
+                self.trace_dendrites[i_symbol, i_neuron] = calculate_trace(self.trace_dendrites[i_symbol, i_neuron],
+                                                                           0, self.p.Experiment.runtime,
+                                                                           events, self.p.Plasticity.tau_h)
 
     def set_weights_exc_exc(self, new_weight, con_id, post_ids=None, p_con=1.0):
         # ToDo: Find out why this is not working in Nest after one simulation, only before all simulations
@@ -790,7 +802,7 @@ class SHTMTotal(SHTMBase, ABC):
 
         active_synapse_post = np.zeros((self.p.Network.num_symbols, self.p.Network.num_neurons))
         # Prepare spike time matrices
-        self.spike_times_dendrite, self.spike_times_soma = self.get_spike_times(runtime, self.p.Plasticity.dt)
+        # self.spike_times_dendrite, self.spike_times_soma = self.get_spike_times(runtime, self.p.Plasticity.dt)
 
         q_plasticity = mp.Queue()
 
@@ -799,8 +811,7 @@ class SHTMTotal(SHTMBase, ABC):
         for i_plasticity, plasticity in enumerate(self.con_plastic):
             log.debug(f'Starting plasticity calculation for {i_plasticity}')
             processes.append(Process(target=plasticity,
-                                     args=(plasticity, runtime, self.spike_times_dendrite, self.spike_times_soma,
-                                           sim_start_time, q_plasticity)))
+                                     args=(plasticity, runtime, sim_start_time, q_plasticity)))
             processes[i_plasticity].start()
 
         num_finished_plasticities = 0
@@ -831,6 +842,8 @@ class SHTMTotal(SHTMBase, ABC):
             for i_inh in range(self.p.Network.num_symbols):
                 w = self.exc_to_inh.get("weight", format="array")
                 w[active_synapse_post[i_inh, :]] = self.w_exc_inh_dyn
+
+        self.__update_dendritic_trace()
 
     def __update_con_plastic(self, new_con_plastic):
         for obj_name in NON_PICKLE_OBJECTS:
@@ -948,6 +961,74 @@ class Plasticity(ABC):
 
         return permanence, x, z, mature
 
+    @staticmethod
+    def rule_single(plasticity, permanence, threshold, x, z, runtime, permanence_min,
+             neuron_spikes_pre, neuron_spikes_post_soma, neuron_spikes_post_dendrite,
+             delay, sim_start_time=0.0):
+        last_spike_pre = 0
+
+        neuron_spikes_pre = np.array(neuron_spikes_pre)
+        neuron_spikes_post_soma = np.array(neuron_spikes_post_soma)
+        neuron_spikes_post_dendrite = np.array(neuron_spikes_post_dendrite)
+
+        log.debug(f"{plasticity.id}  permanence before: {permanence}")
+
+        # loop through pre-synaptic spikes
+        for spike_pre in neuron_spikes_pre:
+            # calculate temorary x/z value (pre-synaptic/post-dendritic decay)
+            x = x * np.exp(-(spike_pre-last_spike_pre) / plasticity.tau_plus) + 1.0
+
+            # loop through post-synaptic spikes between pre-synaptic spikes
+            for spike_post in neuron_spikes_post_soma:
+                spike_dt = (spike_post + delay) - spike_pre
+
+                # check if spike-dif is in boundaries
+                if plasticity.delta_t_min < spike_dt < plasticity.delta_t_max:
+                    # calculate temorary x value (pre synaptic decay)
+                    x_tmp = x * np.exp(-spike_dt / plasticity.tau_plus)
+                    z_tmp = calculate_trace(z, sim_start_time, spike_post, neuron_spikes_post_dendrite,
+                                            plasticity.tau_h)
+
+                    # hebbian learning
+                    permanence = plasticity.__facilitate(plasticity, permanence, x_tmp)
+                    log.debug(f"{plasticity.id}  permanence facilitate: {permanence}")
+
+                    permanence = plasticity.__homeostasis_control(plasticity, permanence, z_tmp, permanence_min)
+                    log.debug(f"{plasticity.id}  permanence homeostasis: {permanence}")
+
+            permanence = plasticity.__depress(plasticity, permanence, permanence_min)
+            last_spike_pre = spike_pre
+            log.debug(f"{plasticity.id}  permanence depression: {permanence}")
+
+        log.debug(f"{plasticity.id}  permanence after: {permanence}")
+
+        # update x (kplus) and z
+        x = x * np.exp(-(runtime-last_spike_pre) / plasticity.tau_plus)
+
+        if permanence >= threshold:
+            mature = True
+        else:
+            mature = False
+
+        return permanence, x, mature
+
+    @staticmethod
+    def __facilitate(plasticity, permanence, x):
+        mu = 0
+        clip = np.power(1.0 - (permanence / plasticity.permanence_max), mu)
+        permanence_norm = (permanence / plasticity.permanence_max) + (plasticity.lambda_plus * x * clip)
+        return min(permanence_norm * plasticity.permanence_max, plasticity.permanence_max)
+
+    @staticmethod
+    def __homeostasis_control(plasticity, permanence, z, permanence_min):
+        permanence = permanence + plasticity.lambda_h * (plasticity.target_rate_h - z) * plasticity.permanence_max
+        return max(min(permanence, plasticity.permanence_max), permanence_min)
+
+    @staticmethod
+    def __depress(plasticity, permanence, permanence_min):
+        permanence = permanence - plasticity.lambda_minus * plasticity.permanence_max
+        return max(permanence_min, permanence)
+
     def enable_permanence_logging(self):
         self.permanences = [np.copy(self.permanence)]
 
@@ -984,8 +1065,7 @@ class Plasticity(ABC):
         pass
 
     @staticmethod
-    def __call__(plasticity, runtime: float, spike_times_dendrite, spike_times_soma, sim_start_time=0.0,
-                 q_plasticity=None):
+    def __call__(plasticity, runtime: float, sim_start_time=0.0, q_plasticity=None):
         if isinstance(plasticity.projection.pre.celltype, SpikeSourceArray):
             spikes_pre = plasticity.projection.pre.get("spike_times").value
             spikes_pre = np.array(spikes_pre)
@@ -1006,6 +1086,7 @@ class Plasticity(ABC):
             neuron_spikes_pre = spikes_pre[j]
             neuron_spikes_post_dendrite = np.array(spikes_post_dendrite[i])
             neuron_spikes_post_soma = spikes_post_somas[i]
+            z = plasticity.shtm.trace_dendrites[SYMBOLS[plasticity.get_post_symbol()], i]
 
             if plasticity.debug:
                 log.debug(f"Permanence calculation for connection {c} [{i}, {j}]")
@@ -1013,18 +1094,29 @@ class Plasticity(ABC):
                 log.debug(f"Spikes post [dend]: {neuron_spikes_post_dendrite}")
                 log.debug(f"Spikes post [soma]: {neuron_spikes_post_soma}")
 
-            permanence, x, z, mature = plasticity.rule(plasticity=plasticity, permanence=plasticity.permanence[c],
-                                                       threshold=plasticity.threshold[c],
-                                                       runtime=runtime, x=plasticity.x[j], z=plasticity.z[i],
-                                                       permanence_min=plasticity.permanence_min[c],
-                                                       neuron_spikes_pre=neuron_spikes_pre,
-                                                       neuron_spikes_post_soma=neuron_spikes_post_soma,
-                                                       spike_times_dendrite=spike_times_dendrite,
-                                                       spike_times_soma=spike_times_soma, id_pre=j, id_post=i,
-                                                       sim_start_time=sim_start_time)
+            # permanence, x, z, mature = plasticity.rule(plasticity=plasticity, permanence=plasticity.permanence[c],
+            #                                            threshold=plasticity.threshold[c],
+            #                                            runtime=runtime, x=plasticity.x[j], z=plasticity.z[i],
+            #                                            permanence_min=plasticity.permanence_min[c],
+            #                                            neuron_spikes_pre=neuron_spikes_pre,
+            #                                            neuron_spikes_post_soma=neuron_spikes_post_soma,
+            #                                            spike_times_dendrite=spike_times_dendrite,
+            #                                            spike_times_soma=spike_times_soma, id_pre=j, id_post=i,
+            #                                            sim_start_time=sim_start_time)
+            permanence, x, mature = plasticity.rule_single(plasticity=plasticity, permanence=plasticity.permanence[c],
+                                                           threshold=plasticity.threshold[c],
+                                                           runtime=runtime, x=plasticity.x[j], z=z,
+                                                           permanence_min=plasticity.permanence_min[c],
+                                                           neuron_spikes_pre=neuron_spikes_pre,
+                                                           neuron_spikes_post_soma=neuron_spikes_post_soma,
+                                                           neuron_spikes_post_dendrite=spikes_post_dendrite[i],
+                                                           delay=plasticity.shtm.p.Synapses.delay_exc_exc,
+                                                           sim_start_time=sim_start_time)
+
+
             plasticity.permanence[c] = permanence
             plasticity.x[j] = x
-            plasticity.z[i] = z
+            # plasticity.z[i] = z
 
             if mature:
                 weight[j, i] = plasticity.w_mature
