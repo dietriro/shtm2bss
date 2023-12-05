@@ -17,7 +17,7 @@ plotting:
   save_figure: True
 performance:
   compute_performance: True
-  method: "all_symbols"
+  method: "last_symbol"
 network:
   num_symbols: 4
   num_neurons: 15
@@ -35,7 +35,7 @@ plasticity:
   permanence_init_max: 8
   permanence_max: 20.
   threshold: 10.
-  w_mature: 0.129
+  w_mature: 0.1298
   y: 1
   lambda_plus: 0.08
   lambda_minus: 0.0015
@@ -72,10 +72,10 @@ neurons:
     theta_dAP: 59
 synapses:
   dyn_inh_weights: False
-  w_ext_exc: 4.1
+  w_ext_exc: 4.1122
   w_exc_exc: 0.01e-3
-  w_exc_inh: 2.3
-  w_inh_exc: 12.9
+  w_exc_inh: 3.8747
+  w_inh_exc: 12.9155
   p_exc_exc: 0.2
   receptor_ext_exc: "I_1"
   receptor_exc_exc: "I_2"
