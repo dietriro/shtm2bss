@@ -6,6 +6,7 @@ from shtmbss2.core.data import load_config
 
 
 class ParameterGroup:
+    _to_evaluate: list = list()
     @classmethod
     def dict(cls, exclude_none=False):
         p_dict_original = cls.__dict__
@@ -19,6 +20,27 @@ class ParameterGroup:
                         continue
                     p_dict[v_name] = p_dict_original[v_name]
         return p_dict
+
+    @classmethod
+    def evaluate(cls, recursive=True):
+        for param_name in cls._to_evaluate:
+            if hasattr(cls, param_name):
+                value = getattr(cls, param_name)
+                try:
+                    value = eval(value)
+                except Exception as e:
+                    log.warning(f"Could not evaluate parameter {param_name}.")
+                    log.warning(e)
+                    continue
+                setattr(cls, param_name, value)
+            else:
+                log.warning(f"Could not find parameter {param_name} for class {cls.__str__}")
+
+        if recursive:
+            for v_name, v_instance in vars(cls).items():
+                if not (v_name.startswith('_') or inspect.isfunction(v_instance)):
+                    if inspect.isclass(v_instance):
+                        v_instance.evaluate(recursive=recursive)
 
 
 class Parameters(ParameterGroup):
@@ -106,6 +128,7 @@ class Parameters(ParameterGroup):
 
     class Synapses(ParameterGroup):
         dyn_inh_weights: bool = None
+        dyn_weight_calculation: bool = None
         w_ext_exc: float = None
         w_exc_exc: float = None
         w_exc_inh: float = None
@@ -119,6 +142,12 @@ class Parameters(ParameterGroup):
         delay_exc_exc: float = None
         delay_exc_inh: float = None
         delay_inh_exc: float = None
+        j_ext_exc_psp: float = None
+        j_exc_inh_psp: float = None
+        j_inh_exc_psp: float = None
+        _to_evaluate: list = ["j_ext_exc_psp",
+                              "j_exc_inh_psp",
+                              "j_inh_exc_psp"]
 
     class Calibration(ParameterGroup):
         v_rest_calib: float = None
@@ -154,4 +183,3 @@ class Parameters(ParameterGroup):
             else:
                 if hasattr(category_obj, name):
                     setattr(category_obj, name, value)
-

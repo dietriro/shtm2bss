@@ -14,7 +14,7 @@ from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
 from shtmbss2.core.parameters import Parameters
 from shtmbss2.core.helpers import (Process, symbol_from_label, NeuronType, RecTypes, id_to_symbol, moving_average,
-                                   calculate_trace)
+                                   calculate_trace, psp_max_2_psc_max)
 from shtmbss2.common.plot import plot_dendritic_events
 from shtmbss2.core.data import save_config, save_experimental_setup, save_performance_data, save_network_data
 
@@ -74,13 +74,31 @@ class SHTMBase(ABC):
         self.num_active_dendrites_post = None
 
         self.experiment_num = None
+        self.experiment_runs = 0
 
     def load_params(self, **kwargs):
         self.p = Parameters(network_type=self, custom_params=kwargs)
 
+        self.p.evaluate(recursive=True)
+
         self.p.Plasticity.tau_h = self.__compute_time_constant_dendritic_rate(dt_stm=self.p.Encoding.dt_stm,
                                                                               dt_seq=self.p.Encoding.dt_seq,
                                                                               target_firing_rate=self.p.Plasticity.y)
+
+        # dynamically calculate new weights, scale by 1/1000 for "original" pynn-nest neurons
+        if self.p.Synapses.dyn_weight_calculation:
+            self.p.Synapses.w_ext_exc = psp_max_2_psc_max(self.p.Synapses.j_ext_exc_psp,
+                                                          self.p.Neurons.Excitatory.tau_m,
+                                                          self.p.Neurons.Excitatory.tau_syn_ext,
+                                                          self.p.Neurons.Excitatory.c_m) / 1000
+            self.p.Synapses.w_exc_inh = psp_max_2_psc_max(self.p.Synapses.j_exc_inh_psp,
+                                                          self.p.Neurons.Inhibitory.tau_m,
+                                                          self.p.Neurons.Inhibitory.tau_syn_E,
+                                                          self.p.Neurons.Inhibitory.c_m)
+            self.p.Synapses.w_inh_exc = np.abs(psp_max_2_psc_max(self.p.Synapses.j_inh_exc_psp,
+                                                                 self.p.Neurons.Excitatory.tau_m,
+                                                                 self.p.Neurons.Excitatory.tau_syn_inh,
+                                                                 self.p.Neurons.Excitatory.c_m)) / 1000
 
     def init_network(self):
         self.init_neurons()
@@ -412,7 +430,7 @@ class SHTMBase(ABC):
         axs[1].set_xlabel("# Training Episodes")
         axs[1].legend(["False-positives", "False-negatives"])
 
-        target_pattern_size_line = [self.p.Network.pattern_size/self.p.Network.num_neurons
+        target_pattern_size_line = [self.p.Network.pattern_size / self.p.Network.num_neurons
                                     for _ in self.num_active_somas_post[0]]
         axs[2].plot(target_pattern_size_line, linestyle="dashed", color=f"grey",
                     label=f"Target pattern size ({self.p.Network.pattern_size})")
@@ -772,8 +790,11 @@ class SHTMTotal(SHTMBase, ABC):
                     self.__run_plasticity_singular(runtime, sim_start_time, dyn_exc_inh=dyn_exc_inh)
 
             if self.p.Experiment.autosave and self.p.Experiment.autosave_epoches > 0:
-                if t % self.p.Experiment.autosave_epoches == 0:
+                if (t + 1) % self.p.Experiment.autosave_epoches == 0:
+                    self.p.Experiment.episodes = self.experiment_runs + t + 1
                     self.save_full_state()
+
+        self.experiment_runs += steps
 
     def __run_plasticity_singular(self, runtime, sim_start_time, dyn_exc_inh=False):
         log.info("Starting plasticity calculations")

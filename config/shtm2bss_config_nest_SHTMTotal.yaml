@@ -73,6 +73,7 @@ neurons:
     theta_dAP: 59
 synapses:
   dyn_inh_weights: False
+  dyn_weight_calculation: True
   w_ext_exc: 4.1122
   w_exc_exc: 0.01e-3
   w_exc_inh: 3.8747
@@ -86,3 +87,6 @@ synapses:
   delay_exc_exc: 2
   delay_exc_inh: 0.1
   delay_inh_exc: 0.1
+  j_ext_exc_psp: 1.1 * Parameters.Neurons.Excitatory.v_thresh
+  j_exc_inh_psp: 1.2 * Parameters.Neurons.Inhibitory.v_thresh / Parameters.Network.pattern_size
+  j_inh_exc_psp: -2 * Parameters.Neurons.Excitatory.v_thresh
