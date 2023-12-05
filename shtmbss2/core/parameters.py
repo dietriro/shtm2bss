@@ -23,104 +23,105 @@ class ParameterGroup:
 
 class Parameters(ParameterGroup):
     class Experiment(ParameterGroup):
-        type = None
-        id = None
-        sequences = None
-        seq_repetitions = None
-        runtime = None
-        episodes = None
-        run_add_calib = None
-        autosave = None
-        autosave_epoches = None
+        type: str = None
+        id: str = None
+        sequences: list = None
+        seq_repetitions: int = None
+        runtime: float = None
+        episodes: int = None
+        run_add_calib: bool = None
+        autosave: bool = None
+        autosave_epoches: int = None
 
     class Plotting(ParameterGroup):
-        size = None
-        file_type = None
-        save_figure = None
+        size: list = None
+        file_type: str = None
+        save_figure: bool = None
 
     class Performance(ParameterGroup):
-        compute_performance = None
-        method = None
+        compute_performance: bool = None
+        method: str = None
 
     class Network(ParameterGroup):
-        num_symbols = None
-        num_neurons = None
+        num_symbols: int = None
+        num_neurons: int = None
+        pattern_size: int = None
 
     class Backend(ParameterGroup):
-        module_name = None
-        neuron_name = None
+        module_name: str = None
+        neuron_name: str = None
 
     class Encoding(ParameterGroup):
-        dt_stm = None
-        dt_seq = None
-        t_exc_start = None
+        dt_stm: float = None
+        dt_seq: float = None
+        t_exc_start: float = None
 
     class Plasticity(ParameterGroup):
-        type = None
-        learning_factor = None
-        permanence_init_min = None
-        permanence_init_max = None
-        permanence_max = None
-        threshold = None
-        w_mature = None
-        y = None
-        lambda_plus = None
-        lambda_minus = None
-        lambda_h = None
-        target_rate_h = None
-        tau_plus = None
-        tau_h = None
-        delta_t_min = None
-        delta_t_max = None
-        dt = None
+        type: str = None
+        learning_factor: float = None
+        permanence_init_min: float = None
+        permanence_init_max: float = None
+        permanence_max: float = None
+        threshold: float = None
+        w_mature: float = None
+        y: float = None
+        lambda_plus: float = None
+        lambda_minus: float = None
+        lambda_h: float = None
+        target_rate_h: float = None
+        tau_plus: float = None
+        tau_h: float = None
+        delta_t_min: float = None
+        delta_t_max: float = None
+        dt: float = None
 
     class Neurons(ParameterGroup):
         class Inhibitory(ParameterGroup):
-            c_m = None
-            v_rest = None
-            v_reset = None
-            v_thresh = None
-            tau_m = None
-            tau_syn_I = None
-            tau_syn_E = None
-            tau_refrac = None
+            c_m: float = None
+            v_rest: float = None
+            v_reset: float = None
+            v_thresh: float = None
+            tau_m: float = None
+            tau_syn_I: float = None
+            tau_syn_E: float = None
+            tau_refrac: float = None
 
         class Excitatory(ParameterGroup):
-            c_m = None
-            v_rest = None
-            v_reset = None
-            v_thresh = None
-            tau_m = None
-            tau_syn_I = None
-            tau_syn_E = None
-            tau_syn_ext = None
-            tau_syn_den = None
-            tau_syn_inh = None
-            tau_refrac = None
+            c_m: float = None
+            v_rest: float = None
+            v_reset: float = None
+            v_thresh: float = None
+            tau_m: float = None
+            tau_syn_I: float = None
+            tau_syn_E: float = None
+            tau_syn_ext: float = None
+            tau_syn_den: float = None
+            tau_syn_inh: float = None
+            tau_refrac: float = None
 
         class Dendrite(ParameterGroup):
-            I_p = None
-            tau_dAP = None
-            theta_dAP = None
+            I_p: float = None
+            tau_dAP: float = None
+            theta_dAP: float = None
 
     class Synapses(ParameterGroup):
-        dyn_inh_weights = None
-        w_ext_exc = None
-        w_exc_exc = None
-        w_exc_inh = None
-        w_inh_exc = None
-        p_exc_exc = None
-        receptor_ext_exc = None
-        receptor_exc_exc = None
-        receptor_exc_inh = None
-        receptor_inh_exc = None
-        delay_ext_exc = None
-        delay_exc_exc = None
-        delay_exc_inh = None
-        delay_inh_exc = None
+        dyn_inh_weights: bool = None
+        w_ext_exc: float = None
+        w_exc_exc: float = None
+        w_exc_inh: float = None
+        w_inh_exc: float = None
+        p_exc_exc: float = None
+        receptor_ext_exc: str = None
+        receptor_exc_exc: str = None
+        receptor_exc_inh: str = None
+        receptor_inh_exc: str = None
+        delay_ext_exc: float = None
+        delay_exc_exc: float = None
+        delay_exc_inh: float = None
+        delay_inh_exc: float = None
 
     class Calibration(ParameterGroup):
-        v_rest_calib = None
+        v_rest_calib: float = None
 
     def __init__(self, network_type, custom_params=None):
         self.load_default_params(network_type)

@@ -225,16 +225,6 @@ class SHTMBase(ABC):
                         runtime=None, dtype=None):
         pass
 
-    def __retrieve_neuron_data(self):
-        self.neuron_events = dict()
-
-        for neuron_type in NeuronType.get_all_types():
-            self.neuron_events[neuron_type] = list()
-            for i_symbol in range(self.p.Network.num_symbols):
-                events = self.get_neuron_data(neuron_type, value_type=RecTypes.SPIKES, symbol_id=i_symbol,
-                                              dtype=list)
-                self.neuron_events[neuron_type].append(events)
-
     def plot_events(self, neuron_types="all", symbols="all", size=None, x_lim_lower=None, x_lim_upper=None, seq_start=0,
                     seq_end=None, fig_title="", file_path=None, window="initial"):
         if size is None:
@@ -422,6 +412,10 @@ class SHTMBase(ABC):
         axs[1].set_xlabel("# Training Episodes")
         axs[1].legend(["False-positives", "False-negatives"])
 
+        target_pattern_size_line = [self.p.Network.pattern_size/self.p.Network.num_neurons
+                                    for _ in self.num_active_somas_post[0]]
+        axs[2].plot(target_pattern_size_line, linestyle="dashed", color=f"grey",
+                    label=f"Target pattern size ({self.p.Network.pattern_size})")
         axs[2].set_ylabel("Rel. no. of active neurons")
         axs[2].set_xlabel("# Training Episodes")
 
@@ -492,10 +486,11 @@ class SHTMBase(ABC):
                                                        self.neuron_events[NeuronType.Soma][i_symbol] for item in
                                                        sublist])
 
-                    # ToDo: Replace constant value '3' with new parameter
-                    if i_symbol != SYMBOLS[element] and num_dAPs[i_symbol] >= (ratio_fp_activation * 3):
+                    if (i_symbol != SYMBOLS[element] and
+                            num_dAPs[i_symbol] >= (ratio_fp_activation * self.p.Network.pattern_size)):
                         output[i_symbol] = 1
-                    elif i_symbol == SYMBOLS[element] and num_dAPs[i_symbol] >= (ratio_fn_activation * 3):
+                    elif (i_symbol == SYMBOLS[element] and
+                          num_dAPs[i_symbol] >= (ratio_fn_activation * self.p.Network.pattern_size)):
                         counter_correct += 1
                         output[i_symbol] = 1
 
@@ -670,6 +665,16 @@ class SHTMTotal(SHTMBase, ABC):
 
         axs[-1].set_xlabel("Connection [#]")
         fig.text(0.02, 0.5, "Weights diff / connection direction", va="center", rotation="vertical")
+
+    def __retrieve_neuron_data(self):
+        self.neuron_events = dict()
+
+        for neuron_type in NeuronType.get_all_types():
+            self.neuron_events[neuron_type] = list()
+            for i_symbol in range(self.p.Network.num_symbols):
+                events = self.get_neuron_data(neuron_type, value_type=RecTypes.SPIKES, symbol_id=i_symbol,
+                                              dtype=list)
+                self.neuron_events[neuron_type].append(events)
 
     def get_spike_times(self, runtime, dt):
         log.detail("Calculating spike times")

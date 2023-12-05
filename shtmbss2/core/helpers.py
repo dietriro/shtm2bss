@@ -68,7 +68,11 @@ def id_to_symbol(index):
 def moving_average(a, n=4):
     ret = np.cumsum(a, dtype=float)
     ret[n:] = ret[n:] - ret[:-n]
-    return ret[n - 1:] / n
+    ret = ret[n - 1:] / n
+    if n > 1:
+        return np.concatenate((moving_average(a[:n-1], n=n-1), ret), axis=0)
+    else:
+        return ret
 
 
 def calculate_trace(start_value, t_start, t_end, t_events, decay_factor):
