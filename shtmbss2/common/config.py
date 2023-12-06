@@ -31,7 +31,9 @@ class FileType:
 
 
 class ExperimentType:
-    EVALUATION = 'evaluation'
+    EVAL_SINGLE = 'eval_single'
+    EVAL_MULTI = 'eval_multi'
+    INSTANCE = 'instance'
 
 
 class PerformanceType:
@@ -49,6 +51,8 @@ class RuntimeConfig:
     config_prefix = "shtm2bss_config"
     saved_network_vars = ["exc_to_exc", "exc_to_inh"]
     saved_plasticity_vars = ["permanence", "permanence_min", "permanences", "weights", "x", "z"]
+    saved_instance_params = ["Experiment.type", "Experiment.id", "Experiment.sequences", "Experiment.runtime",
+                             "Experiment.episodes"]
 
 
 # Logging
@@ -76,7 +80,9 @@ EXPERIMENT_SUBFOLDERS = {
     FileType.OPTIMIZATION: 'optimizations'
 }
 EXPERIMENT_SETUP_FILE_NAME = {
-    ExperimentType.EVALUATION: 'experiments.csv',
+    ExperimentType.EVAL_SINGLE: 'experiments_single.csv',
+    ExperimentType.EVAL_MULTI: 'experiments_multi.csv',
+    ExperimentType.INSTANCE: 'experimental_results.csv'
 }
 
 SYMBOLS = {symbol: index for index, symbol in enumerate(string.ascii_uppercase)}

@@ -46,8 +46,14 @@ def get_last_experiment_num(net, experiment_id, experiment_type) -> int:
     return 0
 
 
-def save_setup(data, experiment_type, experiment_num, create_eval_file, do_update, **kwargs):
-    file_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend], EXPERIMENT_SETUP_FILE_NAME[experiment_type])
+def get_experiment_folder(net, experiment_id, experiment_num, instance_id=None):
+    folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend], f"{str(net)}_{experiment_id}_{experiment_num:02d}")
+    if instance_id is not None:
+        folder_path = join(folder_path, f'{instance_id:02d}')
+    return folder_path
+
+
+def save_setup(data, experiment_num, create_eval_file, do_update, file_path, save_categories=False, **kwargs):
 
     # ToDo: Implement this feature, check if metrics can be added
     # add all static parameters defined above for this specific experiment
@@ -61,40 +67,57 @@ def save_setup(data, experiment_type, experiment_num, create_eval_file, do_updat
     values = []
     lines = []
     prev_category = None
+    categories_sparse = None
     if not create_eval_file:
         with open(file_path, 'r') as f:
             csv_reader = csv.reader(f)
             lines = list(csv_reader)
-        for category, header in zip(lines[0], lines[1]):
-            if category == "":
-                if prev_category is None:
-                    header_full = header
+        if save_categories:
+            for category, header in zip(lines[0], lines[1]):
+                if category == "":
+                    if prev_category is None:
+                        header_full = header
+                    else:
+                        header_full = f"{prev_category}.{header}"
                 else:
-                    header_full = f"{prev_category}.{header}"
-            else:
-                header_full = f"{category}.{header}"
-                prev_category = category
-            categories.append(category)
-            headers.append(header)
-            if header_full in data.keys():
-                values.append(data[header_full])
-                data.pop(header_full)
-            else:
-                values.append('None')
+                    header_full = f"{category}.{header}"
+                    prev_category = category
+                categories.append(category)
+                headers.append(header)
+                if header_full in data.keys():
+                    values.append(data[header_full])
+                    data.pop(header_full)
+                else:
+                    values.append('None')
+        else:
+            for header in lines[0]:
+                headers.append(header)
+                if header in data.keys():
+                    values.append(data[header])
+                    data.pop(header)
+                else:
+                    values.append('None')
+
 
         if len(data.keys()) > 0:
             do_update_headers = True
 
-    for header_full, value in data.items():
-        category = ".".join(header_full.split(".")[:-1])
-        header = header_full.split(".")[-1]
+    if save_categories:
+        for header_full, value in data.items():
+            category = ".".join(header_full.split(".")[:-1])
+            header = header_full.split(".")[-1]
 
-        categories.append(category)
-        headers.append(header)
-        values.append(value)
+            categories.append(category)
+            headers.append(header)
+            values.append(value)
 
-    categories_sparse = sparsen_list(categories)
+        categories_sparse = sparsen_list(categories)
+    else:
+        for header, value in data.items():
+            headers.append(header)
+            values.append(value)
 
+    start_id = 2 if save_categories else 1
     # writing to csv file
     with open(file_path, 'w' if create_eval_file or do_update_headers or do_update else 'a') as csvfile:
         # creating a csv writer object
@@ -102,19 +125,20 @@ def save_setup(data, experiment_type, experiment_num, create_eval_file, do_updat
 
         # writing the headers if file is newly created
         if create_eval_file or do_update_headers or do_update:
-            csvwriter.writerow(categories_sparse)
+            if save_categories:
+                csvwriter.writerow(categories_sparse)
             csvwriter.writerow(headers)
 
         # update last line if this is only an update
         if do_update:
             experiment_num_col = headers.index('experiment_num')
-            for line in lines[2:]:
+            for line in lines[start_id:]:
                 if int(line[experiment_num_col]) == experiment_num:
                     line = values
                 csvwriter.writerow(line)
 
         if do_update_headers:
-            for line in lines[2:]:
+            for line in lines[start_id:]:
                 for header in data.keys():
                     line.append('None')
                 csvwriter.writerow(line)
@@ -126,21 +150,21 @@ def save_setup(data, experiment_type, experiment_num, create_eval_file, do_updat
     return experiment_num
 
 
-def save_config(net, experiment_num):
+def save_config(net, instance_id=None):
     experiment_id = net.p.Experiment.id
     experiment_num = net.experiment_num
 
-    folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend], f"{str(net)}_{experiment_id}_{experiment_num:02d}")
+    folder_path = get_experiment_folder(net, experiment_id, experiment_num, instance_id=instance_id)
     file_path = join(folder_path, f"config.yaml")
 
     with open(file_path, 'w') as file:
         yaml.dump(net.p.dict(exclude_none=True), file)
 
 
-def save_performance_data(data, metric_names, net, experiment_num):
+def save_performance_data(data, metric_names, net, experiment_num, instance_id=None):
     experiment_id = net.p.Experiment.id
 
-    folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend], f"{str(net)}_{experiment_id}_{experiment_num:02d}")
+    folder_path = get_experiment_folder(net, experiment_id, experiment_num, instance_id=instance_id)
 
     for i_metric, metric in enumerate(data):
         file_path = join(folder_path,
@@ -149,10 +173,10 @@ def save_performance_data(data, metric_names, net, experiment_num):
         np.save(file_path, metric)
 
 
-def save_network_data(net, experiment_num):
+def save_network_data(net, experiment_num, instance_id=None):
     experiment_id = net.p.Experiment.id
 
-    folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend], f"{str(net)}_{experiment_id}_{experiment_num:02d}")
+    folder_path = get_experiment_folder(net, experiment_id, experiment_num, instance_id=instance_id)
     file_path = join(folder_path, "weights")
 
     weights_dict = {var_name: getattr(net, var_name) for var_name in RuntimeConfig.saved_network_vars}
@@ -177,8 +201,31 @@ def save_network_data(net, experiment_num):
     np.savez(file_path, **plasticity_dict)
 
 
-def save_experimental_setup(net, experiment_num=None,
-                            **kwargs):
+def save_instance_setup(net, performance, experiment_num=None, instance_id=None, **kwargs):
+    params = flatten_dict(net.p.dict(exclude_none=True))
+    experiment_type = net.p.Experiment.type
+    experiment_id = net.p.Experiment.id
+
+    folder_path_instance = get_experiment_folder(net, experiment_id, experiment_num, instance_id=instance_id)
+    if not os.path.exists(folder_path_instance):
+        os.makedirs(folder_path_instance)
+
+    folder_path_experiment = get_experiment_folder(net, experiment_id, experiment_num, instance_id=None)
+    file_path = join(folder_path_experiment, EXPERIMENT_SETUP_FILE_NAME[ExperimentType.INSTANCE])
+    create_eval_file = not exists(file_path)
+
+    # prepare data
+    data_end = {**{'time_finished': datetime.datetime.now().strftime('%d.%m.%y - %H:%M')}, **performance}
+    data_params = {name.lower().replace('.', '_'): params[name] for name in RuntimeConfig.saved_instance_params}
+    data = {**{'instance_id': instance_id}, **data_params, **data_end}
+
+    save_setup(data, experiment_num, create_eval_file=create_eval_file, do_update=False, file_path=file_path,
+               save_categories=False, **kwargs)
+
+    return experiment_num
+
+
+def save_experimental_setup(net, experiment_num=None, instance_id=None, **kwargs):
     params = flatten_dict(net.p.dict(exclude_none=True))
     experiment_type = net.p.Experiment.type
     experiment_id = net.p.Experiment.id
@@ -199,8 +246,7 @@ def save_experimental_setup(net, experiment_num=None,
         return None
 
     # create folder if it doesn't exist
-    folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend],
-                       f"{str(net)}_{experiment_id}_{experiment_num:02d}")
+    folder_path = get_experiment_folder(net, experiment_id, experiment_num, instance_id=instance_id)
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
@@ -209,7 +255,7 @@ def save_experimental_setup(net, experiment_num=None,
 
     data = {**data, **params}
 
-    save_setup(data, experiment_type, experiment_num, create_eval_file, do_update, **kwargs)
+    save_setup(data, experiment_num, create_eval_file, do_update, file_path=file_path, save_categories=True, **kwargs)
 
     return experiment_num
 

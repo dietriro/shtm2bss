@@ -1,26 +1,29 @@
 experiment:
-  type: 'evaluation'
+  type: 'eval_single'
   id: 'a'
   sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
-  seq_repetitions: 1
-  runtime: 0.44
+  runtime: null
   episodes: 100
   run_add_calib: False
-  autosave: True
+  autosave: False
   autosave_epoches: 5
+  random_seed: True
+  seed_offset: null
 plotting:
   size: [10, 12]
   file_type: 'pdf'
   save_figure: True
 performance:
   compute_performance: True
-  method: "all_symbols"
+  method: "last_symbol"
 network:
   num_symbols: 4
   num_neurons: 15
+  pattern_size: 3
 encoding:
   dt_stm: 40.e-3
   dt_seq: 100.e-3
+  t_exc_start: 30.e-3
 plasticity:
   type: 'original'
   learning_factor: 10
@@ -58,6 +61,7 @@ neurons:
     tau_refrac: [60, 10]
 synapses:
   dyn_inh_weights: False
+  dyn_weight_calculation: True
   w_ext_exc: 500
   w_exc_exc: 0.0
   w_exc_inh: 220
@@ -67,5 +71,12 @@ synapses:
   receptor_exc_exc: "excitatory"
   receptor_exc_inh: "excitatory"
   receptor_inh_exc: "inhibitory"
+  delay_ext_exc: 0.1
+  delay_exc_exc: 2
+  delay_exc_inh: 0.1
+  delay_inh_exc: 0.1
+  j_ext_exc_psp: 1.1 * Parameters.Neurons.Excitatory.v_thresh
+  j_exc_inh_psp: 1.2 * Parameters.Neurons.Inhibitory.v_thresh / Parameters.Network.pattern_size
+  j_inh_exc_psp: -2 * Parameters.Neurons.Excitatory.v_thresh
 calibration:
   v_rest_calib: 275

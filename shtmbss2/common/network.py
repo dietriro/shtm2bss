@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import copy
 import pickle
@@ -16,7 +17,8 @@ from shtmbss2.core.parameters import Parameters
 from shtmbss2.core.helpers import (Process, symbol_from_label, NeuronType, RecTypes, id_to_symbol, moving_average,
                                    calculate_trace, psp_max_2_psc_max)
 from shtmbss2.common.plot import plot_dendritic_events
-from shtmbss2.core.data import save_config, save_experimental_setup, save_performance_data, save_network_data
+from shtmbss2.core.data import (save_config, save_experimental_setup, save_performance_data, save_network_data,
+                                save_instance_setup)
 
 if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
     import pynn_brainscales.brainscales2 as pynn
@@ -44,7 +46,7 @@ NON_PICKLE_OBJECTS = ["post_somas", "projection", "shtm"]
 
 
 class SHTMBase(ABC):
-    def __init__(self, **kwargs):
+    def __init__(self, instance_id=None, seed_offset=None, **kwargs):
         # Load pre-defined parameters
         self.p = Parameters(network_type=self, custom_params=kwargs)
         self.load_params()
@@ -67,14 +69,27 @@ class SHTMBase(ABC):
         self.neuron_events = None
 
         # Declare performance containers
-        self.performance_errors = None
-        self.performance_fps = None
-        self.performance_fns = None
-        self.num_active_somas_post = None
+        self.performance_error = None
+        self.performance_fp = None
+        self.performance_fn = None
+        self.performance_active_somas = None
         self.num_active_dendrites_post = None
 
         self.experiment_num = None
         self.experiment_runs = 0
+        self.instance_id = instance_id
+
+        if self.p.Experiment.random_seed:
+            if seed_offset is None:
+                if self.p.Experiment.seed_offset is None:
+                    self.p.Experiment.seed_offset = int(time.time())
+            else:
+                self.p.Experiment.seed_offset = seed_offset
+
+            instance_offset = self.instance_id if self.instance_id is not None else 0
+            np.random.seed(self.p.Experiment.seed_offset + instance_offset)
+        else:
+            np.random.seed(0)
 
     def load_params(self, **kwargs):
         self.p = Parameters(network_type=self, custom_params=kwargs)
@@ -140,12 +155,11 @@ class SHTMBase(ABC):
         spike_time = None
 
         sequence_offset = self.p.Encoding.t_exc_start
-        for i_rep in range(self.p.Experiment.seq_repetitions):
-            for i_seq, sequence in enumerate(self.p.Experiment.sequences):
-                for i_element, element in enumerate(sequence):
-                    spike_time = sequence_offset + i_element * self.p.Encoding.dt_stm
-                    spike_times[SYMBOLS[element]].append(spike_time)
-                sequence_offset = spike_time + self.p.Encoding.dt_seq
+        for i_seq, sequence in enumerate(self.p.Experiment.sequences):
+            for i_element, element in enumerate(sequence):
+                spike_time = sequence_offset + i_element * self.p.Encoding.dt_stm
+                spike_times[SYMBOLS[element]].append(spike_time)
+            sequence_offset = spike_time + self.p.Encoding.dt_seq
 
         self.last_ext_spike_time = spike_time
 
@@ -155,13 +169,13 @@ class SHTMBase(ABC):
 
         self.neurons_ext.set(spike_times=spike_times)
 
-        if init_performance or self.performance_errors is None:
+        if init_performance or self.performance_error is None:
             log.info(f'Initialized external input for sequence(s) {self.p.Experiment.sequences}')
             # Initialize performance containers
-            self.performance_errors = [[] for _ in self.p.Experiment.sequences]
-            self.performance_fps = [[] for _ in self.p.Experiment.sequences]
-            self.performance_fns = [[] for _ in self.p.Experiment.sequences]
-            self.num_active_somas_post = [[] for _ in self.p.Experiment.sequences]
+            self.performance_error = [[] for _ in self.p.Experiment.sequences]
+            self.performance_fp = [[] for _ in self.p.Experiment.sequences]
+            self.performance_fn = [[] for _ in self.p.Experiment.sequences]
+            self.performance_active_somas = [[] for _ in self.p.Experiment.sequences]
             self.num_active_dendrites_post = [[] for _ in self.p.Experiment.sequences]
 
     def init_connections(self):
@@ -180,6 +194,11 @@ class SHTMBase(ABC):
             for j in range(self.p.Network.num_symbols):
                 if i == j:
                     continue
+                seed = j + i * self.p.Network.num_symbols
+                if self.instance_id is not None:
+                    seed += self.instance_id * self.p.Network.num_symbols**2
+                if self.p.Experiment.random_seed:
+                    seed += self.p.Experiment.seed_offset
                 self.exc_to_exc.append(Projection(
                     self.get_neurons(NeuronType.Soma, symbol_id=i),
                     self.get_neurons(NeuronType.Dendrite, symbol_id=j),
@@ -227,7 +246,7 @@ class SHTMBase(ABC):
         t_exc = (((len(self.p.Experiment.sequences[0]) - 1) * dt_stm + dt_seq + calibration)
                  * len(self.p.Experiment.sequences))
 
-        print("\nDuration of a sequence set %d ms" % t_exc)
+        log.debug("\nDuration of a sequence set %d ms" % t_exc)
 
         return target_firing_rate * t_exc
 
@@ -407,10 +426,10 @@ class SHTMBase(ABC):
 
         if type(sequences) is str:
             if sequences == "mean":
-                axs = self.__plot_performance_seq(axs, np.mean(self.performance_errors, axis=0),
-                                                  np.mean(self.performance_fps, axis=0),
-                                                  np.mean(self.performance_fns, axis=0),
-                                                  np.mean(self.num_active_somas_post, axis=0), i_col=1)
+                axs = self.__plot_performance_seq(axs, np.mean(self.performance_error, axis=0),
+                                                  np.mean(self.performance_fp, axis=0),
+                                                  np.mean(self.performance_fn, axis=0),
+                                                  np.mean(self.performance_active_somas, axis=0), i_col=1)
             elif sequences == "all":
                 sequence_range = range(len(self.p.Experiment.sequences))
         elif type(sequences) in [range, list]:
@@ -418,10 +437,10 @@ class SHTMBase(ABC):
 
         if sequence_range is not None:
             for i_seq in sequence_range:
-                self.__plot_performance_seq(axs, self.performance_errors[i_seq],
-                                            self.performance_fps[i_seq],
-                                            self.performance_fns[i_seq],
-                                            self.num_active_somas_post[i_seq], i_col=i_seq)
+                self.__plot_performance_seq(axs, self.performance_error[i_seq],
+                                            self.performance_fp[i_seq],
+                                            self.performance_fn[i_seq],
+                                            self.performance_active_somas[i_seq], i_col=i_seq)
 
         axs[0].set_ylabel("Prediction error")
         axs[0].set_xlabel("# Training Episodes")
@@ -431,7 +450,7 @@ class SHTMBase(ABC):
         axs[1].legend(["False-positives", "False-negatives"])
 
         target_pattern_size_line = [self.p.Network.pattern_size / self.p.Network.num_neurons
-                                    for _ in self.num_active_somas_post[0]]
+                                    for _ in self.performance_active_somas[0]]
         axs[2].plot(target_pattern_size_line, linestyle="dashed", color=f"grey",
                     label=f"Target pattern size ({self.p.Network.pattern_size})")
         axs[2].set_ylabel("Rel. no. of active neurons")
@@ -524,30 +543,64 @@ class SHTMBase(ABC):
                 seq_num_active_somas_post.append(num_som_spikes[SYMBOLS[element]])
                 seq_num_active_dendrites_post.append(num_dAPs[SYMBOLS[element]])
 
-            self.performance_errors[i_seq].append(np.mean(seq_error))
-            self.performance_fps[i_seq].append(np.mean(seq_fp))
-            self.performance_fns[i_seq].append(np.mean(seq_fn))
-            self.num_active_somas_post[i_seq].append(np.mean(seq_num_active_somas_post))
+            self.performance_error[i_seq].append(np.mean(seq_error))
+            self.performance_fp[i_seq].append(np.mean(seq_fp))
+            self.performance_fn[i_seq].append(np.mean(seq_fn))
+            self.performance_active_somas[i_seq].append(np.mean(seq_num_active_somas_post))
             self.num_active_dendrites_post[i_seq].append(np.mean(seq_num_active_dendrites_post))
+
+    def get_performance_dict(self, final_result=False):
+        performance = dict()
+        if final_result:
+            for metric_name in ["performance_error", "performance_fp", "performance_fn", "performance_active_somas"]:
+                metric = getattr(self, metric_name)
+                metric_means = np.mean(metric, axis=0)
+                # add final value to dict
+                performance[metric_name] = metric_means[-1]
+                # add mean of all training epochs to dict
+                performance[metric_name] = np.mean(metric_means)
+        else:
+            performance['performance_error'] = self.performance_error
+            performance['performance_fp'] = self.performance_fp
+            performance['performance_fn'] = self.performance_fn
+            performance['performance_active_somas'] = self.performance_active_somas
+            performance['num_active_dendrites_post'] = self.num_active_dendrites_post
+        return performance
+
 
     def save_full_state(self):
         log.debug("Saving full state of network and experiment.")
 
-        self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num)
-        save_config(net=self, experiment_num=self.experiment_num)
-        data = [self.performance_errors, self.performance_fps, self.performance_fns, self.num_active_somas_post,
+        if self.p.Experiment.type == ExperimentType.EVAL_MULTI:
+            if self.instance_id is not None and self.instance_id == 0:
+                self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
+                                                              instance_id=self.instance_id)
+            save_instance_setup(net=self, performance=self.get_performance_dict(final_result=True),
+                                experiment_num=self.experiment_num, instance_id=self.instance_id)
+        else:
+            self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
+                                                          instance_id=self.instance_id)
+
+        if ((self.p.Experiment.type == ExperimentType.EVAL_MULTI and
+                self.instance_id is not None and self.instance_id == 1) or
+                self.p.Experiment.type == ExperimentType.EVAL_SINGLE):
+            self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
+                                                          instance_id=self.instance_id)
+        save_config(net=self, instance_id=self.instance_id)
+        data = [self.performance_error, self.performance_fp, self.performance_fn, self.performance_active_somas,
                 self.num_active_dendrites_post]
         metric_names = ["pf_error", "pf_fps", "pf_fns", "pf_active_somas", "pf_active_dend"]
-        save_performance_data(data, metric_names, self, self.experiment_num)
-        save_network_data(self, self.experiment_num)
+        save_performance_data(data, metric_names, self, self.experiment_num, instance_id=self.instance_id)
+        save_network_data(self, self.experiment_num, instance_id=self.instance_id)
 
     def __str__(self):
         return type(self).__name__
 
 
 class SHTMTotal(SHTMBase, ABC):
-    def __init__(self, log_permanence=None, log_weights=None, w_exc_inh_dyn=None, plasticity_cls=None, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, log_permanence=None, log_weights=None, w_exc_inh_dyn=None, plasticity_cls=None, instance_id=None,
+                 seed_offset=None, **kwargs):
+        super().__init__(instance_id=instance_id, seed_offset=seed_offset, **kwargs)
 
         self.con_plastic = None
         self.w_exc_inh_dyn = w_exc_inh_dyn
@@ -743,9 +796,11 @@ class SHTMTotal(SHTMBase, ABC):
 
         return self.con_plastic[con_id].projection.get("weight", format="array")
 
-    def run(self, runtime=None, steps=200, plasticity_enabled=True, dyn_exc_inh=False, run_type=RunType.SINGLE):
+    def run(self, runtime=None, steps=None, plasticity_enabled=True, dyn_exc_inh=False, run_type=RunType.SINGLE):
         if runtime is None:
             runtime = self.p.Experiment.runtime
+        if steps is None:
+            steps = self.p.Experiment.episodes
 
         if type(runtime) is str:
             if str(runtime).lower() == 'max':

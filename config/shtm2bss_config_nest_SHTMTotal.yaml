@@ -1,16 +1,17 @@
 experiment:
-  type: 'evaluation'
-  id: 'org-1'
+  type: 'eval_multi'
+  id: 'test'
 #  sequences: [[A, D, B, E], [F, D, B, C]]
 #  sequences: [['A', 'C', 'B'], ['D', 'C', 'B'], ['C', 'B', 'A'], ['B', 'D', 'A']]
   sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
 #  sequences: [['A', 'B', 'C']]
-  seq_repetitions: 1
   runtime: null
-  episodes: 100
+  episodes: 10
   run_add_calib: False
   autosave: False
   autosave_epoches: 5
+  random_seed: True
+  seed_offset: null
 plotting:
   size: [10, 12]
   file_type: 'pdf'

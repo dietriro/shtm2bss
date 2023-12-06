@@ -27,10 +27,10 @@ MCNeuron = pynn.NativeCellType
 
 class SHTMBase(network.SHTMBase, ABC):
 
-    def __init__(self, **kwargs):
+    def __init__(self, instance_id=None, seed_offset=None, **kwargs):
         global MCNeuron
 
-        super().__init__(**kwargs)
+        super().__init__(instance_id=instance_id, seed_offset=seed_offset, **kwargs)
 
         nest.Install(self.p.Backend.module_name)
         MCNeuron = pynn.native_cell_type(self.p.Backend.neuron_name)
@@ -358,8 +358,8 @@ class SHTMBase(network.SHTMBase, ABC):
 
 
 class SHTMTotal(SHTMBase, network.SHTMTotal):
-    def __init__(self, **kwargs):
-        super().__init__(plasticity_cls=Plasticity, **kwargs)
+    def __init__(self, instance_id=None, seed_offset=None, **kwargs):
+        super().__init__(plasticity_cls=Plasticity, instance_id=instance_id, seed_offset=seed_offset, **kwargs)
 
 
 class Plasticity(network.Plasticity):

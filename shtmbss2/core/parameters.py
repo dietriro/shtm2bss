@@ -54,6 +54,8 @@ class Parameters(ParameterGroup):
         run_add_calib: bool = None
         autosave: bool = None
         autosave_epoches: int = None
+        random_seed: bool = None
+        seed_offset: int = None
 
     class Plotting(ParameterGroup):
         size: list = None
