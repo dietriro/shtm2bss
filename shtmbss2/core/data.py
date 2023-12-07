@@ -46,10 +46,13 @@ def get_last_experiment_num(net, experiment_id, experiment_type) -> int:
     return 0
 
 
-def get_experiment_folder(net, experiment_id, experiment_num, instance_id=None):
-    folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend], f"{str(net)}_{experiment_id}_{experiment_num:02d}")
+def get_experiment_folder(net, experiment_type, experiment_id, experiment_num, instance_id=None):
+    net_name = net.__name__ if inspect.isclass(net) else str(net)
+    folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend],
+                       str(EXPERIMENT_SUBFOLDERS[experiment_type]),
+                       f"{net_name}_{experiment_id}_{experiment_num:02d}")
     if instance_id is not None:
-        folder_path = join(folder_path, f'{instance_id:02d}')
+        folder_path = join(folder_path, f"{instance_id:02d}")
     return folder_path
 
 
@@ -150,33 +153,36 @@ def save_setup(data, experiment_num, create_eval_file, do_update, file_path, sav
     return experiment_num
 
 
-def save_config(net, instance_id=None):
+def save_config(net):
+    experiment_type = net.p.Experiment.type
     experiment_id = net.p.Experiment.id
     experiment_num = net.experiment_num
 
-    folder_path = get_experiment_folder(net, experiment_id, experiment_num, instance_id=instance_id)
+    folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num, instance_id=None)
     file_path = join(folder_path, f"config.yaml")
 
     with open(file_path, 'w') as file:
+        data = net.p.dict(exclude_none=True)
         yaml.dump(net.p.dict(exclude_none=True), file)
 
 
-def save_performance_data(data, metric_names, net, experiment_num, instance_id=None):
+def save_performance_data(data, net, experiment_num, instance_id=None):
     experiment_id = net.p.Experiment.id
+    experiment_type = net.p.Experiment.type
 
-    folder_path = get_experiment_folder(net, experiment_id, experiment_num, instance_id=instance_id)
+    folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num, instance_id=instance_id)
 
-    for i_metric, metric in enumerate(data):
-        file_path = join(folder_path,
-                         f"{metric_names[i_metric]}")
-
-        np.save(file_path, metric)
+    for metric_name, metric_data in data.items():
+        file_path = join(folder_path, f"pf_{metric_name}")
+        np.save(file_path, metric_data)
 
 
 def save_network_data(net, experiment_num, instance_id=None):
+    # ToDo: Check if this works with bss2
+    experiment_type = net.p.Experiment.type
     experiment_id = net.p.Experiment.id
 
-    folder_path = get_experiment_folder(net, experiment_id, experiment_num, instance_id=instance_id)
+    folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num, instance_id=instance_id)
     file_path = join(folder_path, "weights")
 
     weights_dict = {var_name: getattr(net, var_name) for var_name in RuntimeConfig.saved_network_vars}
@@ -206,11 +212,13 @@ def save_instance_setup(net, performance, experiment_num=None, instance_id=None,
     experiment_type = net.p.Experiment.type
     experiment_id = net.p.Experiment.id
 
-    folder_path_instance = get_experiment_folder(net, experiment_id, experiment_num, instance_id=instance_id)
+    folder_path_instance = get_experiment_folder(net, experiment_type, experiment_id, experiment_num,
+                                                 instance_id=instance_id)
     if not os.path.exists(folder_path_instance):
         os.makedirs(folder_path_instance)
 
-    folder_path_experiment = get_experiment_folder(net, experiment_id, experiment_num, instance_id=None)
+    folder_path_experiment = get_experiment_folder(net, experiment_type, experiment_id, experiment_num,
+                                                   instance_id=None)
     file_path = join(folder_path_experiment, EXPERIMENT_SETUP_FILE_NAME[ExperimentType.INSTANCE])
     create_eval_file = not exists(file_path)
 
@@ -246,7 +254,7 @@ def save_experimental_setup(net, experiment_num=None, instance_id=None, **kwargs
         return None
 
     # create folder if it doesn't exist
-    folder_path = get_experiment_folder(net, experiment_id, experiment_num, instance_id=instance_id)
+    folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num, instance_id=instance_id)
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 

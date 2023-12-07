@@ -23,8 +23,8 @@ RECORDING_VALUES = {
 
 class SHTMBase(network.SHTMBase, ABC):
 
-    def __init__(self, instance_id=None, seed_offset=None, **kwargs):
-        super().__init__(instance_id=instance_id, seed_offset=seed_offset, **kwargs)
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, **kwargs):
+        super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset, **kwargs)
 
     def load_params(self, **kwargs):
         super().load_params(**kwargs)
@@ -461,8 +461,9 @@ class SHTMPlasticity(SHTMSingleNeuron):
 
 
 class SHTMTotal(SHTMBase, network.SHTMTotal):
-    def __init__(self, instance_id=None, seed_offset=None, **kwargs):
-        super().__init__(plasticity_cls=Plasticity, instance_id=instance_id, seed_offset=seed_offset, **kwargs)
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, **kwargs):
+        super().__init__(experiment_type=experiment_type, plasticity_cls=Plasticity, instance_id=instance_id,
+                         seed_offset=seed_offset, **kwargs)
 
 
 class Plasticity(network.Plasticity):

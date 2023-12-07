@@ -1,0 +1,6 @@
+instance_id,experiment_type,experiment_id,experiment_sequences,experiment_runtime,experiment_episodes,time_finished,error,false_positive,false_negative,active_somas
+0,eval_multi,test,"[['A', 'C', 'B'], ['D', 'C', 'B']]",360,100,07.12.23 - 16:47,0.105,0.0,0.105,4.5
+1,eval_multi,test,"[['A', 'C', 'B'], ['D', 'C', 'B']]",360,100,07.12.23 - 16:47,0.04,0.0,0.04,3.75
+2,eval_multi,test,"[['A', 'C', 'B'], ['D', 'C', 'B']]",360,100,07.12.23 - 16:47,0.05,0.0,0.05,4.24
+3,eval_multi,test,"[['A', 'C', 'B'], ['D', 'C', 'B']]",360,100,07.12.23 - 16:47,0.055,0.0,0.055,4.33
+4,eval_multi,test,"[['A', 'C', 'B'], ['D', 'C', 'B']]",360,100,07.12.23 - 16:47,0.07,0.0,0.07,3.9

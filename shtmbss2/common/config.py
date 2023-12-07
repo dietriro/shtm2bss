@@ -2,6 +2,7 @@ import shtmbss2
 import logging
 import os
 import string
+import numpy as np
 
 from os.path import join, dirname, split
 
@@ -13,40 +14,61 @@ os.environ["HWLOC_COMPONENTS"] = "-gl"
 PY_PKG_PATH = split(dirname(shtmbss2.__file__))[0]
 
 
-class Backends:
+class NamedStorage:
+    @classmethod
+    def get_all(cls):
+        return [v for n, v in vars(cls).items() if not (n.startswith('_') or callable(v))]
+
+
+class Backends(NamedStorage):
     BRAIN_SCALES_2 = 'bss2'
     NEST = 'nest'
 
 
-class RunType:
+class RunType(NamedStorage):
     MULTI = "multi"
     SINGLE = "single"
 
 
-class FileType:
+class FileType(NamedStorage):
     DATA = 'data'
     FIGURE = 'figure'
     MODEL = 'model'
     OPTIMIZATION = 'optimization'
 
 
-class ExperimentType:
+class ExperimentType(NamedStorage):
     EVAL_SINGLE = 'eval_single'
     EVAL_MULTI = 'eval_multi'
     INSTANCE = 'instance'
 
 
-class PerformanceType:
+class PerformanceType(NamedStorage):
     ALL_SYMBOLS = "all_symbols"
     LAST_SYMBOL = "last_symbol"
 
 
-class LogHandler:
+class PerformanceMetrics(NamedStorage):
+    ERROR = 'error'
+    FP = 'false_positive'
+    FN = 'false_negative'
+    ACTIVE_SOMAS = 'active_somas'
+    # ACTIVE_DENDRITES = 'active_dendrite'
+
+
+class StatisticalMetrics(NamedStorage):
+    MEAN = 'mean'
+    STD = 'std'
+    MEDIAN = 'median'
+    PERCENTILE = 'percentile'
+
+
+class LogHandler(NamedStorage):
     FILE = 0
     STREAM = 1
 
 
-class RuntimeConfig:
+class RuntimeConfig(NamedStorage):
     backend = None
     config_prefix = "shtm2bss_config"
     saved_network_vars = ["exc_to_exc", "exc_to_inh"]
@@ -56,7 +78,7 @@ class RuntimeConfig:
 
 
 # Logging
-class Log:
+class Log(NamedStorage):
     FILE = join(PY_PKG_PATH, 'data/log/shtm2bss.log')
     # FORMAT_FILE = "[%(asctime)s] [%(filename)s:%(lineno)s - %(funcName)20s() ] [%(levelname)-8s] %(message)s"
     FORMAT_FILE = "[%(asctime)s] [%(filename)-20s:%(lineno)-4s] [%(levelname)-8s] %(message)s"
@@ -74,10 +96,8 @@ EXPERIMENT_FOLDERS = {
     Backends.BRAIN_SCALES_2: join(PY_PKG_PATH, 'data/evaluation/bss2')
 }
 EXPERIMENT_SUBFOLDERS = {
-    FileType.DATA: 'data',
-    FileType.FIGURE: 'figures',
-    FileType.MODEL: 'models',
-    FileType.OPTIMIZATION: 'optimizations'
+    ExperimentType.EVAL_SINGLE: 'single',
+    ExperimentType.EVAL_MULTI: 'multi'
 }
 EXPERIMENT_SETUP_FILE_NAME = {
     ExperimentType.EVAL_SINGLE: 'experiments_single.csv',
@@ -86,3 +106,5 @@ EXPERIMENT_SETUP_FILE_NAME = {
 }
 
 SYMBOLS = {symbol: index for index, symbol in enumerate(string.ascii_uppercase)}
+
+NP_STATISTICS = {m: getattr(np, m) for m in StatisticalMetrics.get_all()}

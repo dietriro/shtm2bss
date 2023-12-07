@@ -1,6 +1,5 @@
 experiment:
-  type: 'eval_single'
-  id: 'a'
+  id: 'test'
   sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
   runtime: null
   episodes: 100
@@ -9,6 +8,8 @@ experiment:
   autosave_epoches: 5
   random_seed: True
   seed_offset: null
+  log_weights: True
+  log_permanence: True
 plotting:
   size: [10, 12]
   file_type: 'pdf'
@@ -62,6 +63,7 @@ neurons:
 synapses:
   dyn_inh_weights: False
   dyn_weight_calculation: True
+  w_exc_inh_dyn: null
   w_ext_exc: 500
   w_exc_exc: 0.0
   w_exc_inh: 220

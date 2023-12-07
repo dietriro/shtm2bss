@@ -14,16 +14,16 @@ warnings.filterwarnings(action='ignore', category=UserWarning)
 
 
 class ParallelExecutor:
-    def __init__(self, num_instances, experiment_type, experiment_id):
+    def __init__(self, num_instances, experiment_id):
         self.num_instances = num_instances
-        self.experiment_type = experiment_type
         self.experiment_id = experiment_id
 
+        self.experiment_type = ExperimentType.EVAL_MULTI
         self.experiment_num = None
 
     @staticmethod
     def __run_experiment(process_id, file_save_status, lock, experiment_num, seed_offset, steps=None):
-        shtm = SHTMTotal(log_permanence='all', log_weights='all', instance_id=process_id, seed_offset=seed_offset)
+        shtm = SHTMTotal(experiment_type=ExperimentType.EVAL_MULTI, instance_id=process_id, seed_offset=seed_offset)
 
         # set autosave to false in order to minimize file lock timeouts
         shtm.p.Experiment.autosave = False
@@ -70,3 +70,5 @@ class ParallelExecutor:
             processes[i_inst].join()
 
             log.info(f"Finished simulation {i_inst + 1}/{self.num_instances}")
+
+        return self.experiment_num

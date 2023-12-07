@@ -5,13 +5,18 @@ Calibration: {}
 Encoding:
   dt_seq: 100
   dt_stm: 40
+  t_exc_start: 30
 Experiment:
   autosave: true
+  autosave_epoches: 5
   episodes: 100
-  id: a
+  id: test
+  log_permanence: true
+  log_weights: true
+  random_seed: true
   run_add_calib: false
-  runtime: 440.0
-  seq_repetitions: 1
+  runtime: 360
+  seed_offset: 1701965425
   sequences:
   - - A
     - C
@@ -19,10 +24,11 @@ Experiment:
   - - D
     - C
     - B
-  type: evaluation
+  type: eval_single
 Network:
   num_neurons: 15
   num_symbols: 4
+  pattern_size: 3
 Neurons:
   Dendrite:
     I_p: 200
@@ -49,7 +55,7 @@ Neurons:
     v_thresh: 15
 Performance:
   compute_performance: true
-  method: all_symbols
+  method: last_symbol
 Plasticity:
   delta_t_max: 80
   delta_t_min: 4
@@ -62,11 +68,11 @@ Plasticity:
   permanence_init_min: 0
   permanence_max: 20.0
   target_rate_h: 1.0
-  tau_h: 440
+  tau_h: 360
   tau_plus: 20
   threshold: 10.0
   type: original
-  w_mature: 10
+  w_mature: 0.1298
   y: 1
 Plotting:
   file_type: pdf
@@ -75,13 +81,21 @@ Plotting:
   - 10
   - 12
 Synapses:
+  delay_exc_exc: 2
+  delay_exc_inh: 0.1
+  delay_ext_exc: 0.1
+  delay_inh_exc: 0.1
   dyn_inh_weights: false
-  p_exc_exc: 0.4
+  dyn_weight_calculation: true
+  j_exc_inh_psp: 6.0
+  j_ext_exc_psp: 22.0
+  j_inh_exc_psp: -40
+  p_exc_exc: 0.2
   receptor_exc_exc: I_2
   receptor_exc_inh: excitatory
   receptor_ext_exc: I_1
   receptor_inh_exc: I_3
-  w_exc_exc: 0.0
-  w_exc_inh: 4
-  w_ext_exc: 4
-  w_inh_exc: 1
+  w_exc_exc: 1.0e-05
+  w_exc_inh: 3.8746489950446508
+  w_ext_exc: 4.112209148358357
+  w_inh_exc: 12.915496650148835

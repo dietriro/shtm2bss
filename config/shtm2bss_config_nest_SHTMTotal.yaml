@@ -1,17 +1,18 @@
 experiment:
-  type: 'eval_multi'
   id: 'test'
 #  sequences: [[A, D, B, E], [F, D, B, C]]
 #  sequences: [['A', 'C', 'B'], ['D', 'C', 'B'], ['C', 'B', 'A'], ['B', 'D', 'A']]
   sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
 #  sequences: [['A', 'B', 'C']]
   runtime: null
-  episodes: 10
+  episodes: 100
   run_add_calib: False
   autosave: False
   autosave_epoches: 5
   random_seed: True
   seed_offset: null
+  log_weights: True
+  log_permanence: True
 plotting:
   size: [10, 12]
   file_type: 'pdf'
@@ -75,6 +76,7 @@ neurons:
 synapses:
   dyn_inh_weights: False
   dyn_weight_calculation: True
+  w_exc_inh_dyn: null
   w_ext_exc: 4.1122
   w_exc_exc: 0.01e-3
   w_exc_inh: 3.8747

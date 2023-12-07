@@ -1,12 +1,14 @@
 import inspect
 from abc import ABC
 
+from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
-from shtmbss2.core.data import load_config
+from shtmbss2.core.data import load_config, get_experiment_folder, load_yaml
 
 
 class ParameterGroup:
     _to_evaluate: list = list()
+
     @classmethod
     def dict(cls, exclude_none=False):
         p_dict_original = cls.__dict__
@@ -56,6 +58,8 @@ class Parameters(ParameterGroup):
         autosave_epoches: int = None
         random_seed: bool = None
         seed_offset: int = None
+        log_weights: bool = None
+        log_permanence: bool = None
 
     class Plotting(ParameterGroup):
         size: list = None
@@ -131,6 +135,7 @@ class Parameters(ParameterGroup):
     class Synapses(ParameterGroup):
         dyn_inh_weights: bool = None
         dyn_weight_calculation: bool = None
+        w_exc_inh_dyn: float = None
         w_ext_exc: float = None
         w_exc_exc: float = None
         w_exc_inh: float = None
@@ -154,10 +159,14 @@ class Parameters(ParameterGroup):
     class Calibration(ParameterGroup):
         v_rest_calib: float = None
 
-    def __init__(self, network_type, custom_params=None):
-        self.load_default_params(network_type)
+    def __init__(self, network_type):
+        self.network_type = network_type
 
-        log.debug(f"Successfully loaded parameters for '{network_type}'")
+    def load_default_params(self, custom_params=None):
+        default_params = load_config(self.network_type)
+        self.set_params(self, default_params)
+
+        log.debug(f"Successfully loaded parameters for '{self.network_type}'")
 
         # Set specific parameters loaded from individual configuration
         if custom_params is not None:
@@ -168,11 +177,15 @@ class Parameters(ParameterGroup):
                     category_obj = getattr(category_obj, category_name)
                 setattr(category_obj, name, value)
 
-        log.debug(f"Successfully set custom parameters for '{network_type}'")
+        log.debug(f"Successfully set custom parameters for '{self.network_type}'")
 
-    def load_default_params(self, network_type):
-        default_params = load_config(network_type)
-        self.set_params(self, default_params)
+    def load_experiment_params(self, experiment_type, experiment_id, experiment_num):
+        experiment_folder_path = get_experiment_folder(self.network_type, experiment_type, experiment_id,
+                                                       experiment_num, instance_id=None)
+
+        saved_params = load_yaml(experiment_folder_path, "config.yaml")
+
+        self.set_params(self, saved_params)
 
     def set_params(self, category_obj, parameters):
         for name, value in parameters.items():
