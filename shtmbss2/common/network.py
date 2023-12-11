@@ -99,9 +99,10 @@ class SHTMBase(ABC):
 
         self.p.evaluate(recursive=True)
 
-        self.p.Plasticity.tau_h = self.__compute_time_constant_dendritic_rate(dt_stm=self.p.Encoding.dt_stm,
-                                                                              dt_seq=self.p.Encoding.dt_seq,
-                                                                              target_firing_rate=self.p.Plasticity.y)
+        if self.p.Plasticity.tau_h is None:
+            self.p.Plasticity.tau_h = self.__compute_time_constant_dendritic_rate(dt_stm=self.p.Encoding.dt_stm,
+                                                                                  dt_seq=self.p.Encoding.dt_seq,
+                                                                                  target_firing_rate=self.p.Plasticity.y)
 
         # dynamically calculate new weights, scale by 1/1000 for "original" pynn-nest neurons
         if self.p.Synapses.dyn_weight_calculation:
