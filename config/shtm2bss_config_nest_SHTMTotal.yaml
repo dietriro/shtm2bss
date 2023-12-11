@@ -7,9 +7,10 @@ experiment:
   runtime: null
   episodes: 100
   run_add_calib: False
-  autosave: False
-  autosave_epoches: 5
-  random_seed: True
+  save_final: False
+  save_auto: False
+  save_auto_epoches: 5
+  generate_rand_seed_offset: False
   seed_offset: null
   log_weights: True
   log_permanence: True
@@ -31,6 +32,7 @@ encoding:
   dt_stm: 40
   dt_seq: 100
   t_exc_start: 30
+  t_scaling_factor: 1.
 plasticity:
   type: 'original'
   learning_factor: 1
@@ -47,7 +49,7 @@ plasticity:
   tau_plus: 20
   tau_h: null       # computed during runtime based on sequence length
   delta_t_min: 4
-  delta_t_max: 80
+  delta_t_max: 75
   dt: 0.1
 neurons:
   inhibitory:

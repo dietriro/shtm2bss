@@ -153,16 +153,15 @@ def save_setup(data, experiment_num, create_eval_file, do_update, file_path, sav
     return experiment_num
 
 
-def save_config(net):
+def save_config(net, instance_id=None):
     experiment_type = net.p.Experiment.type
     experiment_id = net.p.Experiment.id
     experiment_num = net.experiment_num
 
-    folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num, instance_id=None)
+    folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num, instance_id=instance_id)
     file_path = join(folder_path, f"config.yaml")
 
     with open(file_path, 'w') as file:
-        data = net.p.dict(exclude_none=True)
         yaml.dump(net.p.dict(exclude_none=True), file)
 
 

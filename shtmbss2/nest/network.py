@@ -1,4 +1,7 @@
+import os
 import numpy as np
+
+os.environ["PYNEST_QUIET"] = "1"
 
 from abc import ABC
 from quantities import ms

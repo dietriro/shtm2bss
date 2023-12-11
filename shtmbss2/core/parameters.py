@@ -33,7 +33,7 @@ class ParameterGroup:
                 except Exception as e:
                     log.warning(f"Could not evaluate parameter {param_name}.")
                     log.warning(e)
-                    continue
+                    value = None
                 setattr(cls, param_name, value)
             else:
                 log.warning(f"Could not find parameter {param_name} for class {cls.__str__}")
@@ -54,9 +54,10 @@ class Parameters(ParameterGroup):
         runtime: float = None
         episodes: int = None
         run_add_calib: bool = None
-        autosave: bool = None
-        autosave_epoches: int = None
-        random_seed: bool = None
+        save_final: bool = None
+        save_auto: bool = None
+        save_auto_epoches: int = None
+        generate_rand_seed_offset: bool = None
         seed_offset: int = None
         log_weights: bool = None
         log_permanence: bool = None
@@ -83,6 +84,7 @@ class Parameters(ParameterGroup):
         dt_stm: float = None
         dt_seq: float = None
         t_exc_start: float = None
+        t_scaling_factor: float = None
 
     class Plasticity(ParameterGroup):
         type: str = None

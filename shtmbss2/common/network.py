@@ -77,19 +77,18 @@ class SHTMBase(ABC):
         self.num_active_dendrites_post = None
 
         self.experiment_num = None
-        self.experiment_runs = 0
+        self.experiment_episodes = 0
         self.instance_id = instance_id
 
         self.performance = PerformanceSingle(parameters=self.p)
 
-        if self.p.Experiment.random_seed:
-            if self.p.Experiment.seed_offset is None:
-                if seed_offset is None:
-                    self.p.Experiment.seed_offset = int(time.time())
-                else:
-                    self.p.Experiment.seed_offset = seed_offset
+        if seed_offset is None:
+            if self.p.Experiment.generate_rand_seed_offset:
+                self.p.Experiment.seed_offset = int(time.time())
+            elif self.p.Experiment.seed_offset is None:
+                self.p.Experiment.seed_offset = 0
         else:
-            self.p.Experiment.seed_offset = 0
+            self.p.Experiment.seed_offset = seed_offset
 
         instance_offset = self.instance_id if self.instance_id is not None else 0
         np.random.seed(self.p.Experiment.seed_offset + instance_offset)
@@ -99,9 +98,10 @@ class SHTMBase(ABC):
 
         self.p.evaluate(recursive=True)
 
-        self.p.Plasticity.tau_h = self.__compute_time_constant_dendritic_rate(dt_stm=self.p.Encoding.dt_stm,
-                                                                              dt_seq=self.p.Encoding.dt_seq,
-                                                                              target_firing_rate=self.p.Plasticity.y)
+        if self.p.Plasticity.tau_h is None:
+            self.p.Plasticity.tau_h = self.__compute_time_constant_dendritic_rate(dt_stm=self.p.Encoding.dt_stm,
+                                                                                  dt_seq=self.p.Encoding.dt_seq,
+                                                                                  target_firing_rate=self.p.Plasticity.y)
 
         # dynamically calculate new weights, scale by 1/1000 for "original" pynn-nest neurons
         if self.p.Synapses.dyn_weight_calculation:
@@ -193,11 +193,9 @@ class SHTMBase(ABC):
             for j in range(self.p.Network.num_symbols):
                 if i == j:
                     continue
-                seed = j + i * self.p.Network.num_symbols
+                seed = j + i * self.p.Network.num_symbols + self.p.Experiment.seed_offset
                 if self.instance_id is not None:
                     seed += self.instance_id * self.p.Network.num_symbols ** 2
-                if self.p.Experiment.random_seed:
-                    seed += self.p.Experiment.seed_offset
                 self.exc_to_exc.append(Projection(
                     self.get_neurons(NeuronType.Soma, symbol_id=i),
                     self.get_neurons(NeuronType.Dendrite, symbol_id=j),
@@ -434,12 +432,7 @@ class SHTMBase(ABC):
             self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
                                                           instance_id=self.instance_id)
 
-        if ((self.p.Experiment.type == ExperimentType.EVAL_MULTI and
-             self.instance_id is not None and self.instance_id == 1) or
-                self.p.Experiment.type == ExperimentType.EVAL_SINGLE):
-            self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
-                                                          instance_id=self.instance_id)
-        save_config(net=self)
+        save_config(net=self, instance_id=None)
         save_performance_data(self.performance.data, self, self.experiment_num, instance_id=self.instance_id)
         save_network_data(self, self.experiment_num, instance_id=self.instance_id)
 
@@ -649,6 +642,7 @@ class SHTMTotal(SHTMBase, ABC):
             runtime = self.p.Experiment.runtime
         if steps is None:
             steps = self.p.Experiment.episodes
+        self.p.Experiment.episodes = 0
 
         if type(runtime) is str:
             if str(runtime).lower() == 'max':
@@ -692,12 +686,16 @@ class SHTMTotal(SHTMBase, ABC):
                 elif run_type == RunType.SINGLE:
                     self.__run_plasticity_singular(runtime, sim_start_time, dyn_exc_inh=dyn_exc_inh)
 
-            if self.p.Experiment.autosave and self.p.Experiment.autosave_epoches > 0:
-                if (t + 1) % self.p.Experiment.autosave_epoches == 0:
-                    self.p.Experiment.episodes = self.experiment_runs + t + 1
+            if self.p.Experiment.save_auto and self.p.Experiment.save_auto_epoches > 0:
+                if (t + 1) % self.p.Experiment.save_auto_epoches == 0:
+                    self.p.Experiment.episodes = self.experiment_episodes + t + 1
                     self.save_full_state()
 
-        self.experiment_runs += steps
+        self.experiment_episodes += steps
+        self.p.Experiment.episodes = self.experiment_episodes
+
+        if self.p.Experiment.save_final or self.p.Experiment.save_auto:
+            self.save_full_state()
 
     def __run_plasticity_singular(self, runtime, sim_start_time, dyn_exc_inh=False):
         log.info("Starting plasticity calculations")
@@ -836,6 +834,8 @@ class Plasticity(ABC):
         neuron_spikes_post_soma = np.array(neuron_spikes_post_soma)
         neuron_spikes_post_dendrite = np.array(neuron_spikes_post_dendrite)
 
+        permanence_before = permanence
+
         log.debug(f"{self.id}  permanence before: {permanence}")
 
         # loop through pre-synaptic spikes
@@ -847,6 +847,8 @@ class Plasticity(ABC):
             for spike_post in neuron_spikes_post_soma:
                 spike_dt = (spike_post + delay) - spike_pre
 
+                log.debug(f"{self.id}  spikes: {spike_pre}, {spike_post}, {spike_dt}")
+
                 # check if spike-dif is in boundaries
                 if self.delta_t_min < spike_dt < self.delta_t_max:
                     # calculate temorary x value (pre synaptic decay)
@@ -856,14 +858,16 @@ class Plasticity(ABC):
 
                     # hebbian learning
                     permanence = self.__facilitate(permanence, x_tmp)
-                    log.debug(f"{self.id}  permanence facilitate: {permanence}")
+                    log.debug(f"{self.id}  d_permanence facilitate: {permanence-permanence_before}")
+                    permanence_before = permanence_before
 
                     permanence = self.__homeostasis_control(permanence, z_tmp, permanence_min)
-                    log.debug(f"{self.id}  permanence homeostasis: {permanence}")
+                    log.debug(f"{self.id}  d_permanence homeostasis: {permanence-permanence_before}")
+                    permanence_before = permanence_before
 
             permanence = self.__depress(permanence, permanence_min)
             last_spike_pre = spike_pre
-            log.debug(f"{self.id}  permanence depression: {permanence}")
+            log.debug(f"{self.id}  permanence depression: {permanence-permanence_before}")
 
         log.debug(f"{self.id}  permanence after: {permanence}")
 

@@ -3,11 +3,18 @@ import warnings
 import numpy as np
 import multiprocessing as mp
 
-from shtmbss2.nest.network import SHTMTotal
 from shtmbss2.core.helpers import Process
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
 from shtmbss2.core.data import get_last_experiment_num
+
+if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
+    from shtmbss2.brainscales2.network import SHTMTotal
+elif RuntimeConfig.backend == Backends.NEST:
+    from shtmbss2.nest.network import SHTMTotal
+else:
+    raise Exception(f"Backend {RuntimeConfig.backend} not implemented yet. "
+                    f"Please choose among [{Backends.BRAIN_SCALES_2}, {Backends.NEST}]")
 
 np.set_printoptions(threshold=np.inf, suppress=True, linewidth=np.inf)
 warnings.filterwarnings(action='ignore', category=UserWarning)
@@ -25,8 +32,8 @@ class ParallelExecutor:
     def __run_experiment(process_id, file_save_status, lock, experiment_num, seed_offset, steps=None):
         shtm = SHTMTotal(experiment_type=ExperimentType.EVAL_MULTI, instance_id=process_id, seed_offset=seed_offset)
 
-        # set autosave to false in order to minimize file lock timeouts
-        shtm.p.Experiment.autosave = False
+        # set save_auto to false in order to minimize file lock timeouts
+        shtm.p.Experiment.save_auto = False
         shtm.experiment_num = experiment_num
 
         lock.acquire(block=True)
