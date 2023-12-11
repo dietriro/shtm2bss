@@ -34,6 +34,7 @@ class ParallelExecutor:
 
         # set save_auto to false in order to minimize file lock timeouts
         shtm.p.Experiment.save_auto = False
+        shtm.p.Experiment.save_final = False
         shtm.experiment_num = experiment_num
 
         lock.acquire(block=True)
