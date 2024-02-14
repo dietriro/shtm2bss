@@ -66,9 +66,9 @@ synapses:
   dyn_inh_weights: False
   dyn_weight_calculation: False
   w_exc_inh_dyn: null
-  w_ext_exc: 500
+  w_ext_exc: 600
   w_exc_exc: 0.0
-  w_exc_inh: 220
+  w_exc_inh: 250
   w_inh_exc: -800
   p_exc_exc: 0.4
   receptor_ext_exc: "excitatory"
@@ -79,8 +79,8 @@ synapses:
   delay_exc_exc: 0.0
   delay_exc_inh: 0.0
   delay_inh_exc: 0.0
-  j_ext_exc_psp: 1.1 * Parameters.Neurons.Excitatory.v_thresh
-  j_exc_inh_psp: 1.2 * Parameters.Neurons.Inhibitory.v_thresh / Parameters.Network.pattern_size
-  j_inh_exc_psp: -2 * Parameters.Neurons.Excitatory.v_thresh
+  j_ext_exc_psp: None
+  j_exc_inh_psp: None
+  j_inh_exc_psp: None
 calibration:
   v_rest_calib: 275

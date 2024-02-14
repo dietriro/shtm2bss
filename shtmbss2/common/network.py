@@ -363,7 +363,7 @@ class SHTMBase(ABC):
             pickle.dump(fig, open(f'{file_path}.fig.pickle',
                                   'wb'))  # This is for Python 3 - py2 may need `file` instead of `open`
 
-    def plot_v_exc(self, alphabet_range, neuron_range='all', size=None, neuron_type=NeuronType.Soma, runtime=0.1,
+    def plot_v_exc(self, alphabet_range, neuron_range='all', size=None, neuron_type=NeuronType.Soma, runtime=None,
                    show_legend=False, file_path=None):
         if size is None:
             size = (12, 10)
@@ -374,6 +374,14 @@ class SHTMBase(ABC):
             pass
         else:
             return
+
+        if type(runtime) is str:
+            if str(runtime).lower() == 'max':
+                runtime = self.last_ext_spike_time + (self.p.Encoding.dt_seq - self.p.Encoding.t_exc_start)
+        elif type(runtime) is float or type(runtime) is int:
+            pass
+        else:
+            runtime = self.p.Experiment.runtime
 
         spike_times = [[]]
         header_spikes = list()
@@ -391,7 +399,7 @@ class SHTMBase(ABC):
 
                 # retrieve voltage data
                 data_v = self.get_neuron_data(neuron_type, value_type=RecTypes.V, symbol_id=alphabet_id,
-                                              neuron_id=neuron_id)
+                                              neuron_id=neuron_id, runtime=runtime)
 
                 ax.plot(data_v.times, data_v, alpha=0.5, label=header_spikes[-1])
 
