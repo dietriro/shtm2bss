@@ -9,16 +9,18 @@ from matplotlib.lines import Line2D
 from pyNN.random import NumpyRNG
 from tabulate import tabulate
 from abc import ABC, abstractmethod
+from copy import deepcopy
 
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
 from shtmbss2.core.parameters import Parameters
 from shtmbss2.core.performance import PerformanceSingle
-from shtmbss2.core.helpers import (Process, symbol_from_label, NeuronType, RecTypes, id_to_symbol, calculate_trace,
+from shtmbss2.core.helpers import (Process, symbol_from_label, id_to_symbol, calculate_trace,
                                    psp_max_2_psc_max)
+from shtmbss2.common.config import NeuronType, RecTypes
 from shtmbss2.common.plot import plot_dendritic_events
 from shtmbss2.core.data import (save_config, save_experimental_setup, save_performance_data, save_network_data,
-                                save_instance_setup)
+                                save_instance_setup, get_experiment_folder)
 
 if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
     import pynn_brainscales.brainscales2 as pynn
@@ -46,10 +48,14 @@ NON_PICKLE_OBJECTS = ["post_somas", "projection", "shtm"]
 
 
 class SHTMBase(ABC):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, **kwargs):
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
+                 **kwargs):
         # Load pre-defined parameters
-        self.p = Parameters(network_type=self)
-        self.load_params(**kwargs)
+        if p is None:
+            self.p = Parameters(network_type=self)
+            self.load_params(**kwargs)
+        else:
+            self.p = deepcopy(p)
         self.p.Experiment.type = experiment_type
 
         # Declare neuron populations
@@ -177,7 +183,7 @@ class SHTMBase(ABC):
             # Initialize performance containers
             self.performance.init_data()
 
-    def init_connections(self):
+    def init_connections(self, exc_to_exc=None, exc_to_inh=None):
         self.ext_to_exc = []
         for i in range(self.p.Network.num_symbols):
             self.ext_to_exc.append(Projection(
@@ -189,10 +195,13 @@ class SHTMBase(ABC):
 
         self.exc_to_exc = []
         num_connections = int(self.p.Network.num_neurons * self.p.Synapses.p_exc_exc)
+        i_w = 0
         for i in range(self.p.Network.num_symbols):
             for j in range(self.p.Network.num_symbols):
                 if i == j:
+                    i_w += 1
                     continue
+                weight = self.p.Synapses.w_exc_exc if exc_to_exc is None else exc_to_exc[i_w]
                 seed = j + i * self.p.Network.num_symbols + self.p.Experiment.seed_offset
                 if self.instance_id is not None:
                     seed += self.instance_id * self.p.Network.num_symbols ** 2
@@ -200,17 +209,19 @@ class SHTMBase(ABC):
                     self.get_neurons(NeuronType.Soma, symbol_id=i),
                     self.get_neurons(NeuronType.Dendrite, symbol_id=j),
                     FixedNumberPreConnector(num_connections, rng=NumpyRNG(seed=j + i * self.p.Network.num_symbols)),
-                    synapse_type=StaticSynapse(weight=self.p.Synapses.w_exc_exc, delay=self.p.Synapses.delay_exc_exc),
+                    synapse_type=StaticSynapse(weight=weight, delay=self.p.Synapses.delay_exc_exc),
                     receptor_type=self.p.Synapses.receptor_exc_exc,
                     label=f"exc-exc_{id_to_symbol(i)}>{id_to_symbol(j)}"))
+                i_w += 1
 
         self.exc_to_inh = []
         for i in range(self.p.Network.num_symbols):
+            weight = self.p.Synapses.w_exc_inh if exc_to_inh is None else exc_to_inh[i]
             self.exc_to_inh.append(Projection(
                 self.get_neurons(NeuronType.Soma, symbol_id=i),
                 PopulationView(self.neurons_inh, [i]),
                 AllToAllConnector(),
-                synapse_type=StaticSynapse(weight=self.p.Synapses.w_exc_inh, delay=self.p.Synapses.delay_exc_inh),
+                synapse_type=StaticSynapse(weight=weight, delay=self.p.Synapses.delay_exc_inh),
                 receptor_type=self.p.Synapses.receptor_exc_inh))
 
         self.inh_to_exc = []
@@ -311,15 +322,13 @@ class SHTMBase(ABC):
 
             for neurons_i in neuron_types:
                 # Retrieve and plot spikes from selected neurons
-                spikes = self.get_neuron_data(neuron_type=neurons_i, symbol_id=i_symbol,
-                                              value_type=RecTypes.SPIKES, dtype=list)
+                spikes = deepcopy(self.neuron_events[neurons_i][i_symbol])
                 if neurons_i == NeuronType.Inhibitory:
                     spikes.append([])
                 else:
                     spikes.insert(0, [])
                 if neurons_i == NeuronType.Dendrite:
-                    spikes_post = self.get_neuron_data(neuron_type=NeuronType.Soma, symbol_id=i_symbol,
-                                                       value_type=RecTypes.SPIKES, dtype=list)
+                    spikes_post = deepcopy(self.neuron_events[NeuronType.Soma][i_symbol])
                     plot_dendritic_events(ax, spikes[1:], spikes_post, tau_dap=self.p.Neurons.Dendrite.tau_dAP,
                                           color=f"C{neurons_i.ID}", label=neurons_i.NAME.capitalize(),
                                           seq_start=seq_start, seq_end=seq_end)
@@ -444,14 +453,79 @@ class SHTMBase(ABC):
         save_performance_data(self.performance.data, self, self.experiment_num, instance_id=self.instance_id)
         save_network_data(self, self.experiment_num, instance_id=self.instance_id)
 
+    def load_performance_data(self, experiment_type, experiment_num, instance_id=None):
+        folder_path = get_experiment_folder(self, experiment_type, self.p.Experiment.id, experiment_num,
+                                            instance_id=instance_id)
+
+        file_path = join(folder_path, "performance.npz")
+        data_performance = np.load(file_path)
+
+        self.performance.data = dict()
+
+        for metric_name in data_performance.files:
+            self.performance.data[metric_name] = data_performance[metric_name].tolist()
+
+    def load_network_data(self, experiment_type, experiment_num, instance_id=None):
+        # ToDo: Check if this works with bss2
+        folder_path = get_experiment_folder(self, experiment_type, self.p.Experiment.id, experiment_num,
+                                            instance_id=instance_id)
+
+        # Load weights
+        file_path = join(folder_path, "weights.npz")
+        data_weights = np.load(file_path)
+
+        # Load events
+        file_path = join(folder_path, "events.pkl")
+        with open(file_path, 'rb') as f:
+            self.neuron_events = pickle.load(f)
+
+        # Load network variables
+        file_path = join(folder_path, "network.npz")
+        data_network = np.load(file_path)
+        for var_name, var_value in data_network.items():
+            setattr(self, var_name, var_value)
+
+        # Load plasticity parameters
+        file_path = join(folder_path, "plasticity.npz")
+        data_plasticity = np.load(file_path, allow_pickle=True)
+        data_plasticity = dict(data_plasticity)
+        for var_name in ["permanences", "weights"]:
+            if var_name in data_plasticity.keys():
+                data_plasticity[var_name] = data_plasticity[var_name].tolist()
+
+        return data_weights, data_plasticity
+
+    @staticmethod
+    def load_full_state(network_type, experiment_id, experiment_num, debug=False):
+        log.debug("Loading full state of network and experiment.")
+
+        p = Parameters(network_type=network_type)
+        p.load_experiment_params(experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=experiment_id,
+                                 experiment_num=experiment_num)
+
+        shtm = network_type(p=p)
+        shtm.load_performance_data(ExperimentType.EVAL_SINGLE, experiment_num)
+        data_weights, data_plasticity = shtm.load_network_data(ExperimentType.EVAL_SINGLE, experiment_num)
+
+        shtm.init_neurons()
+        shtm.init_connections(debug=debug)
+
+        for i_con_plastic in range(len(shtm.con_plastic)):
+            for var_name, var_value in data_plasticity.items():
+                setattr(shtm.con_plastic[i_con_plastic], var_name, var_value[i_con_plastic])
+
+        shtm.init_external_input()
+
+        return shtm
+
     def __str__(self):
         return type(self).__name__
 
 
 class SHTMTotal(SHTMBase, ABC):
     def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, plasticity_cls=None, instance_id=None,
-                 seed_offset=None, **kwargs):
-        super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset,
+                 seed_offset=None, p=None, **kwargs):
+        super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset, p=p,
                          **kwargs)
 
         self.con_plastic = None

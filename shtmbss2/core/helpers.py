@@ -2,36 +2,7 @@ import multiprocessing as mp
 import traceback
 import numpy as np
 
-from inspect import isclass
-
 from shtmbss2.common.config import SYMBOLS
-
-
-class NeuronType:
-    class Dendrite:
-        ID = 0
-        NAME = "dendrite"
-
-    class Soma:
-        ID = 1
-        NAME = "soma"
-
-    class Inhibitory:
-        ID = 2
-        NAME = "inhibitory"
-
-    @staticmethod
-    def get_all_types():
-        all_types = list()
-        for n_type_name, n_type in NeuronType.__dict__.items():
-            if isclass(n_type):
-                all_types.append(n_type)
-        return all_types
-
-
-class RecTypes:
-    SPIKES = "spikes"
-    V = "v"
 
 
 class Process(mp.Process):

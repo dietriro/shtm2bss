@@ -1,3 +1,5 @@
+from inspect import isclass
+
 import shtmbss2
 import logging
 import os
@@ -6,12 +8,38 @@ import numpy as np
 
 from os.path import join, dirname, split
 
-
 # Workaround to remove "Invalid MIT-MAGIC-COOKIE-1 key" error message caused by import of mpi4py in NumpyRNG (pyNN)
 os.environ["HWLOC_COMPONENTS"] = "-gl"
 
 
 PY_PKG_PATH = split(dirname(shtmbss2.__file__))[0]
+
+
+class NeuronType:
+    class Dendrite:
+        ID = 0
+        NAME = "dendrite"
+
+    class Soma:
+        ID = 1
+        NAME = "soma"
+
+    class Inhibitory:
+        ID = 2
+        NAME = "inhibitory"
+
+    @staticmethod
+    def get_all_types():
+        all_types = list()
+        for n_type_name, n_type in NeuronType.__dict__.items():
+            if isclass(n_type):
+                all_types.append(n_type)
+        return all_types
+
+
+class RecTypes:
+    SPIKES = "spikes"
+    V = "v"
 
 
 class NamedStorage:
@@ -71,8 +99,10 @@ class LogHandler(NamedStorage):
 class RuntimeConfig(NamedStorage):
     backend = None
     config_prefix = "shtm2bss_config"
-    saved_network_vars = ["exc_to_exc", "exc_to_inh"]
-    saved_plasticity_vars = ["permanence", "permanence_min", "permanences", "weights", "x", "z"]
+    saved_weights = ["exc_to_exc", "exc_to_inh"]
+    saved_events = [NeuronType.Soma, NeuronType.Dendrite, NeuronType.Inhibitory]
+    saved_network_vars = ["trace_dendrites"]
+    saved_plasticity_vars = ["permanence", "permanence_min", "permanences", "weights", "x"]
     saved_instance_params = ["Experiment.type", "Experiment.id", "Experiment.sequences", "Experiment.runtime",
                              "Experiment.episodes"]
 

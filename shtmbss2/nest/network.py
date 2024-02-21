@@ -10,7 +10,8 @@ from neo.core.spiketrainlist import SpikeTrain, SpikeTrainList
 from shtmbss2.nest.config import *
 from shtmbss2.core.logging import log
 import shtmbss2.common.network as network
-from shtmbss2.core.helpers import NeuronType, RecTypes, id_to_symbol
+from shtmbss2.core.helpers import id_to_symbol
+from shtmbss2.common.config import NeuronType, RecTypes
 
 import nest
 import pyNN.nest as pynn
@@ -30,10 +31,12 @@ MCNeuron = pynn.NativeCellType
 
 class SHTMBase(network.SHTMBase, ABC):
 
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, **kwargs):
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
+                 **kwargs):
         global MCNeuron
 
-        super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset, **kwargs)
+        super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset, p=p,
+                         **kwargs)
 
         nest.Install(self.p.Backend.module_name)
         MCNeuron = pynn.native_cell_type(self.p.Backend.neuron_name)
@@ -361,9 +364,10 @@ class SHTMBase(network.SHTMBase, ABC):
 
 
 class SHTMTotal(SHTMBase, network.SHTMTotal):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, **kwargs):
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
+                 **kwargs):
         super().__init__(experiment_type=experiment_type, plasticity_cls=Plasticity, instance_id=instance_id,
-                         seed_offset=seed_offset, **kwargs)
+                         seed_offset=seed_offset, p=p, **kwargs)
 
 
 class Plasticity(network.Plasticity):

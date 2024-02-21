@@ -7,7 +7,8 @@ from abc import ABC, abstractmethod
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
 from shtmbss2.core.parameters import Parameters
-from shtmbss2.core.helpers import moving_average, NeuronType
+from shtmbss2.core.helpers import moving_average
+from shtmbss2.common.config import NeuronType
 from shtmbss2.core.data import get_experiment_folder
 
 

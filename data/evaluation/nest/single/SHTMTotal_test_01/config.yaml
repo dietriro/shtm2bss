@@ -6,17 +6,19 @@ Encoding:
   dt_seq: 100
   dt_stm: 40
   t_exc_start: 30
+  t_scaling_factor: 1.0
 Experiment:
-  autosave: true
-  autosave_epoches: 5
   episodes: 100
+  generate_rand_seed_offset: false
   id: test
   log_permanence: true
   log_weights: true
-  random_seed: true
   run_add_calib: false
   runtime: 360
-  seed_offset: 1701965425
+  save_auto: false
+  save_auto_epoches: 5
+  save_final: false
+  seed_offset: 0
   sequences:
   - - A
     - C
@@ -57,7 +59,7 @@ Performance:
   compute_performance: true
   method: last_symbol
 Plasticity:
-  delta_t_max: 80
+  delta_t_max: 75
   delta_t_min: 4
   dt: 0.1
   lambda_h: 0.014

@@ -9,7 +9,7 @@ from abc import ABC
 from shtmbss2.brainscales2.config import *
 from shtmbss2.core.logging import log
 import shtmbss2.common.network as network
-from shtmbss2.core.helpers import NeuronType, RecTypes
+from shtmbss2.common.config import NeuronType, RecTypes
 
 from pynn_brainscales import brainscales2 as pynn
 
@@ -23,8 +23,10 @@ RECORDING_VALUES = {
 
 class SHTMBase(network.SHTMBase, ABC):
 
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, **kwargs):
-        super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset, **kwargs)
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
+                 **kwargs):
+        super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset, p=p,
+                         **kwargs)
 
     def load_params(self, **kwargs):
         super().load_params(**kwargs)
@@ -461,9 +463,10 @@ class SHTMPlasticity(SHTMSingleNeuron):
 
 
 class SHTMTotal(SHTMBase, network.SHTMTotal):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, **kwargs):
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
+                 **kwargs):
         super().__init__(experiment_type=experiment_type, plasticity_cls=Plasticity, instance_id=instance_id,
-                         seed_offset=seed_offset, **kwargs)
+                         seed_offset=seed_offset, p=p, **kwargs)
 
 
 class Plasticity(network.Plasticity):

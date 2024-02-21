@@ -2,6 +2,7 @@ import csv
 import inspect
 import numpy as np
 import yaml
+import pickle
 import datetime
 from copy import copy
 from os.path import exists
@@ -170,10 +171,9 @@ def save_performance_data(data, net, experiment_num, instance_id=None):
     experiment_type = net.p.Experiment.type
 
     folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num, instance_id=instance_id)
+    file_path = join(folder_path, "performance")
 
-    for metric_name, metric_data in data.items():
-        file_path = join(folder_path, f"pf_{metric_name}")
-        np.save(file_path, metric_data)
+    np.savez(file_path, **net.performance.data)
 
 
 def save_network_data(net, experiment_num, instance_id=None):
@@ -182,9 +182,11 @@ def save_network_data(net, experiment_num, instance_id=None):
     experiment_id = net.p.Experiment.id
 
     folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num, instance_id=instance_id)
+
+    # Save weights
     file_path = join(folder_path, "weights")
 
-    weights_dict = {var_name: getattr(net, var_name) for var_name in RuntimeConfig.saved_network_vars}
+    weights_dict = {var_name: getattr(net, var_name) for var_name in RuntimeConfig.saved_weights}
     for con_name, connections in weights_dict.items():
         weights_all = list()
         for connection in connections:
@@ -193,6 +195,21 @@ def save_network_data(net, experiment_num, instance_id=None):
 
     np.savez(file_path, **weights_dict)
 
+    # Save events
+    file_path = join(folder_path, "events.pkl")
+
+    # events_dict = {neuron_type.NAME: net.neuron_events[neuron_type] for neuron_type in RuntimeConfig.saved_events}
+    with open(file_path, 'wb') as f:
+        pickle.dump(net.neuron_events, f)
+
+    # Save network variables
+    file_path = join(folder_path, "network")
+
+    network_dict = {var_name: getattr(net, var_name) for var_name in RuntimeConfig.saved_network_vars}
+
+    np.savez(file_path, **network_dict)
+
+    # Save plasticity parameters
     file_path = join(folder_path, "plasticity")
 
     plasticity_dict = {var_name: list() for var_name in RuntimeConfig.saved_plasticity_vars}
