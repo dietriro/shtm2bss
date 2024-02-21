@@ -20,8 +20,7 @@ from shtmbss2.core.helpers import (Process, symbol_from_label, id_to_symbol, cal
                                    psp_max_2_psc_max)
 from shtmbss2.common.config import NeuronType, RecTypes
 from shtmbss2.common.plot import plot_dendritic_events
-from shtmbss2.core.data import (save_config, save_experimental_setup, save_performance_data, save_network_data,
-                                save_instance_setup, get_experiment_folder)
+from shtmbss2.core.data import (save_experimental_setup, save_instance_setup, get_experiment_folder)
 
 if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
     import pynn_brainscales.brainscales2 as pynn
@@ -108,7 +107,8 @@ class SHTMBase(ABC):
         if self.p.Plasticity.tau_h is None:
             self.p.Plasticity.tau_h = self.__compute_time_constant_dendritic_rate(dt_stm=self.p.Encoding.dt_stm,
                                                                                   dt_seq=self.p.Encoding.dt_seq,
-                                                                                  target_firing_rate=self.p.Plasticity.y)
+                                                                                  target_firing_rate=self.p.Plasticity.y
+                                                                                  )
 
         # dynamically calculate new weights, scale by 1/1000 for "original" pynn-nest neurons
         if self.p.Synapses.dyn_weight_calculation:
@@ -437,145 +437,6 @@ class SHTMBase(ABC):
     def plot_performance(self, statistic=StatisticalMetrics.MEAN, sequences="statistic"):
         self.performance.plot(statistic=statistic, sequences=sequences)
 
-    def save_config(self):
-        folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
-                                            instance_id=self.instance_id)
-        file_path = join(folder_path, f"config.yaml")
-
-        with open(file_path, 'w') as file:
-            yaml.dump(self.p.dict(exclude_none=True), file)
-
-    def save_performance_data(self):
-        folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
-                                            instance_id=self.instance_id)
-        file_path = join(folder_path, "performance")
-
-        np.savez(file_path, **self.performance.data)
-
-    def save_network_data(self):
-        # ToDo: Check if this works with bss2
-        folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
-                                            instance_id=self.instance_id)
-
-        # Save weights
-        file_path = join(folder_path, "weights")
-
-        weights_dict = {var_name: getattr(self, var_name) for var_name in RuntimeConfig.saved_weights}
-        for con_name, connections in weights_dict.items():
-            weights_all = list()
-            for connection in connections:
-                weights_all.append(connection.get("weight", format="array"))
-            weights_dict[con_name] = np.array(weights_all)
-
-        np.savez(file_path, **weights_dict)
-
-        # Save events
-        file_path = join(folder_path, "events.pkl")
-        with open(file_path, 'wb') as f:
-            pickle.dump(self.neuron_events, f)
-
-        # Save network variables
-        file_path = join(folder_path, "network")
-
-        network_dict = {var_name: getattr(self, var_name) for var_name in RuntimeConfig.saved_network_vars}
-
-        np.savez(file_path, **network_dict)
-
-        # Save plasticity parameters
-        file_path = join(folder_path, "plasticity")
-
-        plasticity_dict = {var_name: list() for var_name in RuntimeConfig.saved_plasticity_vars}
-        for con_plastic in self.con_plastic:
-            for var_name in plasticity_dict.keys():
-                plasticity_dict[var_name].append(getattr(con_plastic, var_name))
-
-        for var_name in plasticity_dict.keys():
-            plasticity_dict[var_name] = np.array(plasticity_dict[var_name])
-
-        np.savez(file_path, **plasticity_dict)
-
-    def save_full_state(self):
-        log.debug("Saving full state of network and experiment.")
-
-        if self.p.Experiment.type == ExperimentType.EVAL_MULTI:
-            if self.instance_id is not None and self.instance_id == 0:
-                self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
-                                                              instance_id=self.instance_id)
-            save_instance_setup(net=self, performance=self.performance.get_performance_dict(final_result=True),
-                                experiment_num=self.experiment_num, instance_id=self.instance_id)
-        else:
-            self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
-                                                          instance_id=self.instance_id)
-
-        self.save_config()
-        self.save_performance_data()
-        self.save_network_data()
-
-    def load_performance_data(self, experiment_type, experiment_num, instance_id=None):
-        folder_path = get_experiment_folder(self, experiment_type, self.p.Experiment.id, experiment_num,
-                                            instance_id=instance_id)
-
-        file_path = join(folder_path, "performance.npz")
-        data_performance = np.load(file_path)
-
-        self.performance.data = dict()
-
-        for metric_name in data_performance.files:
-            self.performance.data[metric_name] = data_performance[metric_name].tolist()
-
-    def load_network_data(self, experiment_type, experiment_num, instance_id=None):
-        # ToDo: Check if this works with bss2
-        folder_path = get_experiment_folder(self, experiment_type, self.p.Experiment.id, experiment_num,
-                                            instance_id=instance_id)
-
-        # Load weights
-        file_path = join(folder_path, "weights.npz")
-        data_weights = np.load(file_path)
-
-        # Load events
-        file_path = join(folder_path, "events.pkl")
-        with open(file_path, 'rb') as f:
-            self.neuron_events = pickle.load(f)
-
-        # Load network variables
-        file_path = join(folder_path, "network.npz")
-        data_network = np.load(file_path)
-        for var_name, var_value in data_network.items():
-            setattr(self, var_name, var_value)
-
-        # Load plasticity parameters
-        file_path = join(folder_path, "plasticity.npz")
-        data_plasticity = np.load(file_path, allow_pickle=True)
-        data_plasticity = dict(data_plasticity)
-        for var_name in ["permanences", "weights"]:
-            if var_name in data_plasticity.keys():
-                data_plasticity[var_name] = data_plasticity[var_name].tolist()
-
-        return data_weights, data_plasticity
-
-    @staticmethod
-    def load_full_state(network_type, experiment_id, experiment_num, debug=False):
-        log.debug("Loading full state of network and experiment.")
-
-        p = Parameters(network_type=network_type)
-        p.load_experiment_params(experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=experiment_id,
-                                 experiment_num=experiment_num)
-
-        shtm = network_type(p=p)
-        shtm.load_performance_data(ExperimentType.EVAL_SINGLE, experiment_num)
-        data_weights, data_plasticity = shtm.load_network_data(ExperimentType.EVAL_SINGLE, experiment_num)
-
-        shtm.init_neurons()
-        shtm.init_connections(debug=debug)
-
-        for i_con_plastic in range(len(shtm.con_plastic)):
-            for var_name, var_value in data_plasticity.items():
-                setattr(shtm.con_plastic[i_con_plastic], var_name, var_value[i_con_plastic])
-
-        shtm.init_external_input()
-
-        return shtm
-
     def __str__(self):
         return type(self).__name__
 
@@ -607,7 +468,7 @@ class SHTMTotal(SHTMBase, ABC):
         else:
             self.log_weights = range(self.p.Network.num_symbols ** 2 - self.p.Network.num_symbols)
 
-    def init_connections(self, debug=False):
+    def init_connections(self, exc_to_exc=None, exc_to_inh=None, debug=False):
         super().init_connections()
 
         self.con_plastic = list()
@@ -921,6 +782,145 @@ class SHTMTotal(SHTMBase, ABC):
                 elif obj_name not in NON_PICKLE_OBJECTS:
                     setattr(self.con_plastic[new_con_plastic.id], obj_name, getattr(new_con_plastic, obj_name))
 
+    def save_config(self):
+        folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
+                                            instance_id=self.instance_id)
+        file_path = join(folder_path, f"config.yaml")
+
+        with open(file_path, 'w') as file:
+            yaml.dump(self.p.dict(exclude_none=True), file)
+
+    def save_performance_data(self):
+        folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
+                                            instance_id=self.instance_id)
+        file_path = join(folder_path, "performance")
+
+        np.savez(file_path, **self.performance.data)
+
+    def save_network_data(self):
+        # ToDo: Check if this works with bss2
+        folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
+                                            instance_id=self.instance_id)
+
+        # Save weights
+        file_path = join(folder_path, "weights")
+
+        weights_dict = {var_name: getattr(self, var_name) for var_name in RuntimeConfig.saved_weights}
+        for con_name, connections in weights_dict.items():
+            weights_all = list()
+            for connection in connections:
+                weights_all.append(connection.get("weight", format="array"))
+            weights_dict[con_name] = np.array(weights_all)
+
+        np.savez(file_path, **weights_dict)
+
+        # Save events
+        file_path = join(folder_path, "events.pkl")
+        with open(file_path, 'wb') as f:
+            pickle.dump(self.neuron_events, f)
+
+        # Save network variables
+        file_path = join(folder_path, "network")
+
+        network_dict = {var_name: getattr(self, var_name) for var_name in RuntimeConfig.saved_network_vars}
+
+        np.savez(file_path, **network_dict)
+
+        # Save plasticity parameters
+        file_path = join(folder_path, "plasticity")
+
+        plasticity_dict = {var_name: list() for var_name in RuntimeConfig.saved_plasticity_vars}
+        for con_plastic in self.con_plastic:
+            for var_name in plasticity_dict.keys():
+                plasticity_dict[var_name].append(getattr(con_plastic, var_name))
+
+        for var_name in plasticity_dict.keys():
+            plasticity_dict[var_name] = np.array(plasticity_dict[var_name])
+
+        np.savez(file_path, **plasticity_dict)
+
+    def save_full_state(self):
+        log.debug("Saving full state of network and experiment.")
+
+        if self.p.Experiment.type == ExperimentType.EVAL_MULTI:
+            if self.instance_id is not None and self.instance_id == 0:
+                self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
+                                                              instance_id=self.instance_id)
+            save_instance_setup(net=self, performance=self.performance.get_performance_dict(final_result=True),
+                                experiment_num=self.experiment_num, instance_id=self.instance_id)
+        else:
+            self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
+                                                          instance_id=self.instance_id)
+
+        self.save_config()
+        self.save_performance_data()
+        self.save_network_data()
+
+    def load_performance_data(self, experiment_type, experiment_num, instance_id=None):
+        folder_path = get_experiment_folder(self, experiment_type, self.p.Experiment.id, experiment_num,
+                                            instance_id=instance_id)
+
+        file_path = join(folder_path, "performance.npz")
+        data_performance = np.load(file_path)
+
+        self.performance.data = dict()
+
+        for metric_name in data_performance.files:
+            self.performance.data[metric_name] = data_performance[metric_name].tolist()
+
+    def load_network_data(self, experiment_type, experiment_num, instance_id=None):
+        # ToDo: Check if this works with bss2
+        folder_path = get_experiment_folder(self, experiment_type, self.p.Experiment.id, experiment_num,
+                                            instance_id=instance_id)
+
+        # Load weights
+        file_path = join(folder_path, "weights.npz")
+        data_weights = np.load(file_path)
+
+        # Load events
+        file_path = join(folder_path, "events.pkl")
+        with open(file_path, 'rb') as f:
+            self.neuron_events = pickle.load(f)
+
+        # Load network variables
+        file_path = join(folder_path, "network.npz")
+        data_network = np.load(file_path)
+        for var_name, var_value in data_network.items():
+            setattr(self, var_name, var_value)
+
+        # Load plasticity parameters
+        file_path = join(folder_path, "plasticity.npz")
+        data_plasticity = np.load(file_path, allow_pickle=True)
+        data_plasticity = dict(data_plasticity)
+        for var_name in ["permanences", "weights"]:
+            if var_name in data_plasticity.keys():
+                data_plasticity[var_name] = data_plasticity[var_name].tolist()
+
+        return data_weights, data_plasticity
+
+    @staticmethod
+    def load_full_state(network_type, experiment_id, experiment_num, debug=False):
+        log.debug("Loading full state of network and experiment.")
+
+        p = Parameters(network_type=network_type)
+        p.load_experiment_params(experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=experiment_id,
+                                 experiment_num=experiment_num)
+
+        shtm = network_type(p=p)
+        shtm.load_performance_data(ExperimentType.EVAL_SINGLE, experiment_num)
+        data_weights, data_plasticity = shtm.load_network_data(ExperimentType.EVAL_SINGLE, experiment_num)
+
+        shtm.init_neurons()
+        shtm.init_connections(debug=debug)
+
+        for i_con_plastic in range(len(shtm.con_plastic)):
+            for var_name, var_value in data_plasticity.items():
+                setattr(shtm.con_plastic[i_con_plastic], var_name, var_value[i_con_plastic])
+
+        shtm.init_external_input()
+
+        return shtm
+
 
 class Plasticity(ABC):
     def __init__(self, projection: Projection, post_somas, shtm, index, proj_post_soma_inh=None, debug=False,
@@ -980,7 +980,7 @@ class Plasticity(ABC):
 
         # loop through pre-synaptic spikes
         for spike_pre in neuron_spikes_pre:
-            # calculate temorary x/z value (pre-synaptic/post-dendritic decay)
+            # calculate temporary x/z value (pre-synaptic/post-dendritic decay)
             x = x * np.exp(-(spike_pre - last_spike_pre) / self.tau_plus) + 1.0
 
             # loop through post-synaptic spikes between pre-synaptic spikes
@@ -991,7 +991,7 @@ class Plasticity(ABC):
 
                 # check if spike-dif is in boundaries
                 if self.delta_t_min < spike_dt < self.delta_t_max:
-                    # calculate temorary x value (pre synaptic decay)
+                    # calculate temporary x value (pre synaptic decay)
                     x_tmp = x * np.exp(-spike_dt / self.tau_plus)
                     z_tmp = calculate_trace(z, sim_start_time, spike_post, neuron_spikes_post_dendrite,
                                             self.tau_h)
