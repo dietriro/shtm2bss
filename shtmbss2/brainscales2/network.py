@@ -7,6 +7,7 @@ from tabulate import tabulate
 from abc import ABC
 
 from shtmbss2.brainscales2.config import *
+from shtmbss2.brainscales2.patches import patch_pynn_calibration
 from shtmbss2.core.logging import log
 import shtmbss2.common.network as network
 from shtmbss2.common.config import NeuronType, RecTypes
@@ -35,6 +36,12 @@ class SHTMBase(network.SHTMBase, ABC):
         self.p.Neurons.Dendrite.theta_dAP = self.p.Neurons.Excitatory.v_thresh[NeuronType.Dendrite.ID]
         self.p.Neurons.Dendrite.I_p = self.p.Neurons.Excitatory.v_reset[NeuronType.Dendrite.ID]
         self.p.Neurons.Dendrite.tau_dAP = self.p.Neurons.Excitatory.tau_refrac[NeuronType.Dendrite.ID]
+        
+        patch_pynn_calibration(
+            self.p.Calibration.padi_bus_dacen_extension,
+            self.p.Calibration.correlation_amplitude,
+            self.p.Calibration.correlation_time_constant,
+        )
 
     def init_neurons(self):
         super().init_neurons()
