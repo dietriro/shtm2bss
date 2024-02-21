@@ -2,6 +2,7 @@ import time
 import numpy as np
 import copy
 import pickle
+import yaml
 import multiprocessing as mp
 
 from matplotlib import pyplot as plt
@@ -436,6 +437,63 @@ class SHTMBase(ABC):
     def plot_performance(self, statistic=StatisticalMetrics.MEAN, sequences="statistic"):
         self.performance.plot(statistic=statistic, sequences=sequences)
 
+    def save_config(self):
+        folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
+                                            instance_id=self.instance_id)
+        file_path = join(folder_path, f"config.yaml")
+
+        with open(file_path, 'w') as file:
+            yaml.dump(self.p.dict(exclude_none=True), file)
+
+    def save_performance_data(self):
+        folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
+                                            instance_id=self.instance_id)
+        file_path = join(folder_path, "performance")
+
+        np.savez(file_path, **self.performance.data)
+
+    def save_network_data(self):
+        # ToDo: Check if this works with bss2
+        folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
+                                            instance_id=self.instance_id)
+
+        # Save weights
+        file_path = join(folder_path, "weights")
+
+        weights_dict = {var_name: getattr(self, var_name) for var_name in RuntimeConfig.saved_weights}
+        for con_name, connections in weights_dict.items():
+            weights_all = list()
+            for connection in connections:
+                weights_all.append(connection.get("weight", format="array"))
+            weights_dict[con_name] = np.array(weights_all)
+
+        np.savez(file_path, **weights_dict)
+
+        # Save events
+        file_path = join(folder_path, "events.pkl")
+        with open(file_path, 'wb') as f:
+            pickle.dump(self.neuron_events, f)
+
+        # Save network variables
+        file_path = join(folder_path, "network")
+
+        network_dict = {var_name: getattr(self, var_name) for var_name in RuntimeConfig.saved_network_vars}
+
+        np.savez(file_path, **network_dict)
+
+        # Save plasticity parameters
+        file_path = join(folder_path, "plasticity")
+
+        plasticity_dict = {var_name: list() for var_name in RuntimeConfig.saved_plasticity_vars}
+        for con_plastic in self.con_plastic:
+            for var_name in plasticity_dict.keys():
+                plasticity_dict[var_name].append(getattr(con_plastic, var_name))
+
+        for var_name in plasticity_dict.keys():
+            plasticity_dict[var_name] = np.array(plasticity_dict[var_name])
+
+        np.savez(file_path, **plasticity_dict)
+
     def save_full_state(self):
         log.debug("Saving full state of network and experiment.")
 
@@ -449,9 +507,9 @@ class SHTMBase(ABC):
             self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
                                                           instance_id=self.instance_id)
 
-        save_config(net=self, instance_id=None)
-        save_performance_data(self.performance.data, self, self.experiment_num, instance_id=self.instance_id)
-        save_network_data(self, self.experiment_num, instance_id=self.instance_id)
+        self.save_config()
+        self.save_performance_data()
+        self.save_network_data()
 
     def load_performance_data(self, experiment_type, experiment_num, instance_id=None):
         folder_path = get_experiment_folder(self, experiment_type, self.p.Experiment.id, experiment_num,
