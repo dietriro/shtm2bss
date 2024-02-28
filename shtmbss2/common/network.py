@@ -962,6 +962,8 @@ class Plasticity(ABC):
         self.lambda_minus = lambda_minus * learning_factor
         self.lambda_h = lambda_h * learning_factor
 
+        self.learning_rules = {"original": self.rule, "bss2": self.rule_bss2}
+
         self.symbol_id_pre = SYMBOLS[symbol_from_label(self.projection.label, ID_PRE)]
         self.symbol_id_post = SYMBOLS[symbol_from_label(self.projection.label, ID_POST)]
 
@@ -998,16 +1000,16 @@ class Plasticity(ABC):
 
                     # hebbian learning
                     permanence = self.__facilitate(permanence, x_tmp)
-                    log.debug(f"{self.id}  d_permanence facilitate: {permanence-permanence_before}")
-                    permanence_before = permanence_before
+                    log.debug(f"{self.id}  d_permanence facilitate: {permanence - permanence_before}")
+                    permanence_before = permanence
 
                     permanence = self.__homeostasis_control(permanence, z_tmp, permanence_min)
-                    log.debug(f"{self.id}  d_permanence homeostasis: {permanence-permanence_before}")
-                    permanence_before = permanence_before
+                    log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
+                    permanence_before = permanence
 
             permanence = self.__depress(permanence, permanence_min)
             last_spike_pre = spike_pre
-            log.debug(f"{self.id}  permanence depression: {permanence-permanence_before}")
+            log.debug(f"{self.id}  permanence depression: {permanence - permanence_before}")
 
         log.debug(f"{self.id}  permanence after: {permanence}")
 
@@ -1033,6 +1035,76 @@ class Plasticity(ABC):
 
     def __depress(self, permanence, permanence_min):
         permanence = permanence - self.lambda_minus * self.permanence_max
+        return max(permanence_min, permanence)
+
+    def rule_bss2(self, permanence, threshold, x, z, runtime, permanence_min,
+                  neuron_spikes_pre, neuron_spikes_post_soma, neuron_spikes_post_dendrite,
+                  delay, sim_start_time=0.0):
+        neuron_spikes_pre = np.array(neuron_spikes_pre)
+        neuron_spikes_post_soma = np.array(neuron_spikes_post_soma)
+        neuron_spikes_post_dendrite = np.array(neuron_spikes_post_dendrite)
+
+        permanence_before = permanence
+
+        log.debug(f"{self.id}  permanence before: {permanence}")
+
+        x = 0
+        z = 0
+
+        # Calculate accumulated x
+        for spike_pre in neuron_spikes_pre:
+            for spike_post in neuron_spikes_post_soma:
+                spike_dt = spike_post - spike_pre
+
+                # ToDo: Replace with check based on trace
+                # ToDo: Update rule based on actual trace calculation from BSS-2
+                if self.delta_t_min < spike_dt < self.delta_t_max:
+                    log.debug(f"{self.id}  spikes: {spike_pre}, {spike_post}, {spike_dt}")
+                    x += np.exp(-spike_dt / self.tau_plus)
+
+        # Calculate accumulated z
+        for spike_post_dendrite in neuron_spikes_post_dendrite:
+            for spike_post in neuron_spikes_post_soma:
+                spike_dt = spike_post - spike_post_dendrite
+
+                # ToDo: Replace with check based on trace
+                # ToDo: Update rule based on actual trace calculation from BSS-2
+                if self.delta_t_min < spike_dt < self.delta_t_max:
+                    log.debug(f"{self.id}  spikes: {spike_post_dendrite}, {spike_post}, {spike_dt}")
+                    z += np.exp(-spike_dt / self.tau_h)
+
+        log.debug(f"{self.id}  x: {x},  z: {z}")
+
+        # hebbian learning
+        # Only run facilitate/homeostasis if a spike pair exists with a delta within boundaries,
+        # i.e. x or z > 0
+        if x > 0 or z > 0:
+            permanence = self.__facilitate_bss2(permanence, x)
+        log.debug(f"{self.id}  d_permanence facilitate: {permanence - permanence_before}")
+        permanence_before = permanence
+
+        if x > 0 or z > 0:
+            permanence = self.__homeostasis_control_bss2(permanence, z, permanence_min)
+        log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
+        permanence_before = permanence
+
+        permanence = self.__depress_bss2(permanence, permanence_min, num_spikes=len(neuron_spikes_pre))
+        log.debug(f"{self.id}  permanence depression: {permanence - permanence_before}")
+
+        log.debug(f"{self.id}  permanence after: {permanence}")
+
+        return permanence, x, permanence >= threshold
+
+    def __facilitate_bss2(self, permanence, x):
+        permanence = permanence + self.lambda_plus * x * self.permanence_max
+        return min(permanence, self.permanence_max)
+
+    def __homeostasis_control_bss2(self, permanence, z, permanence_min):
+        permanence = permanence + self.lambda_h * (self.target_rate_h - z) * self.permanence_max
+        return max(min(permanence, self.permanence_max), permanence_min)
+
+    def __depress_bss2(self, permanence, permanence_min, num_spikes):
+        permanence = permanence - self.lambda_minus * self.permanence_max * num_spikes
         return max(permanence_min, permanence)
 
     def enable_permanence_logging(self):
@@ -1091,15 +1163,16 @@ class Plasticity(ABC):
                 log.debug(f"Spikes post [dend]: {neuron_spikes_post_dendrite}")
                 log.debug(f"Spikes post [soma]: {neuron_spikes_post_soma}")
 
-            permanence, x, mature = self.rule(permanence=self.permanence[c],
-                                              threshold=self.threshold[c],
-                                              runtime=runtime, x=self.x[j], z=z,
-                                              permanence_min=self.permanence_min[c],
-                                              neuron_spikes_pre=neuron_spikes_pre,
-                                              neuron_spikes_post_soma=neuron_spikes_post_soma,
-                                              neuron_spikes_post_dendrite=neuron_spikes_post_dendrite,
-                                              delay=self.shtm.p.Synapses.delay_exc_exc,
-                                              sim_start_time=sim_start_time)
+            permanence, x, mature = (self.learning_rules[self.shtm.p.Plasticity.type]
+                                     (permanence=self.permanence[c],
+                                      threshold=self.threshold[c],
+                                      runtime=runtime, x=self.x[j], z=z,
+                                      permanence_min=self.permanence_min[c],
+                                      neuron_spikes_pre=neuron_spikes_pre,
+                                      neuron_spikes_post_soma=neuron_spikes_post_soma,
+                                      neuron_spikes_post_dendrite=neuron_spikes_post_dendrite,
+                                      delay=self.shtm.p.Synapses.delay_exc_exc,
+                                      sim_start_time=sim_start_time))
 
             self.permanence[c] = permanence
             self.x[j] = x
