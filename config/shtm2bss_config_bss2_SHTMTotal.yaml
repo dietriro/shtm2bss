@@ -24,22 +24,23 @@ network:
   pattern_size: 3
 encoding:
   dt_stm: 20.e-3
-  dt_seq: 50.e-3
+  dt_seq: 600.e-3
   t_exc_start: 15.e-3
   t_scaling_factor: 1.e-3
+  num_repetitions: 500
 plasticity:
   type: 'original'
   learning_factor: 1
   permanence_init_min: 0
   permanence_init_max: 8
   permanence_max: 20.
-  threshold: 10.
-  w_mature: 500
+  threshold: 100.
+  w_mature: 50
   y: 1
-  lambda_plus: 0.08
-  lambda_minus: 0.0015
-  lambda_h: 0.014
-  target_rate_h: 1.
+  lambda_plus: 102 # 0.08 * 1270
+  lambda_minus: 127 # 2: 0.0015 * 1270, max: 127, min: 0
+  lambda_h: 18 # 0.014 * 1270
+  target_rate_h: 50
   tau_plus: 10.e-3
   tau_h: null
   delta_t_min: 2.e-3
@@ -66,10 +67,10 @@ synapses:
   dyn_inh_weights: False
   dyn_weight_calculation: False
   w_exc_inh_dyn: null
-  w_ext_exc: 600
+  w_ext_exc: 60
   w_exc_exc: 0.0
-  w_exc_inh: 250
-  w_inh_exc: -800
+  w_exc_inh: 25
+  w_inh_exc: -80
   p_exc_exc: 0.4
   receptor_ext_exc: "excitatory"
   receptor_exc_exc: "excitatory"
@@ -84,6 +85,6 @@ synapses:
   j_inh_exc_psp: None
 calibration:
   v_rest_calib: 275
-  padi_bus_dacen_extension: 0
+  padi_bus_dacen_extension: 9
   correlation_amplitude: 1.5
   correlation_time_constant: 30

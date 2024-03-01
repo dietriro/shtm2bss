@@ -33,6 +33,7 @@ encoding:
   dt_seq: 100
   t_exc_start: 30
   t_scaling_factor: 1.
+  num_repetitions: 1
 plasticity:
   type: 'original'
   learning_factor: 1

@@ -85,6 +85,7 @@ class Parameters(ParameterGroup):
         dt_seq: float = None
         t_exc_start: float = None
         t_scaling_factor: float = None
+        num_repetitions: int = None
 
     class Plasticity(ParameterGroup):
         type: str = None

@@ -102,7 +102,7 @@ class RuntimeConfig(NamedStorage):
     saved_weights = ["exc_to_exc", "exc_to_inh"]
     saved_events = [NeuronType.Soma, NeuronType.Dendrite, NeuronType.Inhibitory]
     saved_network_vars = ["trace_dendrites"]
-    saved_plasticity_vars = ["permanence", "permanence_min", "permanences", "weights", "x"]
+    saved_plasticity_vars = ["permanence", "permanence_min", "permanences", "weights", "x", "z"]
     saved_instance_params = ["Experiment.type", "Experiment.id", "Experiment.sequences", "Experiment.runtime",
                              "Experiment.episodes"]
 

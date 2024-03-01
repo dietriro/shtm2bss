@@ -8,11 +8,18 @@ from abc import ABC
 
 from shtmbss2.brainscales2.config import *
 from shtmbss2.brainscales2.patches import patch_pynn_calibration
+from shtmbss2.brainscales2.plasticity import PlasticityOnChip
 from shtmbss2.core.logging import log
+from shtmbss2.core.helpers import id_to_symbol
 import shtmbss2.common.network as network
 from shtmbss2.common.config import NeuronType, RecTypes
 
 from pynn_brainscales import brainscales2 as pynn
+from pynn_brainscales.brainscales2 import Projection, PopulationView
+from pynn_brainscales.brainscales2.connectors import AllToAllConnector, FixedNumberPreConnector
+from pynn_brainscales.brainscales2.standardmodels.synapses import StaticSynapse
+from pyNN.random import NumpyRNG
+from dlens_vx_v3 import sta, halco, hal
 
 
 RECORDING_VALUES = {
@@ -24,10 +31,14 @@ RECORDING_VALUES = {
 
 class SHTMBase(network.SHTMBase, ABC):
 
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None, use_on_chip_plasticity=False,
                  **kwargs):
         super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset, p=p,
                          **kwargs)
+        self.use_on_chip_plasticity = use_on_chip_plasticity
+        self.exc_to_exc_soma_to_soma_dummy = None
+        self.exc_to_exc_dendrite_to_soma_dummy = None
+        self.plasticity_rule = None
 
     def load_params(self, **kwargs):
         super().load_params(**kwargs)
@@ -43,6 +54,37 @@ class SHTMBase(network.SHTMBase, ABC):
             self.p.Calibration.correlation_time_constant,
         )
 
+    def init_plasticity_rule(self, start_time: float, period: float, runtime: float, permanence_threshold: int = 100, mature_weight: int = 63):
+        if not (0 <= mature_weight <= 63):
+            raise ValueError("Mature weight needs to be in [0, 63].")
+
+        timer = pynn.plasticity_rules.Timer(start=start_time, period=period, num_periods=int((runtime-start_time)/period) + 1)
+
+        self.plasticity_rule = PlasticityOnChip(
+            timer=timer,
+            num_neurons=self.p.Network.num_symbols * self.p.Network.num_neurons,
+            permanence_threshold=self.p.Plasticity.threshold,
+            w_mature=self.p.Plasticity.w_mature,
+            target_rate_h=self.p.Plasticity.target_rate_h,
+            lambda_plus=self.p.Plasticity.lambda_plus,
+            lambda_minus=self.p.Plasticity.lambda_minus,
+            lambda_h=self.p.Plasticity.lambda_h,
+            learning_factor=self.p.Plasticity.learning_factor
+            )
+
+        # read-out permanence to retain between epochs
+        pynn.simulator.state.injected_readout.ppu_symbols = {
+            "permanences",
+            "dummy"
+        }
+
+        # reset neuron counters
+        pynn.simulator.state.injection_pre_realtime = sta.PlaybackProgramBuilder()
+        for coord in halco.iter_all(halco.SpikeCounterResetOnDLS):
+            pynn.simulator.state.injection_pre_realtime.write(coord, hal.SpikeCounterReset())
+        pynn.simulator.state.injection_pre_realtime.block_until(halco.BarrierOnFPGA(), hal.Barrier.omnibus)
+
+        
     def init_neurons(self):
         super().init_neurons()
 
@@ -56,9 +98,13 @@ class SHTMBase(network.SHTMBase, ABC):
             self.run_add_calibration()
 
     def init_all_neurons_exc(self, num_neurons=None):
+        all_dendrites, all_somas = self.init_neurons_exc(self.p.Network.num_symbols * self.p.Network.num_neurons)
+        self.neurons_exc_all = (all_dendrites, all_somas)
+        
         neurons_exc = list()
         for i in range(self.p.Network.num_symbols):
-            dendrites, somas = self.init_neurons_exc(num_neurons=num_neurons)
+            dendrites = pynn.PopulationView(all_dendrites, slice(i * self.p.Network.num_neurons, (i + 1) * self.p.Network.num_neurons))
+            somas = pynn.PopulationView(all_somas, slice(i * self.p.Network.num_neurons, (i + 1) * self.p.Network.num_neurons))
             somas.record([RECORDING_VALUES[NeuronType.Soma][RecTypes.SPIKES]])
             dendrites.record([RECORDING_VALUES[NeuronType.Dendrite][RecTypes.SPIKES]])
             neurons_exc.append((dendrites, somas))
@@ -72,19 +118,27 @@ class SHTMBase(network.SHTMBase, ABC):
         # TODO: remove once pynn_brainscales supports float values directly (bug currently)
         # pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_I": 2.})
 
-        all_neurons = pynn.Population(num_neurons * 2, pynn.cells.CalibHXNeuronCuba(
+        dendrites = pynn.Population(num_neurons, pynn.cells.CalibHXNeuronCuba(
+            plasticity_rule=self.plasticity_rule,
             tau_m=self.p.Neurons.Excitatory.tau_m,
-            tau_syn_I=self.p.Neurons.Excitatory.tau_syn_I * num_neurons,
-            tau_syn_E=self.p.Neurons.Excitatory.tau_syn_E * num_neurons,
-            v_rest=self.p.Neurons.Excitatory.v_rest * num_neurons,
-            v_reset=self.p.Neurons.Excitatory.v_reset * num_neurons,
-            v_thresh=self.p.Neurons.Excitatory.v_thresh * num_neurons,
-            tau_refrac=self.p.Neurons.Excitatory.tau_refrac * num_neurons,
+            tau_syn_I=self.p.Neurons.Excitatory.tau_syn_I[0],
+            tau_syn_E=self.p.Neurons.Excitatory.tau_syn_E[0],
+            v_rest=self.p.Neurons.Excitatory.v_rest[0],
+            v_reset=self.p.Neurons.Excitatory.v_reset[0],
+            v_thresh=self.p.Neurons.Excitatory.v_thresh[0],
+            tau_refrac=self.p.Neurons.Excitatory.tau_refrac[0],
         ))
 
-        dendrites = pynn.PopulationView(all_neurons, slice(NeuronType.Dendrite.ID, num_neurons * 2, 2))
-        somas = pynn.PopulationView(all_neurons, slice(NeuronType.Soma.ID, num_neurons * 2, 2))
-
+        somas = pynn.Population(num_neurons, pynn.cells.CalibHXNeuronCuba(
+            plasticity_rule=self.plasticity_rule,
+            tau_m=self.p.Neurons.Excitatory.tau_m,
+            tau_syn_I=self.p.Neurons.Excitatory.tau_syn_I[1],
+            tau_syn_E=self.p.Neurons.Excitatory.tau_syn_E[1],
+            v_rest=self.p.Neurons.Excitatory.v_rest[1],
+            v_reset=self.p.Neurons.Excitatory.v_reset[1],
+            v_thresh=self.p.Neurons.Excitatory.v_thresh[1],
+            tau_refrac=self.p.Neurons.Excitatory.tau_refrac[1],
+        ))
 
         return dendrites, somas
 
@@ -118,6 +172,71 @@ class SHTMBase(network.SHTMBase, ABC):
         pop.record(RECORDING_VALUES[NeuronType.Inhibitory][RecTypes.SPIKES])
 
         return pop
+    
+    def init_connections(self, exc_to_exc=None, exc_to_inh=None, debug=None):
+        if not self.use_on_chip_plasticity:
+            super().init_connections(exc_to_exc=exc_to_exc, exc_to_inh=exc_to_inh, debug=debug)        
+        else:
+            self.ext_to_exc = []
+            for i in range(self.p.Network.num_symbols):
+                self.ext_to_exc.append(Projection(
+                    PopulationView(self.neurons_ext, [i]),
+                    self.get_neurons(NeuronType.Soma, symbol_id=i),
+                    AllToAllConnector(),
+                    synapse_type=StaticSynapse(weight=self.p.Synapses.w_ext_exc, delay=self.p.Synapses.delay_ext_exc),
+                    receptor_type=self.p.Synapses.receptor_ext_exc))
+
+            self.exc_to_exc = []
+            self.exc_to_exc_soma_to_soma_dummy = []
+            self.exc_to_exc_dendrite_to_soma_dummy = []
+            num_connections = int(self.p.Network.num_neurons * self.p.Synapses.p_exc_exc)
+            weight = self.p.Synapses.w_exc_exc if exc_to_exc is None else exc_to_exc[i_w]
+            seed = self.p.Experiment.seed_offset
+            if self.instance_id is not None:
+                seed += self.instance_id * self.p.Network.num_symbols ** 2
+            all_dendrites, all_somas = self.neurons_exc_all
+            self.exc_to_exc.append(Projection(
+                all_somas,
+                all_dendrites,
+                AllToAllConnector(),
+                synapse_type=pynn.standardmodels.synapses.PlasticSynapse(weight=weight, delay=self.p.Synapses.delay_exc_exc, plasticity_rule=self.plasticity_rule),
+                receptor_type=self.p.Synapses.receptor_exc_exc,
+                label=f"exc-exc_soma_to_dendrite"))
+            self.exc_to_exc_soma_to_soma_dummy.append(Projection(
+                all_somas,
+                all_somas,
+                AllToAllConnector(),
+                synapse_type=pynn.standardmodels.synapses.PlasticSynapse(weight=0, plasticity_rule=self.plasticity_rule),
+                receptor_type=self.p.Synapses.receptor_exc_exc,
+                label=f"exc-exc_soma_to_soma-dummy"))
+            self.exc_to_exc_dendrite_to_soma_dummy.append(Projection(
+                all_dendrites,
+                all_somas,
+                AllToAllConnector(),
+                synapse_type=pynn.standardmodels.synapses.PlasticSynapse(weight=0, plasticity_rule=self.plasticity_rule),
+                receptor_type=self.p.Synapses.receptor_exc_exc,
+                label=f"exc-exc_dendrite_to_soma-dummy"))
+
+            self.exc_to_inh = []
+            for i in range(self.p.Network.num_symbols):
+                weight = self.p.Synapses.w_exc_inh if exc_to_inh is None else exc_to_inh[i]
+                self.exc_to_inh.append(Projection(
+                    self.get_neurons(NeuronType.Soma, symbol_id=i),
+                    PopulationView(self.neurons_inh, [i]),
+                    AllToAllConnector(),
+                    synapse_type=StaticSynapse(weight=weight, delay=self.p.Synapses.delay_exc_inh),
+                    receptor_type=self.p.Synapses.receptor_exc_inh))
+
+            self.inh_to_exc = []
+            for i in range(self.p.Network.num_symbols):
+                self.inh_to_exc.append(Projection(
+                    PopulationView(self.neurons_inh, [i]),
+                    self.get_neurons(NeuronType.Soma, symbol_id=i),
+                    AllToAllConnector(),
+                    synapse_type=StaticSynapse(weight=self.p.Synapses.w_inh_exc, delay=self.p.Synapses.delay_inh_exc),
+                    receptor_type=self.p.Synapses.receptor_inh_exc))
+
+            self.con_plastic = [OnChipPlasticityDummy(self.exc_to_exc[0], self)] * len(self.exc_to_exc[0])
 
     def run_add_calibration(self, v_rest_calib=275):
         self.reset_rec_exc()
@@ -212,6 +331,83 @@ class SHTMBase(network.SHTMBase, ABC):
             log.error(f"Error retrieving neuron data! Unknown value_type: '{value_type}'.")
             return None
         return data
+
+    def run(self, runtime=None, steps=None, plasticity_enabled=True, dyn_exc_inh=False, run_type=RunType.SINGLE):
+        if not self.use_on_chip_plasticity:
+            super().run(runtime=runtime, steps=steps, plasticity_enabled=plasticity_enabled, dyn_exc_inh=dyn_exc_inh, run_type=run_type)
+        else:
+            if runtime is None:
+                runtime = self.p.Experiment.runtime
+            if steps is None:
+                steps = self.p.Experiment.episodes
+            self.p.Experiment.episodes = 0
+
+            if type(runtime) is str:
+                if str(runtime).lower() == 'max':
+                    runtime = self.last_ext_spike_time + (self.p.Encoding.dt_seq - self.p.Encoding.t_exc_start)
+            elif type(runtime) is float or type(runtime) is int:
+                pass
+            elif runtime is None:
+                log.debug("No runtime specified. Setting runtime to last spike time + 2xdt_stm")
+                runtime = self.last_ext_spike_time + (self.p.Encoding.dt_seq - self.p.Encoding.t_exc_start)
+            else:
+                log.error("Error! Wrong runtime")
+
+            self.p.Experiment.runtime = runtime
+
+            for t in range(steps):
+                log.info(f'Running emulation step {t + 1}/{steps}')
+
+                # reset the simulator and the network state if not first run
+                if pynn.get_current_time() > 0 and t > 0:
+                    self.reset()
+
+                # set start time to 0.0 because
+                # - nest is reset and always starts with 0.0
+                # - bss2 resets the time itself after each run to 0.0
+                sim_start_time = 0.0
+                log.detail(f"Current time: {sim_start_time}")
+
+                pynn.run(runtime)
+
+                # retrieve permanence data from plasticity processor and inject into next execution
+                pynn.simulator.state.injected_config.ppu_symbols = {
+                    "permanences": pynn.get_post_realtime_read_ppu_symbols()["permanences"]}
+
+                # update weight data in projection
+                assert len(self.exc_to_exc) == 1
+                weights_post = np.array(self.exc_to_exc[0].get_data("data")[-1].data).reshape((len(self.exc_to_exc[0])))
+                self.exc_to_exc[0].set(weight=weights_post)
+
+                self._retrieve_neuron_data()
+
+                # expose data in plasticity rule dummy (one call suffices)
+                self.con_plastic[0].rule()
+
+                if self.p.Performance.compute_performance:
+                    self.performance.compute(neuron_events=self.neuron_events, method=self.p.Performance.method)
+
+                if plasticity_enabled:
+                    if run_type == RunType.MULTI:
+                        log.warn(
+                            f"Multi-core version of plasticity calculation is currently not working. Please choose the "
+                            f"single-core version. Not calculating plasticity.")
+                        # self.__run_plasticity_parallel(runtime, sim_start_time, dyn_exc_inh=dyn_exc_inh)
+                    elif run_type == RunType.SINGLE:
+                        self.__run_plasticity_singular(runtime, sim_start_time, dyn_exc_inh=dyn_exc_inh)
+
+                if self.p.Experiment.save_auto and self.p.Experiment.save_auto_epoches > 0:
+                    if (t + 1) % self.p.Experiment.save_auto_epoches == 0:
+                        self.p.Experiment.episodes = self.experiment_episodes + t + 1
+                        self.save_full_state()
+
+            self.experiment_episodes += steps
+            self.p.Experiment.episodes = self.experiment_episodes
+
+            if self.p.Experiment.save_final or self.p.Experiment.save_auto:
+                self.save_full_state()
+
+
 
 
 class SHTMSingleNeuron(SHTMBase):
@@ -513,73 +709,58 @@ class PlasticitySingleNeuron:
         self.mature_weight = 63
         self.debug = False
 
-        self.x = np.zeros((len(self.projection.pre)))
-        self.z = np.zeros((len(self.projection.post)))
 
-    def rule(self, permanence, threshold, x, z, runtime, neuron_spikes_pre, neuron_spikes_post_dendrite,
-             neuron_spikes_post_soma):
-        mature = False
-        for t in np.linspace(0., runtime, int(runtime / self.dt)):
-            if self.debug:
-                log.debug(t, round(permanence, 5), round(x, 2), round(z, 2))
+class OnChipPlasticityDummy(ABC):
+    def __init__(self, projection: Projection, shtm):
+        # custom objects
+        self.projection = projection
+        self.shtm: SHTMTotal = shtm
 
-            # True - if any pre-synaptic neuron spiked
-            has_pre_spike = any(t <= spike < t + self.dt for spike in neuron_spikes_pre)
-            # True - if any post
-            has_post_dendritic_spike = any(t <= spike < t + self.dt for spike in neuron_spikes_post_dendrite)
+        self.permanences = []
+        self.rates = []
+        self.permanence = None
+        self.permanence_min = 0
+        self.weights = []
+        self.x = []
+        self.z = []
 
-            # Indicator function (1st step) - Number of presynaptic spikes within learning time window
-            # for each postsynaptic spike
-            ind = [sum(self.delta_t_min < (spike_post - spike_pre) < self.delta_t_max
-                       for spike_pre in neuron_spikes_pre) for spike_post in neuron_spikes_post_soma]
-            # Indicator function (2nd step) - Number of pairs of pre-/postsynaptic spikes
-            # for which synapses are potentiated
-            has_post_somatic_spike_I = sum(
-                (t <= spike < t + self.dt) and ind[n] for n, spike in enumerate(neuron_spikes_post_soma))
+    def rule(self):
+        # save weights
+        self.weights.append(self.shtm.exc_to_exc[0].get("weight", format="array"))
 
-            # Spike trace of presynaptic neuron
-            x += (- x / self.tau_plus) * self.dt + has_pre_spike
-            # Spike trace of postsynaptic neuron based on daps
-            z += (- z / self.tau_h) * self.dt + has_post_dendritic_spike
+        # save rates
+        self.rates.append(np.array(self.shtm.exc_to_exc_soma_to_soma_dummy[0].get_data("data")[-1].data).reshape((len(self.shtm.exc_to_exc_soma_to_soma_dummy[0]))))
 
-            permanence += (self.lambda_plus * x * has_post_somatic_spike_I
-                           - self.lambda_minus * self.y * has_pre_spike
-                           + self.lambda_h * (
-                                   self.target_rate_h - z) * has_post_somatic_spike_I) * self.permanence_max * self.dt
-            if permanence >= threshold:
-                mature = True
-        return permanence, x, z, mature
+        # save permanences
+        self.permanences.append(np.array(self.shtm.exc_to_exc_dendrite_to_soma_dummy[0].get_data("data")[-1].data).reshape((len(self.shtm.exc_to_exc_dendrite_to_soma_dummy[0]))))
+        self.permanence = self.permanences[-1]
 
-    def __call__(self, runtime: float):
-        if isinstance(self.projection.pre.celltype, pynn.cells.SpikeSourceArray):
-            spikes_pre = self.projection.pre.get("spike_times").value
-            spikes_pre = np.array(spikes_pre)
-            if spikes_pre.ndim == 1:
-                spikes_pre = np.array([spikes_pre] * len(self.projection.pre))
-        else:
-            spikes_pre = self.projection.pre.get_data("spikes").segments[-1].spiketrains
+        # save correlations
+        self.x.append(np.array(self.shtm.exc_to_exc_soma_to_soma_dummy[0].get_data("correlation")[-1].data).reshape((len(self.shtm.exc_to_exc_soma_to_soma_dummy[0]))))
+        self.z.append(np.array(self.shtm.exc_to_exc_dendrite_to_soma_dummy[0].get_data("correlation")[-1].data).reshape((len(self.shtm.exc_to_exc_dendrite_to_soma_dummy[0]))))
 
-        spikes_post_dentrite = self.projection.post.get_data("spikes").segments[-1].spiketrains
-        spikes_post_somas = self.post_somas.get_data("spikes").segments[-1].spiketrains
+    def enable_permanence_logging(self):
+        pass
 
-        weight = self.projection.get("weight", format="array")
+    def enable_weights_logging(self):
+        pass
 
-        for c, connection in enumerate(self.projection.connections):
-            i = connection.postsynaptic_index
-            j = connection.presynaptic_index
-            neuron_spikes_pre = spikes_pre[j]
-            neuron_spikes_post_dendrite = np.array(spikes_post_dentrite[i])
-            neuron_spikes_post_soma = np.array(spikes_post_somas[i])
+    def get_connection_ids(self, connection_id):
+        connection_ids = (f"{self.get_connection_id_pre(self.get_connections()[connection_id])}>"
+                          f"{self.get_connection_id_post(self.get_connections()[connection_id])}")
+        return connection_ids
 
-            permanence, x, z, mature = self.rule(permanence=self.permanence[c], threshold=self.threshold[c],
-                                                 runtime=runtime, x=self.x[j], z=self.z[i],
-                                                 neuron_spikes_pre=neuron_spikes_pre,
-                                                 neuron_spikes_post_dendrite=neuron_spikes_post_dendrite,
-                                                 neuron_spikes_post_soma=neuron_spikes_post_soma)
-            self.permanence[c] = permanence
-            self.x[j] = x
-            self.z[i] = z
+    def get_connection_id_pre(self, connection):
+        return connection.presynaptic_index
 
-            if weight[c] != self.mature_weight and mature:
-                weight[c] = self.mature_weight
-        self.projection.set(weight=weight)
+    def get_connection_id_post(self, connection):
+        return connection.postsynaptic_index
+
+    def get_all_connection_ids(self):
+        connection_ids = []
+        for con in self.get_connections():
+            connection_ids.append(f"{self.get_connection_id_pre(con)}>{self.get_connection_id_post(con)}")
+        return connection_ids
+
+    def get_connections(self):
+        return self.projection.connections
