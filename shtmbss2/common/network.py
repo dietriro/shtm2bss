@@ -1052,38 +1052,52 @@ class Plasticity(ABC):
         z = 0
 
         # Calculate accumulated x
+        spike_pairs_soma_soma = 0
         for spike_pre in neuron_spikes_pre:
             for spike_post in neuron_spikes_post_soma:
                 spike_dt = spike_post - spike_pre
 
-                # ToDo: Replace with check based on trace
+                spike_pairs_soma_soma += 1
+
                 # ToDo: Update rule based on actual trace calculation from BSS-2
-                if self.delta_t_min < spike_dt < self.delta_t_max:
-                    log.debug(f"{self.id}  spikes: {spike_pre}, {spike_post}, {spike_dt}")
+                if spike_dt >= 0:
+                    log.debug(f"{self.id}  spikes (ss): {spike_pre}, {spike_post}, {spike_dt}")
                     x += np.exp(-spike_dt / self.tau_plus)
 
         # Calculate accumulated z
+        spike_pairs_dend_soma = 0
         for spike_post_dendrite in neuron_spikes_post_dendrite:
             for spike_post in neuron_spikes_post_soma:
                 spike_dt = spike_post - spike_post_dendrite
 
-                # ToDo: Replace with check based on trace
+                spike_pairs_dend_soma += 1
+
                 # ToDo: Update rule based on actual trace calculation from BSS-2
-                if self.delta_t_min < spike_dt < self.delta_t_max:
-                    log.debug(f"{self.id}  spikes: {spike_post_dendrite}, {spike_post}, {spike_dt}")
-                    z += np.exp(-spike_dt / self.tau_h)
+                if spike_dt >= 0:
+                    log.debug(f"{self.id}  spikes (ds): {spike_post_dendrite}, {spike_post}, {spike_dt}")
+                    z += 1
+                    # z += np.exp(-spike_dt / self.tau_h)
 
         log.debug(f"{self.id}  x: {x},  z: {z}")
+
+        x_mean = x / spike_pairs_soma_soma if spike_pairs_soma_soma > 0 else 0
+        z_mean = z / spike_pairs_dend_soma if spike_pairs_dend_soma > 0 else 0
+
+        trace_treshold = np.exp(-self.delta_t_max / self.tau_plus)
+
+        log.debug(f"{self.id} threshold: {trace_treshold}")
+        log.debug(f"{self.id} x: {x},   x_mean: {x_mean}")
+        log.debug(f"{self.id} z: {z},   z_mean: {z_mean}")
 
         # hebbian learning
         # Only run facilitate/homeostasis if a spike pair exists with a delta within boundaries,
         # i.e. x or z > 0
-        if x > 0 or z > 0:
+        if x_mean > trace_treshold:
             permanence = self.__facilitate_bss2(permanence, x)
         log.debug(f"{self.id}  d_permanence facilitate: {permanence - permanence_before}")
         permanence_before = permanence
 
-        if x > 0 or z > 0:
+        if x_mean > trace_treshold:
             permanence = self.__homeostasis_control_bss2(permanence, z, permanence_min)
         log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
         permanence_before = permanence
