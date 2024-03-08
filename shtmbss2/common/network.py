@@ -401,10 +401,10 @@ class SHTMBase(ABC):
         for alphabet_id in alphabet_range:
             # retrieve and save spike times
             spikes = self.get_neuron_data(neuron_type, value_type=RecTypes.SPIKES,
-                                          symbol_id=alphabet_id, dtype=np.ndarray)
+                                          symbol_id=alphabet_id, dtype=list)
             for neuron_id in neuron_range:
                 # add spikes to list for printing
-                spike_times[0].append(spikes[:, 1].round(5).tolist())
+                spike_times[0].append(np.array(spikes[neuron_id]).round(5).tolist())
                 header_spikes.append(f"{id_to_symbol(alphabet_id)}[{neuron_id}]")
 
                 # retrieve voltage data
@@ -1000,11 +1000,16 @@ class Plasticity(ABC):
 
                     # hebbian learning
                     permanence = self.__facilitate(permanence, x_tmp)
-                    log.debug(f"{self.id}  d_permanence facilitate: {permanence - permanence_before}")
+                    d_facilitate = permanence - permanence_before
+                    log.debug(f"{self.id}  d_permanence facilitate: {d_facilitate}")
                     permanence_before = permanence
 
                     permanence = self.__homeostasis_control(permanence, z_tmp, permanence_min)
                     log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
+                    if self.debug and permanence - permanence_before < 0:
+                        log.info(f"{self.id}  spikes: {spike_pre}, {spike_post}, {spike_dt}")
+                        log.info(f"{self.id}  d_permanence facilitate: {d_facilitate}")
+                        log.info(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
                     permanence_before = permanence
 
             permanence = self.__depress(permanence, permanence_min)
@@ -1049,7 +1054,7 @@ class Plasticity(ABC):
         log.debug(f"{self.id}  permanence before: {permanence}")
 
         x = 0
-        z = 0
+        z_tmp = 0
 
         # Calculate accumulated x
         spike_pairs_soma_soma = 0
@@ -1057,10 +1062,9 @@ class Plasticity(ABC):
             for spike_post in neuron_spikes_post_soma:
                 spike_dt = spike_post - spike_pre
 
-                spike_pairs_soma_soma += 1
-
                 # ToDo: Update rule based on actual trace calculation from BSS-2
                 if spike_dt >= 0:
+                    spike_pairs_soma_soma += 1
                     log.debug(f"{self.id}  spikes (ss): {spike_pre}, {spike_post}, {spike_dt}")
                     x += np.exp(-spike_dt / self.tau_plus)
 
@@ -1070,18 +1074,21 @@ class Plasticity(ABC):
             for spike_post in neuron_spikes_post_soma:
                 spike_dt = spike_post - spike_post_dendrite
 
-                spike_pairs_dend_soma += 1
-
                 # ToDo: Update rule based on actual trace calculation from BSS-2
                 if spike_dt >= 0:
+                    spike_pairs_dend_soma += 1
                     log.debug(f"{self.id}  spikes (ds): {spike_post_dendrite}, {spike_post}, {spike_dt}")
-                    z += 1
-                    # z += np.exp(-spike_dt / self.tau_h)
+                    z_tmp += np.exp(-spike_dt / self.tau_plus)
 
-        log.debug(f"{self.id}  x: {x},  z: {z}")
+        log.debug(f"{self.id}  x: {x},  z: {z_tmp}")
 
         x_mean = x / spike_pairs_soma_soma if spike_pairs_soma_soma > 0 else 0
-        z_mean = z / spike_pairs_dend_soma if spike_pairs_dend_soma > 0 else 0
+        z_mean = z_tmp / spike_pairs_dend_soma if spike_pairs_dend_soma > 0 else 0
+
+        # Calculcation of z based on x
+        z = np.exp(-(-self.tau_plus*z_mean)/self.tau_h) * spike_pairs_dend_soma
+        # Calculcation of z using only number of pre-post spike pairs
+        # z = spike_pairs_dend_soma
 
         trace_treshold = np.exp(-self.delta_t_max / self.tau_plus)
 
