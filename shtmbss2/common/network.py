@@ -909,16 +909,17 @@ class SHTMTotal(SHTMBase, ABC):
         return data_weights, data_plasticity
 
     @staticmethod
-    def load_full_state(network_type, experiment_id, experiment_num, debug=False):
+    def load_full_state(network_type, experiment_id, experiment_num, experiment_type=ExperimentType.EVAL_SINGLE,
+                        instance_id=None, debug=False):
         log.debug("Loading full state of network and experiment.")
 
         p = Parameters(network_type=network_type)
-        p.load_experiment_params(experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=experiment_id,
-                                 experiment_num=experiment_num)
+        p.load_experiment_params(experiment_type=experiment_type, experiment_id=experiment_id,
+                                 experiment_num=experiment_num, instance_id=instance_id)
 
         shtm = network_type(p=p)
-        shtm.load_performance_data(ExperimentType.EVAL_SINGLE, experiment_num)
-        data_weights, data_plasticity = shtm.load_network_data(ExperimentType.EVAL_SINGLE, experiment_num)
+        shtm.load_performance_data(experiment_type, experiment_num, instance_id=instance_id)
+        data_weights, data_plasticity = shtm.load_network_data(experiment_type, experiment_num, instance_id=instance_id)
 
         shtm.init_neurons()
         shtm.init_connections(debug=debug)
