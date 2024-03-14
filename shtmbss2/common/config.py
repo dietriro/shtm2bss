@@ -66,8 +66,9 @@ class FileType(NamedStorage):
 
 
 class ExperimentType(NamedStorage):
-    EVAL_SINGLE = 'eval_single'
-    EVAL_MULTI = 'eval_multi'
+    EVAL_SINGLE = 'eval-single'
+    EVAL_MULTI = 'eval-multi'
+    OPT_GRID = 'opt-grid'
     INSTANCE = 'instance'
 
 
@@ -98,6 +99,7 @@ class LogHandler(NamedStorage):
 
 class RuntimeConfig(NamedStorage):
     backend = None
+    backend_initialization = False
     config_prefix = "shtm2bss_config"
     saved_weights = ["exc_to_exc", "exc_to_inh"]
     saved_events = [NeuronType.Soma, NeuronType.Dendrite, NeuronType.Inhibitory]
@@ -127,11 +129,13 @@ EXPERIMENT_FOLDERS = {
 }
 EXPERIMENT_SUBFOLDERS = {
     ExperimentType.EVAL_SINGLE: 'single',
-    ExperimentType.EVAL_MULTI: 'multi'
+    ExperimentType.EVAL_MULTI: 'multi',
+    ExperimentType.OPT_GRID: 'grid'
 }
 EXPERIMENT_SETUP_FILE_NAME = {
     ExperimentType.EVAL_SINGLE: 'experiments_single.csv',
     ExperimentType.EVAL_MULTI: 'experiments_multi.csv',
+    ExperimentType.OPT_GRID: 'experiments_grid.csv',
     ExperimentType.INSTANCE: 'experimental_results.csv'
 }
 

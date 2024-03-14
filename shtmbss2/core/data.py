@@ -2,14 +2,12 @@ import csv
 import inspect
 import numpy as np
 import yaml
-import pickle
 import datetime
 from copy import copy
 from os.path import exists
 
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
-# from shtmbss2.common.network import SHTMBase
 
 
 def load_yaml(path_yaml, file_name_yaml):
@@ -22,11 +20,12 @@ def load_yaml(path_yaml, file_name_yaml):
     return data
 
 
-def load_config(network_type):
+def load_config(network_type, experiment_type=ExperimentType.EVAL_SINGLE):
     if not inspect.isclass(network_type):
         network_type = type(network_type)
 
-    config_file_name = f"{RuntimeConfig.config_prefix}_{network_type.__name__}.yaml"
+    config_file_name = (f"{RuntimeConfig.config_prefix}_{experiment_type}_"
+                        f"{RuntimeConfig.backend}_{network_type.__name__}.yaml")
     return load_yaml(PATH_CONFIG, config_file_name)
 
 

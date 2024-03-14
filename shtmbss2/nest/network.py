@@ -38,7 +38,9 @@ class SHTMBase(network.SHTMBase, ABC):
         super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset, p=p,
                          **kwargs)
 
-        nest.Install(self.p.Backend.module_name)
+        if not RuntimeConfig.backend_initialization:
+            nest.Install(self.p.Backend.module_name)
+            RuntimeConfig.backend_initialization = True
         MCNeuron = pynn.native_cell_type(self.p.Backend.neuron_name)
 
     def init_all_neurons_exc(self, num_neurons=None):

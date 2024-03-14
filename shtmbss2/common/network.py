@@ -96,7 +96,10 @@ class SHTMBase(ABC):
         else:
             self.p.Experiment.seed_offset = seed_offset
 
-        instance_offset = self.instance_id if self.instance_id is not None else 0
+        if self.p.Experiment.type == ExperimentType.EVAL_MULTI or self.p.Experiment.type == ExperimentType.EVAL_SINGLE:
+            instance_offset = self.instance_id if self.instance_id is not None else 0
+        else:
+            instance_offset = 0
         np.random.seed(self.p.Experiment.seed_offset + instance_offset)
 
     def load_params(self, **kwargs):
@@ -839,14 +842,16 @@ class SHTMTotal(SHTMBase, ABC):
 
         np.savez(file_path, **plasticity_dict)
 
-    def save_full_state(self):
+    def save_full_state(self, save_basic_data=False, running_avg_perc=0.5):
         log.debug("Saving full state of network and experiment.")
 
-        if self.p.Experiment.type == ExperimentType.EVAL_MULTI:
+        if self.p.Experiment.type == ExperimentType.EVAL_MULTI or self.p.Experiment.type == ExperimentType.OPT_GRID:
             if self.instance_id is not None and self.instance_id == 0:
                 self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
                                                               instance_id=self.instance_id)
-            save_instance_setup(net=self, performance=self.performance.get_performance_dict(final_result=True),
+            save_instance_setup(net=self,
+                                performance=self.performance.get_performance_dict(final_result=True,
+                                                                                  running_avg_perc=running_avg_perc),
                                 experiment_num=self.experiment_num, instance_id=self.instance_id)
         else:
             self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
@@ -935,8 +940,11 @@ class Plasticity(ABC):
         self.post_somas = post_somas
 
         # editable/changing variables
-        self.permanence_min = np.asarray(np.random.randint(permanence_init_min, permanence_init_max,
-                                                           size=(len(self.projection),)), dtype=float)
+        if permanence_init_min == permanence_init_max:
+            self.permanence_min = np.ones(shape=(len(self.projection),), dtype=float) * permanence_init_min
+        else:
+            self.permanence_min = np.asarray(np.random.randint(permanence_init_min, permanence_init_max,
+                                                               size=(len(self.projection),)), dtype=float)
         self.permanence = copy.copy(self.permanence_min)
         self.permanences = None
         self.weights = None

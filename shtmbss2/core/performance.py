@@ -207,16 +207,17 @@ class PerformanceSingle(Performance):
         else:
             return self.data[metric][sequence_id]
 
-    def get_performance_dict(self, final_result=False):
+    def get_performance_dict(self, final_result=False, running_avg_perc=0.5):
         performance = dict()
         if final_result:
             for metric_name in PerformanceMetrics.get_all():
                 metric = self.get_all(metric_name)
                 metric_means = np.mean(metric, axis=0)
                 # add final value to dict
-                performance[metric_name] = metric_means[-1]
+                performance[f"{metric_name}_last"] = metric_means[-1]
                 # add mean of all training epochs to dict
-                performance[metric_name] = np.mean(metric_means)
+                performance[f"{metric_name}_running-avg-{running_avg_perc}"] = (
+                    np.mean(metric_means[int(len(metric_means)*running_avg_perc):]))
         else:
             performance = self.data
         return performance

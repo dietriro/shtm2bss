@@ -1,0 +1,13 @@
+parameters:
+  lambda_plus:
+    enabled: False
+    min: 0.02
+    max: 0.04
+    step: 0.01
+    dtype: float
+  lambda_minus:
+    enabled: True
+    min: 0.001
+    max: 0.002
+    step: 0.0005
+    dtype: float
