@@ -153,7 +153,7 @@ def save_setup(data, experiment_num, create_eval_file, do_update, file_path, sav
     return experiment_num
 
 
-def save_instance_setup(net, performance, experiment_num=None, instance_id=None, **kwargs):
+def save_instance_setup(net, performance, experiment_num=None, instance_id=None, optimized_parameters=None, **kwargs):
     params = flatten_dict(net.p.dict(exclude_none=True))
     experiment_type = net.p.Experiment.type
     experiment_id = net.p.Experiment.id
@@ -169,7 +169,10 @@ def save_instance_setup(net, performance, experiment_num=None, instance_id=None,
     create_eval_file = not exists(file_path)
 
     # prepare data
-    data_end = {**{'time_finished': datetime.datetime.now().strftime('%d.%m.%y - %H:%M')}, **performance}
+    if optimized_parameters is None:
+        optimized_parameters = dict()
+    data_end = {**optimized_parameters, **performance,
+                **{'time_finished': datetime.datetime.now().strftime('%d.%m.%y - %H:%M')}}
     data_params = {name.lower().replace('.', '_'): params[name] for name in RuntimeConfig.saved_instance_params}
     data = {**{'instance_id': instance_id}, **data_params, **data_end}
 

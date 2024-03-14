@@ -50,6 +50,9 @@ NON_PICKLE_OBJECTS = ["post_somas", "projection", "shtm"]
 class SHTMBase(ABC):
     def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
                  **kwargs):
+        if experiment_type == ExperimentType.OPT_GRID:
+            self.optimized_parameters = kwargs
+
         # Load pre-defined parameters
         if p is None:
             self.p = Parameters(network_type=self)
@@ -842,7 +845,7 @@ class SHTMTotal(SHTMBase, ABC):
 
         np.savez(file_path, **plasticity_dict)
 
-    def save_full_state(self, save_basic_data=False, running_avg_perc=0.5):
+    def save_full_state(self, running_avg_perc=0.5):
         log.debug("Saving full state of network and experiment.")
 
         if self.p.Experiment.type == ExperimentType.EVAL_MULTI or self.p.Experiment.type == ExperimentType.OPT_GRID:
@@ -851,8 +854,10 @@ class SHTMTotal(SHTMBase, ABC):
                                                               instance_id=self.instance_id)
             save_instance_setup(net=self,
                                 performance=self.performance.get_performance_dict(final_result=True,
-                                                                                  running_avg_perc=running_avg_perc),
-                                experiment_num=self.experiment_num, instance_id=self.instance_id)
+                                                                                  running_avg_perc=running_avg_perc,
+                                                                                  decimals=3),
+                                experiment_num=self.experiment_num, instance_id=self.instance_id,
+                                optimized_parameters=self.optimized_parameters)
         else:
             self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
                                                           instance_id=self.instance_id)

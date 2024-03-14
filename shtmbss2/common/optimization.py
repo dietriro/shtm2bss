@@ -2,6 +2,7 @@ import warnings
 import numpy as np
 import itertools
 
+from shtmbss2.core.helpers import Process
 from shtmbss2.common.config import *
 from shtmbss2.core.data import load_config, get_last_experiment_num
 from shtmbss2.core.logging import log
@@ -46,8 +47,6 @@ class GridSearch:
 
         model.save_full_state(save_basic_data=experiment_num == 0, running_avg_perc=0.5)
 
-        return model
-
     def run(self, steps=None):
         parameter_names = list()
         parameter_values = list()
@@ -69,10 +68,9 @@ class GridSearch:
             log.essens(f"Starting grid-search run {run_i + 1}/{len(parameter_combinations)} for {parameter_combination}")
             parameters = {p_name: p_value for p_name, p_value in zip(parameter_names, parameter_combination)}
 
-            model = self.__run_experiment(parameters, experiment_num=self.experiment_num, instance_id=run_i,
-                                          steps=steps)
-            performance = model.performance.get_performance_dict(final_result=True, running_avg_perc=0.5)
+            p = Process(target=self.__run_experiment, args=(parameters, self.experiment_num, run_i, steps))
+            p.start()
+            p.join()
 
             log.essens(f"Finished grid-search run {run_i + 1}/{len(parameter_combinations)}")
             log.essens(f"\tParameters: {parameter_combination}")
-            log.essens(f"\tPerformance: {performance}")

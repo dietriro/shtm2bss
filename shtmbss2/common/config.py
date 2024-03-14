@@ -105,8 +105,7 @@ class RuntimeConfig(NamedStorage):
     saved_events = [NeuronType.Soma, NeuronType.Dendrite, NeuronType.Inhibitory]
     saved_network_vars = ["trace_dendrites"]
     saved_plasticity_vars = ["permanence", "permanence_min", "permanences", "weights", "x"]
-    saved_instance_params = ["Experiment.type", "Experiment.id", "Experiment.sequences", "Experiment.runtime",
-                             "Experiment.episodes"]
+    saved_instance_params = []
 
 
 # Logging
