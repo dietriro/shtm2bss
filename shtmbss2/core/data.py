@@ -46,13 +46,24 @@ def get_last_experiment_num(net, experiment_id, experiment_type) -> int:
     return 0
 
 
+def get_last_instance(net, experiment_type, experiment_id, experiment_num):
+    folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num)
+    last_instance_id = 0
+    for item in os.listdir(folder_path):
+        if os.path.isdir(join(folder_path, item)):
+            if item.isnumeric() and int(item) > last_instance_id:
+                last_instance_id = int(item)
+
+    return last_instance_id + 1
+
+
 def get_experiment_folder(net, experiment_type, experiment_id, experiment_num, instance_id=None):
     net_name = net.__name__ if inspect.isclass(net) else str(net)
     folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend],
                        str(EXPERIMENT_SUBFOLDERS[experiment_type]),
                        f"{net_name}_{experiment_id}_{experiment_num:02d}")
     if instance_id is not None:
-        folder_path = join(folder_path, f"{instance_id:02d}")
+        folder_path = join(folder_path, f"{instance_id:0{RuntimeConfig.instance_digits}d}")
     return folder_path
 
 

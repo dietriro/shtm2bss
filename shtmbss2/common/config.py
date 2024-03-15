@@ -101,6 +101,7 @@ class RuntimeConfig(NamedStorage):
     backend = None
     backend_initialization = False
     config_prefix = "shtm2bss_config"
+    instance_digits = 2
     saved_weights = ["exc_to_exc", "exc_to_inh"]
     saved_events = [NeuronType.Soma, NeuronType.Dendrite, NeuronType.Inhibitory]
     saved_network_vars = ["trace_dendrites"]

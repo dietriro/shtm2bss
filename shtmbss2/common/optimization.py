@@ -5,7 +5,7 @@ import yaml
 
 from shtmbss2.core.helpers import Process
 from shtmbss2.common.config import *
-from shtmbss2.core.data import load_config, get_last_experiment_num, get_experiment_folder
+from shtmbss2.core.data import load_config, get_last_experiment_num, get_experiment_folder, get_last_instance
 from shtmbss2.core.logging import log
 
 np.set_printoptions(threshold=np.inf, suppress=True, linewidth=np.inf)
@@ -13,12 +13,13 @@ warnings.filterwarnings(action='ignore', category=UserWarning)
 
 
 class GridSearch:
-    def __init__(self, model_type, experiment_id):
+    def __init__(self, model_type, experiment_id, experiment_num=None):
         self.model_type = model_type
         self.experiment_id = experiment_id
+        self.experiment_num = experiment_num
 
         self.experiment_type = ExperimentType.OPT_GRID
-        self.experiment_num = None
+        self.continuation_id = None
         self.config = None
 
         self.load_config()
@@ -34,7 +35,8 @@ class GridSearch:
         with open(file_path, 'w') as file:
             yaml.dump(self.config, file)
 
-    def __run_experiment(self, parameters, experiment_num, instance_id, steps=None, optimized_parameter_ranges=None):
+    def __run_experiment(self, parameters, experiment_num, instance_id, steps=None,
+                         optimized_parameter_ranges=None):
         model = self.model_type(experiment_type=ExperimentType.OPT_GRID, instance_id=instance_id, seed_offset=0,
                                 **parameters)
 
@@ -55,6 +57,8 @@ class GridSearch:
         model.save_full_state(running_avg_perc=0.5, optimized_parameter_ranges=optimized_parameter_ranges)
 
     def run(self, steps=None):
+        log.handlers[LogHandler.STREAM].setLevel(logging.ESSENS)
+
         parameter_names = list()
         parameter_values = list()
         parameter_ranges = dict()
@@ -75,17 +79,35 @@ class GridSearch:
                                                                           parameter_config["step"])
             parameter_names.append(parameter_name)
         parameter_combinations = list(itertools.product(*parameter_values))
+        num_combinations = len(parameter_combinations)
 
+        # set number of digits for file saving/loading into instance folders
+        RuntimeConfig.instance_digits = len(str(num_combinations))
 
         # retrieve experiment num for new experiment
-        self.experiment_num = get_last_experiment_num(self.model_type, self.experiment_id, self.experiment_type) + 1
+        last_experiment_num = get_last_experiment_num(self.model_type, self.experiment_id, self.experiment_type)
+        if self.experiment_num is None:
+            self.experiment_num = last_experiment_num + 1
 
-        log.handlers[LogHandler.STREAM].setLevel(logging.ESSENS)
+        if self.experiment_num <= last_experiment_num:
+            self.continuation_id = get_last_instance(self.model_type, self.experiment_type, self.experiment_id,
+                                                     self.experiment_num)
+            log.essens(f"Continuing grid-search for {num_combinations-self.continuation_id} "
+                       f"parameter combinations of {parameter_names}")
+        else:
+            log.essens(f"Starting grid-search for {num_combinations} parameter combinations "
+                       f"of {parameter_names}")
 
-        log.essens(f"Starting grid-search for {len(parameter_combinations)} parameter combinations")
 
         for run_i, parameter_combination in enumerate(parameter_combinations):
-            log.essens(f"Starting grid-search run {run_i + 1}/{len(parameter_combinations)} "
+            if self.continuation_id is not None:
+                if run_i < self.continuation_id:
+                    continue
+                elif run_i == self.continuation_id:
+                    log.info(f"Skipped {run_i} parameter combinations. "
+                             f"Continuing evaluation with combination {run_i} now.")
+
+            log.essens(f"Starting grid-search run {run_i + 1}/{num_combinations} "
                        f"for {parameter_combination}")
             parameters = {p_name: p_value for p_name, p_value in zip(parameter_names, parameter_combination)}
 
@@ -94,9 +116,10 @@ class GridSearch:
             p.start()
             p.join()
 
-            log.essens(f"Finished grid-search run {run_i + 1}/{len(parameter_combinations)}")
+            log.essens(f"Finished grid-search run {run_i + 1}/{num_combinations}")
             log.essens(f"\tParameters: {parameter_combination}")
 
-        self.save_config()
+            if run_i == 0:
+                self.save_config()
 
         log.handlers[LogHandler.STREAM].setLevel(logging.INFO)
