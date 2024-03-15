@@ -182,7 +182,7 @@ def save_instance_setup(net, performance, experiment_num=None, instance_id=None,
     return experiment_num
 
 
-def save_experimental_setup(net, experiment_num=None, instance_id=None, **kwargs):
+def save_experimental_setup(net, experiment_num=None, instance_id=None, optimized_parameter_ranges=None, **kwargs):
     params = flatten_dict(net.p.dict(exclude_none=True))
     experiment_type = net.p.Experiment.type
     experiment_id = net.p.Experiment.id
@@ -207,10 +207,13 @@ def save_experimental_setup(net, experiment_num=None, instance_id=None, **kwargs
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
+    # prepare data for saving
+    if optimized_parameter_ranges is None:
+        optimized_parameter_ranges = dict()
     data = {'experiment_id': experiment_id, 'experiment_num': f'{experiment_num:02d}',
             'network_type': str(net), 'time_finished': datetime.datetime.now().strftime('%d.%m.%y - %H:%M')}
 
-    data = {**data, **params}
+    data = {**data, **optimized_parameter_ranges, **params}
 
     save_setup(data, experiment_num, create_eval_file, do_update, file_path=file_path, save_categories=True, **kwargs)
 

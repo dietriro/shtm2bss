@@ -67,9 +67,11 @@ class ParallelExecutor:
 
         seed_offset = int(time.time())
 
+        log.handlers[LogHandler.STREAM].setLevel(logging.ESSENS)
+
         processes = []
         for i_inst in range(self.num_instances):
-            log.debug(f'Starting network {i_inst}')
+            log.essens(f'Starting network {i_inst}')
             processes.append(Process(target=self.__run_experiment, args=(i_inst, file_save_status, lock,
                                                                          self.experiment_num, seed_offset)))
             processes[i_inst].start()
@@ -77,6 +79,8 @@ class ParallelExecutor:
         for i_inst in range(self.num_instances):
             processes[i_inst].join()
 
-            log.info(f"Finished simulation {i_inst + 1}/{self.num_instances}")
+            log.essens(f"Finished simulation {i_inst + 1}/{self.num_instances}")
+
+        log.handlers[LogHandler.STREAM].setLevel(logging.INFO)
 
         return self.experiment_num

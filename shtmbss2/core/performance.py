@@ -175,6 +175,19 @@ class Performance(ABC):
 
         return axs
 
+    def load_data(self, net, experiment_type, experiment_id, experiment_num, instance_id=None):
+        folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num,
+                                            instance_id=instance_id)
+
+        file_path = join(folder_path, "performance.npz")
+        data_performance = np.load(file_path)
+
+        for metric_name in data_performance.files:
+            if instance_id is None:
+                self.data[metric_name] = data_performance[metric_name].tolist()
+            else:
+                self.data[instance_id][metric_name] = data_performance[metric_name].tolist()
+
 
 
 class PerformanceSingle(Performance):
@@ -187,6 +200,10 @@ class PerformanceSingle(Performance):
         self.data = dict()
         for metric_name in PerformanceMetrics.get_all():
             self.data[metric_name] = [[] for _ in self.p.Experiment.sequences]
+
+    def load_data(self, net, experiment_type, experiment_id, experiment_num, instance_id=None):
+        self.init_data()
+        super().load_data(net, experiment_type, experiment_id, experiment_num, instance_id=instance_id)
 
     def get_statistic(self, statistic, metric, episode='all', percentile=None):
         if 'all' in episode:
@@ -277,7 +294,9 @@ class PerformanceMulti(Performance):
                 data_inst[metric_name] = [[] for _ in self.p.Experiment.sequences]
             self.data.append(data_inst)
 
-    def load_data(self, net, experiment_type, experiment_id, experiment_num):
+    def load_data(self, net, experiment_type, experiment_id, experiment_num, instance_id=None):
+        self.init_data()
+
         folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num)
 
         for i_inst in range(self.num_instances):
@@ -286,17 +305,8 @@ class PerformanceMulti(Performance):
 
             if not os.path.exists(inst_folder_path):
                 log.warning(f"Instance folder does not exist: {inst_folder_path}")
-
-            for metric_name in PerformanceMetrics.get_all():
-                metric_file_name = f"pf_{metric_name}.npy"
-                metric_file_path = join(inst_folder_path, metric_file_name)
-
-                if not os.path.exists(inst_folder_path):
-                    log.warning(f"Metric '{metric_name}' for instance {i_inst} could not be loaded because the file "
-                                f"doesn't exist: {metric_file_path}")
-                    continue
-
-                self.data[i_inst][metric_name] = np.load(metric_file_path).tolist()
+                
+            super().load_data(net, experiment_type, experiment_id, experiment_num, instance_id=i_inst)
 
     def get_statistic(self, statistic, metric, episode='all', percentile=None):
         if 'all' in episode:

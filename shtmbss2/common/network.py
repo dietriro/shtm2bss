@@ -52,6 +52,8 @@ class SHTMBase(ABC):
                  **kwargs):
         if experiment_type == ExperimentType.OPT_GRID:
             self.optimized_parameters = kwargs
+        else:
+            self.optimized_parameters = None
 
         # Load pre-defined parameters
         if p is None:
@@ -77,13 +79,6 @@ class SHTMBase(ABC):
         self.rec_neurons_exc = None
         self.last_ext_spike_time = None
         self.neuron_events = None
-
-        # Declare performance containers
-        self.performance_error = None
-        self.performance_fp = None
-        self.performance_fn = None
-        self.performance_active_somas = None
-        self.num_active_dendrites_post = None
 
         self.experiment_num = None
         self.experiment_episodes = 0
@@ -845,13 +840,14 @@ class SHTMTotal(SHTMBase, ABC):
 
         np.savez(file_path, **plasticity_dict)
 
-    def save_full_state(self, running_avg_perc=0.5):
+    def save_full_state(self, running_avg_perc=0.5, optimized_parameter_ranges=None):
         log.debug("Saving full state of network and experiment.")
 
         if self.p.Experiment.type == ExperimentType.EVAL_MULTI or self.p.Experiment.type == ExperimentType.OPT_GRID:
             if self.instance_id is not None and self.instance_id == 0:
                 self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
-                                                              instance_id=self.instance_id)
+                                                              instance_id=self.instance_id,
+                                                              optimized_parameter_ranges=optimized_parameter_ranges)
             save_instance_setup(net=self,
                                 performance=self.performance.get_performance_dict(final_result=True,
                                                                                   running_avg_perc=running_avg_perc,
@@ -865,18 +861,6 @@ class SHTMTotal(SHTMBase, ABC):
         self.save_config()
         self.save_performance_data()
         self.save_network_data()
-
-    def load_performance_data(self, experiment_type, experiment_num, instance_id=None):
-        folder_path = get_experiment_folder(self, experiment_type, self.p.Experiment.id, experiment_num,
-                                            instance_id=instance_id)
-
-        file_path = join(folder_path, "performance.npz")
-        data_performance = np.load(file_path)
-
-        self.performance.data = dict()
-
-        for metric_name in data_performance.files:
-            self.performance.data[metric_name] = data_performance[metric_name].tolist()
 
     def load_network_data(self, experiment_type, experiment_num, instance_id=None):
         # ToDo: Check if this works with bss2
@@ -918,7 +902,7 @@ class SHTMTotal(SHTMBase, ABC):
                                  experiment_num=experiment_num, instance_id=instance_id)
 
         shtm = network_type(p=p)
-        shtm.load_performance_data(experiment_type, experiment_num, instance_id=instance_id)
+        shtm.performance.load_data(shtm, experiment_type, experiment_id, experiment_num, instance_id=instance_id)
         data_weights, data_plasticity = shtm.load_network_data(experiment_type, experiment_num, instance_id=instance_id)
 
         shtm.init_neurons()

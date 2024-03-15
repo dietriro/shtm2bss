@@ -185,6 +185,9 @@ class Parameters(ParameterGroup):
         log.debug(f"Successfully set custom parameters for '{self.network_type}'")
 
     def load_experiment_params(self, experiment_type, experiment_id, experiment_num, instance_id=None):
+        if experiment_type == ExperimentType.EVAL_MULTI and instance_id is None:
+            instance_id = 0
+
         experiment_folder_path = get_experiment_folder(self.network_type, experiment_type, experiment_id,
                                                        experiment_num, instance_id=instance_id)
 
