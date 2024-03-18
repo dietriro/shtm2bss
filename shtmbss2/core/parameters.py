@@ -89,6 +89,8 @@ class Parameters(ParameterGroup):
     class Plasticity(ParameterGroup):
         type: str = None
         learning_factor: float = None
+        weight_learning: bool = None
+        weight_learning_scale: float = None
         permanence_init_min: float = None
         permanence_init_max: float = None
         permanence_max: float = None

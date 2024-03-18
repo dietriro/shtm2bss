@@ -920,9 +920,9 @@ class SHTMTotal(SHTMBase, ABC):
 class Plasticity(ABC):
     def __init__(self, projection: Projection, post_somas, shtm, index, proj_post_soma_inh=None, debug=False,
                  learning_factor=None, permanence_init_min=None, permanence_init_max=None, permanence_max=None,
-                 threshold=None, w_mature=None, y=None, lambda_plus=None,
-                 lambda_minus=None, lambda_h=None, target_rate_h=None, tau_plus=None, tau_h=None, delta_t_min=None,
-                 delta_t_max=None, dt=None, **kwargs):
+                 threshold=None, w_mature=None, y=None, lambda_plus=None, weight_learning=None,
+                 weight_learning_scale=None, lambda_minus=None, lambda_h=None, target_rate_h=None, tau_plus=None,
+                 tau_h=None, delta_t_min=None, delta_t_max=None, dt=None, **kwargs):
         # custom objects
         self.projection = projection
         self.proj_post_soma_inh = proj_post_soma_inh
@@ -938,6 +938,8 @@ class Plasticity(ABC):
         self.permanence = copy.copy(self.permanence_min)
         self.permanences = None
         self.weights = None
+        self.weight_learning = None
+        self.weight_learning_scale = None
         self.x = np.zeros((len(self.projection.pre)))
         self.z = np.zeros((len(self.projection.post)))
 
@@ -1197,7 +1199,8 @@ class Plasticity(ABC):
             self.x[j] = x
 
             if mature:
-                weight[j, i] = self.w_mature
+                weight_offset = (permanence-self.threshold)*self.weight_learning_scale if self.weight_learning else 0
+                weight[j, i] = self.w_mature + weight_offset
                 if self.proj_post_soma_inh is not None:
                     weight_inh = self.proj_post_soma_inh.get("weight", format="array")
                     weight_inh[i, :] = 250

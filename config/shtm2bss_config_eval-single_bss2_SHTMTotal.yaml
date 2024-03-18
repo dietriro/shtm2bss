@@ -30,6 +30,8 @@ encoding:
 plasticity:
   type: 'original'
   learning_factor: 1
+  weight_learning: False
+  weight_learning_scale: 1.0
   permanence_init_min: 0
   permanence_init_max: 8
   permanence_max: 20.
