@@ -42,7 +42,7 @@ class GridSearch:
         self.load_config()
 
     def load_config(self):
-        self.config = load_config(self.model_type, self.experiment_type)
+        self.config = load_config(self.model_type, ExperimentType.OPT_GRID)
         self.parameter_matching = self.config["experiment"]["parameter_matching"]
         self.fig_save = self.config["experiment"]["fig_save"]
         self.num_instances = self.config["experiment"]["num_instances"]
@@ -89,7 +89,8 @@ class GridSearch:
         # run experiments using parallel-executor
         pe = ParallelExecutor(num_instances=self.num_instances, experiment_id=self.experiment_id,
                               experiment_type=self.experiment_type, experiment_num=experiment_num,
-                              experiment_subnum=experiment_subnum, parameter_ranges=optimized_parameter_ranges)
+                              experiment_subnum=experiment_subnum, parameter_ranges=optimized_parameter_ranges,
+                              fig_save=False)
         experiment_num = pe.run(steps=steps)
 
         # retrieve parameters for performed experiment

@@ -95,7 +95,8 @@ class SHTMBase(ABC):
         else:
             self.p.Experiment.seed_offset = seed_offset
 
-        if self.p.Experiment.type == ExperimentType.EVAL_MULTI or self.p.Experiment.type == ExperimentType.EVAL_SINGLE:
+        if self.p.Experiment.type in [ExperimentType.EVAL_MULTI, ExperimentType.EVAL_SINGLE,
+                                      ExperimentType.OPT_GRID_MULTI]:
             instance_offset = self.instance_id if self.instance_id is not None else 0
         else:
             instance_offset = 0
