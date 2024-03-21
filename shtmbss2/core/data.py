@@ -57,13 +57,19 @@ def get_last_instance(net, experiment_type, experiment_id, experiment_num):
     return last_instance_id + 1
 
 
-def get_experiment_folder(net, experiment_type, experiment_id, experiment_num, instance_id=None):
+def get_experiment_folder(net, experiment_type, experiment_id, experiment_num, experiment_subnum=None, instance_id=None):
     net_name = net.__name__ if inspect.isclass(net) else str(net)
+
+    folder_name = f"{net_name}_{experiment_id}_{experiment_num:02d}"
     folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend],
                        str(EXPERIMENT_SUBFOLDERS[experiment_type]),
-                       f"{net_name}_{experiment_id}_{experiment_num:02d}")
+                       folder_name)
+
+    if experiment_subnum is not None:
+        folder_path = join(folder_path, f"{experiment_subnum:0{RuntimeConfig.subnum_digits}d}")
     if instance_id is not None:
         folder_path = join(folder_path, f"{instance_id:0{RuntimeConfig.instance_digits}d}")
+
     return folder_path
 
 
@@ -164,17 +170,19 @@ def save_setup(data, experiment_num, create_eval_file, do_update, file_path, sav
     return experiment_num
 
 
-def save_instance_setup(net, performance, experiment_num=None, instance_id=None, optimized_parameters=None, **kwargs):
-    params = flatten_dict(net.p.dict(exclude_none=True))
-    experiment_type = net.p.Experiment.type
-    experiment_id = net.p.Experiment.id
+def save_instance_setup(net, parameters, performance, experiment_num=None, experiment_subnum=None, instance_id=None,
+                        optimized_parameters=None, **kwargs):
+    params = flatten_dict(parameters.dict(exclude_none=True))
+    experiment_type = parameters.Experiment.type
+    experiment_id = parameters.Experiment.id
 
     folder_path_instance = get_experiment_folder(net, experiment_type, experiment_id, experiment_num,
-                                                 instance_id=instance_id)
+                                                 experiment_subnum=experiment_subnum, instance_id=instance_id)
     if not os.path.exists(folder_path_instance):
         os.makedirs(folder_path_instance)
 
     folder_path_experiment = get_experiment_folder(net, experiment_type, experiment_id, experiment_num,
+                                                   experiment_subnum=None if instance_id is None else experiment_subnum,
                                                    instance_id=None)
     file_path = join(folder_path_experiment, EXPERIMENT_SETUP_FILE_NAME[ExperimentType.INSTANCE])
     create_eval_file = not exists(file_path)
@@ -185,7 +193,8 @@ def save_instance_setup(net, performance, experiment_num=None, instance_id=None,
     data_end = {**optimized_parameters, **performance,
                 **{'time_finished': datetime.datetime.now().strftime('%d.%m.%y - %H:%M')}}
     data_params = {name.lower().replace('.', '_'): params[name] for name in RuntimeConfig.saved_instance_params}
-    data = {**{'instance_id': instance_id}, **data_params, **data_end}
+    data_exp = {'experiment_subnum': experiment_subnum} if instance_id is None else {'instance_id': instance_id}
+    data = {**data_exp, **data_params, **data_end}
 
     save_setup(data, experiment_num, create_eval_file=create_eval_file, do_update=False, file_path=file_path,
                save_categories=False, **kwargs)
@@ -193,7 +202,8 @@ def save_instance_setup(net, performance, experiment_num=None, instance_id=None,
     return experiment_num
 
 
-def save_experimental_setup(net, experiment_num=None, instance_id=None, optimized_parameter_ranges=None, **kwargs):
+def save_experimental_setup(net, experiment_num=None, experiment_subnum=None, instance_id=None,
+                            optimized_parameter_ranges=None, **kwargs):
     params = flatten_dict(net.p.dict(exclude_none=True))
     experiment_type = net.p.Experiment.type
     experiment_id = net.p.Experiment.id
@@ -214,7 +224,8 @@ def save_experimental_setup(net, experiment_num=None, instance_id=None, optimize
         return None
 
     # create folder if it doesn't exist
-    folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num, instance_id=instance_id)
+    folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num,
+                                        experiment_subnum=experiment_subnum, instance_id=None)
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
@@ -223,6 +234,7 @@ def save_experimental_setup(net, experiment_num=None, instance_id=None, optimize
         optimized_parameter_ranges = dict()
     data = {'experiment_id': experiment_id, 'experiment_num': f'{experiment_num:02d}',
             'network_type': str(net), 'time_finished': datetime.datetime.now().strftime('%d.%m.%y - %H:%M')}
+
 
     data = {**data, **optimized_parameter_ranges, **params}
 

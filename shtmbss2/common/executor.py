@@ -6,7 +6,9 @@ import multiprocessing as mp
 from shtmbss2.core.helpers import Process
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
-from shtmbss2.core.data import get_last_experiment_num
+from shtmbss2.core.data import get_last_experiment_num, get_experiment_folder
+from shtmbss2.core.parameters import Parameters
+from shtmbss2.core.performance import PerformanceMulti
 
 if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
     from shtmbss2.brainscales2.network import SHTMTotal
@@ -21,16 +23,24 @@ warnings.filterwarnings(action='ignore', category=UserWarning)
 
 
 class ParallelExecutor:
-    def __init__(self, num_instances, experiment_id):
+    def __init__(self, num_instances, experiment_id, experiment_type=ExperimentType.EVAL_MULTI, experiment_num=None,
+                 experiment_subnum=None, parameter_ranges=None, fig_save=True):
         self.num_instances = num_instances
         self.experiment_id = experiment_id
 
-        self.experiment_type = ExperimentType.EVAL_MULTI
-        self.experiment_num = None
+        self.experiment_type = experiment_type
+        self.experiment_num = experiment_num
+        self.experiment_subnum = experiment_subnum
+
+        self.parameter_ranges = parameter_ranges
+
+        self.fig_save = fig_save
 
     @staticmethod
-    def __run_experiment(process_id, file_save_status, lock, experiment_num, seed_offset, steps=None):
-        shtm = SHTMTotal(experiment_type=ExperimentType.EVAL_MULTI, instance_id=process_id, seed_offset=seed_offset)
+    def __run_experiment(process_id, file_save_status, lock, experiment_type, experiment_num, seed_offset,
+                         experiment_subnum=None, parameter_ranges=None, steps=None):
+        shtm = SHTMTotal(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
+                         instance_id=process_id, seed_offset=seed_offset)
 
         # set save_auto to false in order to minimize file lock timeouts
         shtm.p.Experiment.save_auto = False
@@ -51,19 +61,20 @@ class ParallelExecutor:
             time.sleep(0.1)
 
         lock.acquire(block=True)
-        shtm.save_full_state()
+        shtm.save_full_state(optimized_parameter_ranges=parameter_ranges)
         lock.release()
 
         # signal other processes, that this process has finished the data saving process
         file_save_status[process_id] = 1
 
-    def run(self):
+    def run(self, steps=None):
 
         lock = mp.Lock()
         file_save_status = mp.Array("i", [0 for _ in range(self.num_instances)])
 
         # retrieve experiment num for new experiment
-        self.experiment_num = get_last_experiment_num(SHTMTotal, self.experiment_id, self.experiment_type) + 1
+        if self.experiment_num is None:
+            self.experiment_num = get_last_experiment_num(SHTMTotal, self.experiment_id, self.experiment_type) + 1
 
         seed_offset = int(time.time())
 
@@ -73,13 +84,35 @@ class ParallelExecutor:
         for i_inst in range(self.num_instances):
             log.essens(f'Starting network {i_inst}')
             processes.append(Process(target=self.__run_experiment, args=(i_inst, file_save_status, lock,
-                                                                         self.experiment_num, seed_offset)))
+                                                                         self.experiment_type,
+                                                                         self.experiment_num, seed_offset,
+                                                                         self.experiment_subnum, self.parameter_ranges,
+                                                                         steps)))
             processes[i_inst].start()
 
         for i_inst in range(self.num_instances):
             processes[i_inst].join()
 
             log.essens(f"Finished simulation {i_inst + 1}/{self.num_instances}")
+
+        # save figure of performance
+        if self.fig_save:
+            # retrieve parameters for performed experiment
+            p = Parameters(network_type=SHTMTotal)
+            p.load_experiment_params(experiment_type=ExperimentType.OPT_GRID_MULTI, experiment_id=self.experiment_id,
+                                     experiment_num=self.experiment_num)
+
+            # retrieve performance data for entire set of instances for subnum
+            pf = PerformanceMulti(p, self.num_instances)
+            pf.load_data(SHTMTotal, experiment_type=ExperimentType.OPT_GRID_MULTI,
+                         experiment_id=self.experiment_id,
+                         experiment_num=self.experiment_num)
+
+            # save figure
+            fig, _ = pf.plot(statistic=StatisticalMetrics.MEDIAN, fig_show=False)
+            figure_path = join(get_experiment_folder(SHTMTotal, self.experiment_type, self.experiment_id,
+                                                     self.experiment_num), "performance")
+            fig.savefig(figure_path)
 
         log.handlers[LogHandler.STREAM].setLevel(logging.INFO)
 

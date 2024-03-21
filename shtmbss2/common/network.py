@@ -48,8 +48,8 @@ NON_PICKLE_OBJECTS = ["post_somas", "projection", "shtm"]
 
 
 class SHTMBase(ABC):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
-                 **kwargs):
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None,
+                 seed_offset=None, p=None, **kwargs):
         if experiment_type == ExperimentType.OPT_GRID:
             self.optimized_parameters = kwargs
         else:
@@ -81,6 +81,7 @@ class SHTMBase(ABC):
         self.neuron_events = None
 
         self.experiment_num = None
+        self.experiment_subnum = experiment_subnum
         self.experiment_episodes = 0
         self.instance_id = instance_id
 
@@ -443,10 +444,10 @@ class SHTMBase(ABC):
 
 
 class SHTMTotal(SHTMBase, ABC):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, plasticity_cls=None, instance_id=None,
-                 seed_offset=None, p=None, **kwargs):
-        super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset, p=p,
-                         **kwargs)
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, plasticity_cls=None,
+                 instance_id=None, seed_offset=None, p=None, **kwargs):
+        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, instance_id=instance_id,
+                         seed_offset=seed_offset, p=p, **kwargs)
 
         self.con_plastic = None
         self.trace_dendrites = self.trace_dendrites = np.zeros(shape=(self.p.Network.num_symbols,
@@ -785,7 +786,7 @@ class SHTMTotal(SHTMBase, ABC):
 
     def save_config(self):
         folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
-                                            instance_id=self.instance_id)
+                                            experiment_subnum=self.experiment_subnum, instance_id=self.instance_id)
         file_path = join(folder_path, f"config.yaml")
 
         with open(file_path, 'w') as file:
@@ -793,7 +794,7 @@ class SHTMTotal(SHTMBase, ABC):
 
     def save_performance_data(self):
         folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
-                                            instance_id=self.instance_id)
+                                            experiment_subnum=self.experiment_subnum, instance_id=self.instance_id)
         file_path = join(folder_path, "performance")
 
         np.savez(file_path, **self.performance.data)
@@ -801,7 +802,7 @@ class SHTMTotal(SHTMBase, ABC):
     def save_network_data(self):
         # ToDo: Check if this works with bss2
         folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
-                                            instance_id=self.instance_id)
+                                            experiment_subnum=self.experiment_subnum, instance_id=self.instance_id)
 
         # Save weights
         file_path = join(folder_path, "weights")
@@ -843,19 +844,23 @@ class SHTMTotal(SHTMBase, ABC):
     def save_full_state(self, running_avg_perc=0.5, optimized_parameter_ranges=None):
         log.debug("Saving full state of network and experiment.")
 
-        if self.p.Experiment.type == ExperimentType.EVAL_MULTI or self.p.Experiment.type == ExperimentType.OPT_GRID:
+        if (self.p.Experiment.type in
+                [ExperimentType.EVAL_MULTI, ExperimentType.OPT_GRID, ExperimentType.OPT_GRID_MULTI]):
             if self.instance_id is not None and self.instance_id == 0:
                 self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
+                                                              experiment_subnum=self.experiment_subnum,
                                                               instance_id=self.instance_id,
                                                               optimized_parameter_ranges=optimized_parameter_ranges)
-            save_instance_setup(net=self,
+            save_instance_setup(net=self.__str__(), parameters=self.p,
                                 performance=self.performance.get_performance_dict(final_result=True,
                                                                                   running_avg_perc=running_avg_perc,
                                                                                   decimals=3),
-                                experiment_num=self.experiment_num, instance_id=self.instance_id,
+                                experiment_num=self.experiment_num, experiment_subnum=self.experiment_subnum,
+                                instance_id=self.instance_id,
                                 optimized_parameters=self.optimized_parameters)
         else:
             self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
+                                                          experiment_subnum=self.experiment_subnum,
                                                           instance_id=self.instance_id)
 
         self.save_config()

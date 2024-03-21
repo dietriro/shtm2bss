@@ -175,9 +175,9 @@ class Performance(ABC):
 
         return axs
 
-    def load_data(self, net, experiment_type, experiment_id, experiment_num, instance_id=None):
+    def load_data(self, net, experiment_type, experiment_id, experiment_num, experiment_subnum=None, instance_id=None):
         folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num,
-                                            instance_id=instance_id)
+                                            experiment_subnum=experiment_subnum, instance_id=instance_id)
 
         file_path = join(folder_path, "performance.npz")
         data_performance = np.load(file_path)
@@ -201,9 +201,10 @@ class PerformanceSingle(Performance):
         for metric_name in PerformanceMetrics.get_all():
             self.data[metric_name] = [[] for _ in self.p.Experiment.sequences]
 
-    def load_data(self, net, experiment_type, experiment_id, experiment_num, instance_id=None):
+    def load_data(self, net, experiment_type, experiment_id, experiment_num, experiment_subnum=None, instance_id=None):
         self.init_data()
-        super().load_data(net, experiment_type, experiment_id, experiment_num, instance_id=instance_id)
+        super().load_data(net, experiment_type, experiment_id, experiment_num, experiment_subnum=experiment_subnum,
+                          instance_id=instance_id)
 
     def get_statistic(self, statistic, metric, episode='all', percentile=None):
         if 'all' in episode:
@@ -250,7 +251,7 @@ class PerformanceSingle(Performance):
     def add_data_point(self, data_point, metric, sequence_id):
         self.data[metric][sequence_id].append(data_point)
 
-    def plot(self, statistic=StatisticalMetrics.MEAN, sequences="statistic"):
+    def plot(self, statistic=StatisticalMetrics.MEAN, sequences="statistic", fig_show=False):
         fig, axs = super().plot(statistic=statistic, sequences=sequences)
 
         sequence_range = None
@@ -275,7 +276,10 @@ class PerformanceSingle(Performance):
 
         axs = self.plot_legend(axs)
 
-        fig.show()
+        if fig_show:
+            fig.show()
+
+        return fig, axs
 
 
 class PerformanceMulti(Performance):
@@ -294,10 +298,11 @@ class PerformanceMulti(Performance):
                 data_inst[metric_name] = [[] for _ in self.p.Experiment.sequences]
             self.data.append(data_inst)
 
-    def load_data(self, net, experiment_type, experiment_id, experiment_num, instance_id=None):
+    def load_data(self, net, experiment_type, experiment_id, experiment_num, experiment_subnum=None, instance_id=None):
         self.init_data()
 
-        folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num)
+        folder_path = get_experiment_folder(net, experiment_type, experiment_id, experiment_num,
+                                            experiment_subnum=experiment_subnum)
 
         for i_inst in range(self.num_instances):
             inst_folder_name = f"{i_inst:02d}"
@@ -306,7 +311,8 @@ class PerformanceMulti(Performance):
             if not os.path.exists(inst_folder_path):
                 log.warning(f"Instance folder does not exist: {inst_folder_path}")
                 
-            super().load_data(net, experiment_type, experiment_id, experiment_num, instance_id=i_inst)
+            super().load_data(net, experiment_type, experiment_id, experiment_num, experiment_subnum=experiment_subnum,
+                              instance_id=i_inst)
 
     def get_statistic(self, statistic, metric, episode='all', percentile=None):
         if 'all' in episode:
@@ -332,8 +338,34 @@ class PerformanceMulti(Performance):
         else:
             return self.data[instance_id][metric][sequence_id]
 
-    def get_performance_dict(self, final_result=False):
-        pass
+    def get_performance_dict(self, final_result=False, running_avg_perc=0.5, decimals=5):
+        performance = dict()
+        if final_result:
+            for metric_name in PerformanceMetrics.get_all():
+                for i_inst in range(self.num_instances):
+                    metric = self.get_all(metric_name, instance_id=i_inst)
+                    metric_means = np.mean(metric, axis=0)
+
+                    metric_last = np.round(metric_means[-1], decimals)
+                    metric_running_avg = np.round(np.mean(metric_means[int(len(metric_means) * running_avg_perc):]),
+                                                  decimals)
+                    if i_inst == 0:
+                        # add final value to dict
+                        performance[f"{metric_name}_last"] = metric_last
+                        # add mean of all training epochs to dict
+                        performance[f"{metric_name}_running-avg-{running_avg_perc}"] = metric_running_avg
+                    else:
+                        # add final value to dict
+                        performance[f"{metric_name}_last"] += metric_last
+                        # add mean of all training epochs to dict
+                        performance[f"{metric_name}_running-avg-{running_avg_perc}"] += metric_running_avg
+
+                performance[f"{metric_name}_last"] /= self.num_instances
+                performance[f"{metric_name}_running-avg-{running_avg_perc}"] /= self.num_instances
+
+        else:
+            performance = self.data
+        return performance
 
     def get_data_size(self):
         size = -1
@@ -347,7 +379,7 @@ class PerformanceMulti(Performance):
     def add_data_point(self, data_point, metric, sequence_id, instance_id=None):
         self.data[instance_id][metric][sequence_id].append(data_point)
 
-    def plot(self, statistic, sequences=None, instances="statistic"):
+    def plot(self, statistic, sequences=None, instances="statistic", fig_show=True):
         fig, axs = super().plot(statistic=statistic, sequences=sequences)
 
         axs = self.plot_seq(axs, self.get_statistic(statistic, PerformanceMetrics.ERROR),
@@ -378,6 +410,7 @@ class PerformanceMulti(Performance):
 
         axs = self.plot_legend(axs)
 
-        fig.show()
+        if fig_show:
+            fig.show()
 
-        return axs, fig
+        return fig, axs

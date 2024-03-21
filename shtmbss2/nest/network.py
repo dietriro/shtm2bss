@@ -31,12 +31,12 @@ MCNeuron = pynn.NativeCellType
 
 class SHTMBase(network.SHTMBase, ABC):
 
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None, seed_offset=None, p=None,
                  **kwargs):
         global MCNeuron
 
-        super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset, p=p,
-                         **kwargs)
+        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, instance_id=instance_id,
+                         seed_offset=seed_offset, p=p, **kwargs)
 
         if not RuntimeConfig.backend_initialization:
             nest.Install(self.p.Backend.module_name)
@@ -366,10 +366,10 @@ class SHTMBase(network.SHTMBase, ABC):
 
 
 class SHTMTotal(SHTMBase, network.SHTMTotal):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None, seed_offset=None, p=None,
                  **kwargs):
-        super().__init__(experiment_type=experiment_type, plasticity_cls=Plasticity, instance_id=instance_id,
-                         seed_offset=seed_offset, p=p, **kwargs)
+        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
+                         plasticity_cls=Plasticity, instance_id=instance_id, seed_offset=seed_offset, p=p, **kwargs)
 
 
 class Plasticity(network.Plasticity):

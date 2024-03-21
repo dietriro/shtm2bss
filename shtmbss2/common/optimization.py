@@ -5,7 +5,11 @@ import yaml
 
 from shtmbss2.core.helpers import Process
 from shtmbss2.common.config import *
-from shtmbss2.core.data import load_config, get_last_experiment_num, get_experiment_folder, get_last_instance
+from shtmbss2.core.data import (load_config, get_last_experiment_num, get_experiment_folder, get_last_instance,
+                                save_instance_setup)
+from shtmbss2.common.executor import ParallelExecutor
+from shtmbss2.core.parameters import Parameters
+from shtmbss2.core.performance import PerformanceMulti
 from shtmbss2.core.logging import log
 
 np.set_printoptions(threshold=np.inf, suppress=True, linewidth=np.inf)
@@ -13,19 +17,35 @@ warnings.filterwarnings(action='ignore', category=UserWarning)
 
 
 class GridSearch:
-    def __init__(self, model_type, experiment_id, experiment_num=None):
+    supported_experiment_types = [ExperimentType.OPT_GRID, ExperimentType.OPT_GRID_MULTI]
+
+    def __init__(self, experiment_type, model_type, experiment_id, experiment_num=None):
+        if experiment_type not in self.supported_experiment_types:
+            log.error(f"Unsupported experiment-type selected: {experiment_type}.\n"
+                      f"Please choose one of: {self.supported_experiment_types}")
+            return
+
+        # define model/experiment specific parameters
         self.model_type = model_type
         self.experiment_id = experiment_id
         self.experiment_num = experiment_num
+        self.experiment_type = experiment_type
 
-        self.experiment_type = ExperimentType.OPT_GRID
         self.continuation_id = None
+
+        # define config parameters and load config
         self.config = None
+        self.parameter_matching = None
+        self.fig_save = None
+        self.num_instances = None
 
         self.load_config()
 
     def load_config(self):
         self.config = load_config(self.model_type, self.experiment_type)
+        self.parameter_matching = self.config["experiment"]["parameter_matching"]
+        self.fig_save = self.config["experiment"]["fig_save"]
+        self.num_instances = self.config["experiment"]["num_instances"]
 
     def save_config(self):
         folder_path_experiment = get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
@@ -35,10 +55,10 @@ class GridSearch:
         with open(file_path, 'w') as file:
             yaml.dump(self.config, file)
 
-    def __run_experiment(self, parameters, experiment_num, instance_id, steps=None,
-                         optimized_parameter_ranges=None):
+    def __run_experiment(self, optimized_parameters, experiment_num, instance_id, steps=None,
+                         optimized_parameter_ranges=None, fig_save=False):
         model = self.model_type(experiment_type=ExperimentType.OPT_GRID, instance_id=instance_id, seed_offset=0,
-                                **parameters)
+                                **optimized_parameters)
 
         # set save_auto to false in order to minimize file lock timeouts
         model.p.Experiment.save_auto = False
@@ -56,6 +76,46 @@ class GridSearch:
 
         model.save_full_state(running_avg_perc=0.5, optimized_parameter_ranges=optimized_parameter_ranges)
 
+        # save figure of performance
+        if fig_save:
+            fig, _ = model.performance.plot(statistic=StatisticalMetrics.MEDIAN, fig_show=False)
+            figure_path = join(get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
+                                                     experiment_num, instance_id=instance_id), "performance")
+            fig.savefig(figure_path)
+
+    def __run_experiment_multi(self, optimized_parameters, experiment_num, experiment_subnum, steps=None,
+                               optimized_parameter_ranges=None, fig_save=False):
+
+        # run experiments using parallel-executor
+        pe = ParallelExecutor(num_instances=self.num_instances, experiment_id=self.experiment_id,
+                              experiment_type=self.experiment_type, experiment_num=experiment_num,
+                              experiment_subnum=experiment_subnum, parameter_ranges=optimized_parameter_ranges)
+        experiment_num = pe.run(steps=steps)
+
+        # retrieve parameters for performed experiment
+        p = Parameters(network_type=self.model_type)
+        p.load_experiment_params(experiment_type=ExperimentType.OPT_GRID_MULTI, experiment_id=self.experiment_id,
+                                 experiment_subnum=experiment_subnum, experiment_num=experiment_num)
+
+        # retrieve performance data for entire set of instances for subnum
+        pf = PerformanceMulti(p, self.num_instances)
+        pf.load_data(self.model_type, experiment_type=ExperimentType.OPT_GRID_MULTI, experiment_id=self.experiment_id,
+                     experiment_num=experiment_num, experiment_subnum=experiment_subnum)
+
+        # save figure of performance
+        if fig_save:
+            fig, _ = pf.plot(statistic=StatisticalMetrics.MEDIAN, fig_show=False)
+            figure_path = join(get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
+                                                     experiment_num, experiment_subnum=experiment_subnum),
+                               "performance")
+            fig.savefig(figure_path)
+
+        # save performance and parameter data to overall sheet for experiment
+        save_instance_setup(net=self.model_type, parameters=p,
+                            performance=pf.get_performance_dict(final_result=True, running_avg_perc=0.5, decimals=3),
+                            experiment_num=self.experiment_num, experiment_subnum=experiment_subnum,
+                            instance_id=None, optimized_parameters=optimized_parameters)
+
     def run(self, steps=None):
         log.handlers[LogHandler.STREAM].setLevel(logging.ESSENS)
 
@@ -71,18 +131,30 @@ class GridSearch:
                 parameter_ranges[f"Optimized-params.{parameter_name}"] = parameter_config["values"]
             else:
                 parameter_values.append(np.arange(start=parameter_config["min"],
-                                                  stop=parameter_config["max"]+parameter_config["step"],
+                                                  stop=parameter_config["max"] + parameter_config["step"],
                                                   step=parameter_config["step"],
                                                   dtype=parameter_config["dtype"]).tolist())
                 parameter_ranges[f"Optimized-params.{parameter_name}"] = (parameter_config["min"],
                                                                           parameter_config["max"],
                                                                           parameter_config["step"])
             parameter_names.append(parameter_name)
-        parameter_combinations = list(itertools.product(*parameter_values))
+
+        # create parameter combinations based on selected matching type of parameter values
+        if self.parameter_matching == ParameterMatchingType.ALL:
+            parameter_combinations = list(itertools.product(*parameter_values))
+        elif self.parameter_matching == ParameterMatchingType.SINGLE:
+            log.warning(f"Parameter matching type 'single' is not implemented yet. Continuing with type 'all'.")
+            parameter_combinations = list(itertools.product(*parameter_values))
+        else:
+            log.error(f"Unknown parameter matching type '{self.parameter_matching}'.")
+            return
         num_combinations = len(parameter_combinations)
 
         # set number of digits for file saving/loading into instance folders
-        RuntimeConfig.instance_digits = len(str(num_combinations))
+        if self.experiment_type == ExperimentType.OPT_GRID:
+            RuntimeConfig.instance_digits = len(str(num_combinations))
+        elif self.experiment_type == ExperimentType.OPT_GRID_MULTI:
+            RuntimeConfig.subnum_digits = len(str(num_combinations))
 
         # retrieve experiment num for new experiment
         last_experiment_num = get_last_experiment_num(self.model_type, self.experiment_id, self.experiment_type)
@@ -92,12 +164,11 @@ class GridSearch:
         if self.experiment_num <= last_experiment_num:
             self.continuation_id = get_last_instance(self.model_type, self.experiment_type, self.experiment_id,
                                                      self.experiment_num)
-            log.essens(f"Continuing grid-search for {num_combinations-self.continuation_id} "
+            log.essens(f"Continuing grid-search for {num_combinations - self.continuation_id} "
                        f"parameter combinations of {parameter_names}")
         else:
             log.essens(f"Starting grid-search for {num_combinations} parameter combinations "
                        f"of {parameter_names}")
-
 
         for run_i, parameter_combination in enumerate(parameter_combinations):
             if self.continuation_id is not None:
@@ -111,10 +182,14 @@ class GridSearch:
                        f"for {parameter_combination}")
             parameters = {p_name: p_value for p_name, p_value in zip(parameter_names, parameter_combination)}
 
-            p = Process(target=self.__run_experiment, args=(parameters, self.experiment_num, run_i, steps,
-                                                            parameter_ranges))
-            p.start()
-            p.join()
+            if self.experiment_type == ExperimentType.OPT_GRID:
+                p = Process(target=self.__run_experiment, args=(parameters, self.experiment_num, run_i, steps,
+                                                                parameter_ranges, self.fig_save))
+                p.start()
+                p.join()
+            else:
+                self.__run_experiment_multi(parameters, self.experiment_num, run_i, steps=steps,
+                                            optimized_parameter_ranges=parameter_ranges, fig_save=self.fig_save)
 
             log.essens(f"Finished grid-search run {run_i + 1}/{num_combinations}")
             log.essens(f"\tParameters: {parameter_combination}")
