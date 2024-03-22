@@ -2,6 +2,7 @@ import warnings
 import numpy as np
 import itertools
 import yaml
+import matplotlib.pyplot as plt
 
 from shtmbss2.core.helpers import Process
 from shtmbss2.common.config import *
@@ -82,6 +83,9 @@ class GridSearch:
             figure_path = join(get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
                                                      experiment_num, instance_id=instance_id), "performance")
             fig.savefig(figure_path)
+
+            # close figure in order to make it garbage-collectable
+            plt.close(fig)
 
     def __run_experiment_multi(self, optimized_parameters, experiment_num, experiment_subnum, steps=None,
                                optimized_parameter_ranges=None, fig_save=False):
@@ -199,7 +203,7 @@ class GridSearch:
                         success = True
                     except (RuntimeError, FileNotFoundError) as e:
                         success = False
-                        log.warning(f"Encountered an error during execution. Re-running experiment {run_i}")
+                        log.warning(f"Encountered an error during execution. Re-running experiment with id {run_i}")
 
             log.essens(f"Finished grid-search run {run_i + 1}/{num_combinations}")
             log.essens(f"\tParameters: {parameter_combination}")
