@@ -309,7 +309,7 @@ class PerformanceMulti(Performance):
             inst_folder_path = join(folder_path, inst_folder_name)
 
             if not os.path.exists(inst_folder_path):
-                log.warning(f"Instance folder does not exist: {inst_folder_path}")
+                raise FileNotFoundError(f"Instance folder does not exist: {inst_folder_path}")
                 
             super().load_data(net, experiment_type, experiment_id, experiment_num, experiment_subnum=experiment_subnum,
                               instance_id=i_inst)

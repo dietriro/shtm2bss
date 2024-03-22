@@ -42,7 +42,7 @@ class GridSearch:
         self.load_config()
 
     def load_config(self):
-        self.config = load_config(self.model_type, ExperimentType.OPT_GRID)
+        self.config = load_config(self.model_type, self.experiment_type)
         self.parameter_matching = self.config["experiment"]["parameter_matching"]
         self.fig_save = self.config["experiment"]["fig_save"]
         self.num_instances = self.config["experiment"]["num_instances"]
@@ -165,6 +165,8 @@ class GridSearch:
         if self.experiment_num <= last_experiment_num:
             self.continuation_id = get_last_instance(self.model_type, self.experiment_type, self.experiment_id,
                                                      self.experiment_num)
+            if self.continuation_id > 1:
+                self.continuation_id -= 1
             log.essens(f"Continuing grid-search for {num_combinations - self.continuation_id} "
                        f"parameter combinations of {parameter_names}")
         else:
@@ -189,8 +191,15 @@ class GridSearch:
                 p.start()
                 p.join()
             else:
-                self.__run_experiment_multi(parameters, self.experiment_num, run_i, steps=steps,
-                                            optimized_parameter_ranges=parameter_ranges, fig_save=self.fig_save)
+                success = False
+                while not success:
+                    try:
+                        self.__run_experiment_multi(parameters, self.experiment_num, run_i, steps=steps,
+                                                    optimized_parameter_ranges=parameter_ranges, fig_save=self.fig_save)
+                        success = True
+                    except (RuntimeError, FileNotFoundError) as e:
+                        success = False
+                        log.warning(f"Encountered an error during execution. Re-running experiment {run_i}")
 
             log.essens(f"Finished grid-search run {run_i + 1}/{num_combinations}")
             log.essens(f"\tParameters: {parameter_combination}")
