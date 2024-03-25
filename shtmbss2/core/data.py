@@ -73,7 +73,8 @@ def get_experiment_folder(net, experiment_type, experiment_id, experiment_num, e
     return folder_path
 
 
-def save_setup(data, experiment_num, create_eval_file, do_update, file_path, save_categories=False, **kwargs):
+def save_setup(data, experiment_num, create_eval_file, do_update, file_path, save_categories=False, max_decimals=5,
+               **kwargs):
 
     # ToDo: Implement this feature, check if metrics can be added
     # add all static parameters defined above for this specific experiment
@@ -129,13 +130,19 @@ def save_setup(data, experiment_num, create_eval_file, do_update, file_path, sav
 
             categories.append(category)
             headers.append(header)
-            values.append(value)
+            if max_decimals is not None and type(value) is float:
+                values.append(np.round(value, max_decimals))
+            else:
+                values.append(value)
 
         categories_sparse = sparsen_list(categories)
     else:
         for header, value in data.items():
             headers.append(header)
-            values.append(value)
+            if max_decimals is not None and type(value) is float:
+                values.append(np.round(value, max_decimals))
+            else:
+                values.append(value)
 
     start_id = 2 if save_categories else 1
     # writing to csv file

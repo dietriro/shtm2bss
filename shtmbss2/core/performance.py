@@ -346,9 +346,8 @@ class PerformanceMulti(Performance):
                     metric = self.get_all(metric_name, instance_id=i_inst)
                     metric_means = np.mean(metric, axis=0)
 
-                    metric_last = np.round(metric_means[-1], decimals)
-                    metric_running_avg = np.round(np.mean(metric_means[int(len(metric_means) * running_avg_perc):]),
-                                                  decimals)
+                    metric_last = metric_means[-1]
+                    metric_running_avg = np.mean(metric_means[int(len(metric_means) * running_avg_perc):])
                     if i_inst == 0:
                         # add final value to dict
                         performance[f"{metric_name}_last"] = metric_last
@@ -360,9 +359,10 @@ class PerformanceMulti(Performance):
                         # add mean of all training epochs to dict
                         performance[f"{metric_name}_running-avg-{running_avg_perc}"] += metric_running_avg
 
-                performance[f"{metric_name}_last"] /= self.num_instances
-                performance[f"{metric_name}_running-avg-{running_avg_perc}"] /= self.num_instances
-
+                performance[f"{metric_name}_last"] = np.round(performance[f"{metric_name}_last"] / self.num_instances,
+                                                              decimals)
+                performance[f"{metric_name}_running-avg-{running_avg_perc}"] = np.round(
+                        performance[f"{metric_name}_running-avg-{running_avg_perc}"] / self.num_instances, decimals)
         else:
             performance = self.data
         return performance
