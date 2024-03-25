@@ -10,3 +10,5 @@ PyNN
 neo
 DateTime
 tabulate
+nestml
+pygsl

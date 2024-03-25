@@ -63,6 +63,10 @@ addLoggingLevel('TRACE', 5)
 log = logging.getLogger('shtm')
 log.setLevel(logging.DEBUG)
 
+# Check if log-file folder exists
+if not os.path.exists(Log.FILE):
+    os.makedirs(os.path.dirname(Log.FILE))
+
 # Create handler for file
 fh = logging.FileHandler(Log.FILE, mode='w', encoding='utf-8')
 fh.setLevel(Log.LEVEL_FILE)
