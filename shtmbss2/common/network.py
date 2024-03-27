@@ -978,6 +978,12 @@ class Plasticity(ABC):
         self.symbol_id_pre = SYMBOLS[symbol_from_label(self.projection.label, ID_PRE)]
         self.symbol_id_post = SYMBOLS[symbol_from_label(self.projection.label, ID_POST)]
 
+        self.connections = list()
+        for c, connection in enumerate(self.get_connections()):
+            i = self.get_connection_id_post(connection)
+            j = self.get_connection_id_pre(connection)
+            self.connections.append([c, j, i])
+
     def rule(self, permanence, threshold, x, z, runtime, permanence_min,
              neuron_spikes_pre, neuron_spikes_post_soma, neuron_spikes_post_dendrite,
              delay, sim_start_time=0.0):
@@ -989,7 +995,7 @@ class Plasticity(ABC):
 
         permanence_before = permanence
 
-        log.debug(f"{self.id}  permanence before: {permanence}")
+        # log.debug(f"{self.id}  permanence before: {permanence}")
 
         # loop through pre-synaptic spikes
         for spike_pre in neuron_spikes_pre:
@@ -1000,7 +1006,7 @@ class Plasticity(ABC):
             for spike_post in neuron_spikes_post_soma:
                 spike_dt = (spike_post + delay) - spike_pre
 
-                log.debug(f"{self.id}  spikes: {spike_pre}, {spike_post}, {spike_dt}")
+                # log.debug(f"{self.id}  spikes: {spike_pre}, {spike_post}, {spike_dt}")
 
                 # check if spike-dif is in boundaries
                 if self.delta_t_min < spike_dt < self.delta_t_max:
@@ -1012,22 +1018,22 @@ class Plasticity(ABC):
                     # hebbian learning
                     permanence = self.__facilitate(permanence, x_tmp)
                     d_facilitate = permanence - permanence_before
-                    log.debug(f"{self.id}  d_permanence facilitate: {d_facilitate}")
+                    # log.debug(f"{self.id}  d_permanence facilitate: {d_facilitate}")
                     permanence_before = permanence
 
                     permanence = self.__homeostasis_control(permanence, z_tmp, permanence_min)
                     log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
-                    if self.debug and permanence - permanence_before < 0:
-                        log.info(f"{self.id}  spikes: {spike_pre}, {spike_post}, {spike_dt}")
-                        log.info(f"{self.id}  d_permanence facilitate: {d_facilitate}")
-                        log.info(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
+                    # if self.debug and permanence - permanence_before < 0:
+                        # log.info(f"{self.id}  spikes: {spike_pre}, {spike_post}, {spike_dt}")
+                        # log.info(f"{self.id}  d_permanence facilitate: {d_facilitate}")
+                        # log.info(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
                     permanence_before = permanence
 
             permanence = self.__depress(permanence, permanence_min)
             last_spike_pre = spike_pre
-            log.debug(f"{self.id}  permanence depression: {permanence - permanence_before}")
+            # log.debug(f"{self.id}  permanence depression: {permanence - permanence_before}")
 
-        log.debug(f"{self.id}  permanence after: {permanence}")
+        # log.debug(f"{self.id}  permanence after: {permanence}")
 
         # update x (kplus) and z
         x = x * np.exp(-(runtime - last_spike_pre) / self.tau_plus)
@@ -1062,7 +1068,7 @@ class Plasticity(ABC):
 
         permanence_before = permanence
 
-        log.debug(f"{self.id}  permanence before: {permanence}")
+        # log.debug(f"{self.id}  permanence before: {permanence}")
 
         x = 0
         z_tmp = 0
@@ -1076,7 +1082,7 @@ class Plasticity(ABC):
                 # ToDo: Update rule based on actual trace calculation from BSS-2
                 if spike_dt >= 0:
                     spike_pairs_soma_soma += 1
-                    log.debug(f"{self.id}  spikes (ss): {spike_pre}, {spike_post}, {spike_dt}")
+                    # log.debug(f"{self.id}  spikes (ss): {spike_pre}, {spike_post}, {spike_dt}")
                     x += np.exp(-spike_dt / self.tau_plus)
 
         # Calculate accumulated z
@@ -1088,10 +1094,10 @@ class Plasticity(ABC):
                 # ToDo: Update rule based on actual trace calculation from BSS-2
                 if spike_dt >= 0:
                     spike_pairs_dend_soma += 1
-                    log.debug(f"{self.id}  spikes (ds): {spike_post_dendrite}, {spike_post}, {spike_dt}")
+                    # log.debug(f"{self.id}  spikes (ds): {spike_post_dendrite}, {spike_post}, {spike_dt}")
                     z_tmp += np.exp(-spike_dt / self.tau_plus)
 
-        log.debug(f"{self.id}  x: {x},  z: {z_tmp}")
+        # log.debug(f"{self.id}  x: {x},  z: {z_tmp}")
 
         x_mean = x / spike_pairs_soma_soma if spike_pairs_soma_soma > 0 else 0
         z_mean = z_tmp / spike_pairs_dend_soma if spike_pairs_dend_soma > 0 else 0
@@ -1103,27 +1109,27 @@ class Plasticity(ABC):
 
         trace_treshold = np.exp(-self.delta_t_max / self.tau_plus)
 
-        log.debug(f"{self.id} threshold: {trace_treshold}")
-        log.debug(f"{self.id} x: {x},   x_mean: {x_mean}")
-        log.debug(f"{self.id} z: {z},   z_mean: {z_mean}")
+        # log.debug(f"{self.id} threshold: {trace_treshold}")
+        # log.debug(f"{self.id} x: {x},   x_mean: {x_mean}")
+        # log.debug(f"{self.id} z: {z},   z_mean: {z_mean}")
 
         # hebbian learning
         # Only run facilitate/homeostasis if a spike pair exists with a delta within boundaries,
         # i.e. x or z > 0
         if x_mean > trace_treshold:
             permanence = self.__facilitate_bss2(permanence, x)
-        log.debug(f"{self.id}  d_permanence facilitate: {permanence - permanence_before}")
+        # log.debug(f"{self.id}  d_permanence facilitate: {permanence - permanence_before}")
         permanence_before = permanence
 
         if x_mean > trace_treshold:
             permanence = self.__homeostasis_control_bss2(permanence, z, permanence_min)
-        log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
+        # log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
         permanence_before = permanence
 
         permanence = self.__depress_bss2(permanence, permanence_min, num_spikes=len(neuron_spikes_pre))
-        log.debug(f"{self.id}  permanence depression: {permanence - permanence_before}")
+        # log.debug(f"{self.id}  permanence depression: {permanence - permanence_before}")
 
-        log.debug(f"{self.id}  permanence after: {permanence}")
+        # log.debug(f"{self.id}  permanence after: {permanence}")
 
         return permanence, x, permanence >= threshold
 
@@ -1180,20 +1186,19 @@ class Plasticity(ABC):
         spikes_post_soma = self.shtm.neuron_events[NeuronType.Soma][self.symbol_id_post]
 
         weight = self.projection.get("weight", format="array")
+        weight_before = np.copy(weight)
 
-        for c, connection in enumerate(self.get_connections()):
-            i = self.get_connection_id_post(connection)
-            j = self.get_connection_id_pre(connection)
+        for c, j, i in self.connections:
             neuron_spikes_pre = spikes_pre[j]
             neuron_spikes_post_dendrite = spikes_post_dendrite[i]
             neuron_spikes_post_soma = spikes_post_soma[i]
             z = self.shtm.trace_dendrites[self.symbol_id_post, i]
 
-            if self.debug:
-                log.debug(f"Permanence calculation for connection {c} [{i}, {j}]")
-                log.debug(f"Spikes pre [soma]: {neuron_spikes_pre}")
-                log.debug(f"Spikes post [dend]: {neuron_spikes_post_dendrite}")
-                log.debug(f"Spikes post [soma]: {neuron_spikes_post_soma}")
+            # if self.debug:
+            #     log.debug(f"Permanence calculation for connection {c} [{i}, {j}]")
+            #     log.debug(f"Spikes pre [soma]: {neuron_spikes_pre}")
+            #     log.debug(f"Spikes post [dend]: {neuron_spikes_post_dendrite}")
+            #     log.debug(f"Spikes post [soma]: {neuron_spikes_post_soma}")
 
             permanence, x, mature = (self.learning_rules[self.shtm.p.Plasticity.type]
                                      (permanence=self.permanence[c],
@@ -1215,7 +1220,7 @@ class Plasticity(ABC):
                 if self.proj_post_soma_inh is not None:
                     weight_inh = self.proj_post_soma_inh.get("weight", format="array")
                     weight_inh[i, :] = 250
-                    log.debug(f"+ | W_inh[{i}] = {weight_inh.flatten()}")
+                    # log.debug(f"+ | W_inh[{i}] = {weight_inh.flatten()}")
                     self.proj_post_soma_inh.set(weight=weight_inh)
             else:
                 weight[j, i] = 0
@@ -1223,11 +1228,13 @@ class Plasticity(ABC):
                     weight_inh = self.proj_post_soma_inh.get("weight", format="array")
                     weight_inh_old = np.copy(weight_inh)
                     weight_inh[i, :] = 0
-                    if np.sum(weight_inh_old.flatten() - weight_inh.flatten()) == 0:
-                        log.debug(f"- | W_inh[{i}] = {weight_inh.flatten()}")
+                    # if np.sum(weight_inh_old.flatten() - weight_inh.flatten()) == 0:
+                    #     log.debug(f"- | W_inh[{i}] = {weight_inh.flatten()}")
                     self.proj_post_soma_inh.set(weight=weight_inh)
 
-        self.projection.set(weight=weight)
+        weight_diff = weight-weight_before
+        if np.logical_and(weight_diff != 0, ~np.isnan(weight_diff)).any():
+            self.projection.set(weight=weight)
 
         if self.permanences is not None:
             self.permanences.append(np.copy(np.round(self.permanence, 6)))
