@@ -127,6 +127,8 @@ class SHTMBase(network.SHTMBase, ABC):
         # re-initialize external input, but not the recorders (doesn't work with nest)
         self.init_external_input(init_recorder=False, init_performance=False)
 
+        self.run_state = False
+
     def get_neurons(self, neuron_type, symbol_id=None):
         neurons = None
         if neuron_type == NeuronType.Inhibitory:

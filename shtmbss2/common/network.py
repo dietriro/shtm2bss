@@ -85,6 +85,8 @@ class SHTMBase(ABC):
         self.experiment_episodes = 0
         self.instance_id = instance_id
 
+        self.run_state = False
+
         self.performance = PerformanceSingle(parameters=self.p)
 
         if seed_offset is None:
@@ -265,6 +267,10 @@ class SHTMBase(ABC):
     def reset(self):
         pass
 
+    def run_sim(self, runtime):
+        pynn.run(runtime)
+        self.run_state = True
+
     @abstractmethod
     def get_neurons(self, neuron_type, symbol_id=None):
         pass
@@ -403,8 +409,7 @@ class SHTMBase(ABC):
 
         for alphabet_id in alphabet_range:
             # retrieve and save spike times
-            spikes = self.get_neuron_data(neuron_type, value_type=RecTypes.SPIKES,
-                                          symbol_id=alphabet_id, dtype=list)
+            spikes = self.neuron_events[neuron_type][alphabet_id]
             for neuron_id in neuron_range:
                 # add spikes to list for printing
                 spike_times[0].append(np.array(spikes[neuron_id]).round(5).tolist())
@@ -665,7 +670,7 @@ class SHTMTotal(SHTMBase, ABC):
             log.info(f'Running emulation step {t + 1}/{steps}')
 
             # reset the simulator and the network state if not first run
-            if pynn.get_current_time() > 0 and t > 0:
+            if self.run_state:
                 self.reset()
 
             # set start time to 0.0 because
@@ -674,7 +679,7 @@ class SHTMTotal(SHTMBase, ABC):
             sim_start_time = 0.0
             log.detail(f"Current time: {sim_start_time}")
 
-            pynn.run(runtime)
+            self.run_sim(runtime)
 
             self.__retrieve_neuron_data()
 

@@ -127,14 +127,14 @@ class SHTMBase(network.SHTMBase, ABC):
                 for v_leak in range(450, 600, 10):
                     self.neurons_exc[alphabet_id][1].actual_hwparams[neuron_id].leak.v_leak = v_leak
                     self.init_rec_exc(alphabet_id=alphabet_id, neuron_id=neuron_id, neuron_type=NeuronType.Soma)
-                    pynn.run(0.02)
+                    self.run_sim(0.02)
                     membrane = self.rec_neurons_exc.get_data("v").segments[-1].irregularlysampledsignals[0].base[1]
                     self.reset_rec_exc()
                     if v_rest_calib <= membrane.mean():
                         for v_leak_inner in range(v_leak - 10, v_leak + 10, 1):
                             self.neurons_exc[alphabet_id][1].actual_hwparams[neuron_id].leak.v_leak = v_leak_inner
                             self.init_rec_exc(alphabet_id=alphabet_id, neuron_id=neuron_id, neuron_type=NeuronType.Soma)
-                            pynn.run(0.02)
+                            self.run_sim(0.02)
                             membrane = \
                                 self.rec_neurons_exc.get_data("v").segments[-1].irregularlysampledsignals[0].base[1]
                             self.reset_rec_exc()
@@ -150,6 +150,20 @@ class SHTMBase(network.SHTMBase, ABC):
 
     def reset_rec_exc(self):
         self.rec_neurons_exc.record(None)
+
+    def reset(self):
+        pynn.reset()
+
+        # Restart recording of spikes
+        for i_symbol in range(self.p.Network.num_symbols):
+            somas = pynn.PopulationView(self.neurons_exc[i_symbol], slice(NeuronType.Soma.ID,
+                                                                          self.p.Network.num_neuron * 2, 2))
+            dendrites = pynn.PopulationView(self.neurons_exc[i_symbol], slice(NeuronType.Dendrite.ID,
+                                                                              self.p.Network.num_neuron * 2, 2))
+            somas.record([RECORDING_VALUES[NeuronType.Soma][RecTypes.SPIKES]])
+            dendrites.record([RECORDING_VALUES[NeuronType.Dendrite][RecTypes.SPIKES]])
+
+        self.run_state = False
 
     def get_neurons(self, neuron_type, symbol_id=None):
         if symbol_id is None:
@@ -202,10 +216,12 @@ class SHTMBase(network.SHTMBase, ABC):
                 log.error(f"Could not retrieve voltage data for {neuron_type}")
                 return None
 
+            self.reset()
+
             self.reset_rec_exc()
             self.init_rec_exc(alphabet_id=symbol_id, neuron_id=neuron_id, neuron_type=neuron_type)
 
-            pynn.run(runtime)
+            self.run_sim(runtime)
 
             data = self.rec_neurons_exc.get_data("v").segments[-1].irregularlysampledsignals[0]
         else:
