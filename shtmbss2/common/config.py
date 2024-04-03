@@ -121,7 +121,8 @@ class Log(NamedStorage):
     FILE = join(PY_PKG_PATH, 'data/log/shtm2bss.log')
     # FORMAT_FILE = "[%(asctime)s] [%(filename)s:%(lineno)s - %(funcName)20s() ] [%(levelname)-8s] %(message)s"
     FORMAT_FILE = "[%(asctime)s] [%(filename)-20s:%(lineno)-4s] [%(levelname)-8s] %(message)s"
-    FORMAT_SCREEN = "%(log_color)s%(message)s"
+    FORMAT_SCREEN_COLOR = "%(log_color)s%(message)s"
+    FORMAT_SCREEN_NO_COLOR = "%(message)s"
     LEVEL_FILE = logging.INFO
     LEVEL_SCREEN = logging.INFO
     DATEFMT = '%d.%m.%Y %H:%M:%S'

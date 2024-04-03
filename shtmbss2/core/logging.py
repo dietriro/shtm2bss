@@ -1,5 +1,3 @@
-import colorlog
-
 from shtmbss2.common.config import *
 
 
@@ -76,9 +74,17 @@ log.addHandler(fh)
 # Create handler for stream (stdout)
 ch = logging.StreamHandler()
 ch.setLevel(Log.LEVEL_SCREEN)
-cf = colorlog.ColoredFormatter(Log.FORMAT_SCREEN, datefmt=Log.DATEFMT)
-cf.log_colors['ESSENS'] = 'green'
-cf.log_colors['DETAIL'] = 'cyan'
-cf.log_colors['TRACE'] = 'grey'
-ch.setFormatter(cf)
-log.addHandler(ch)
+
+try:
+    import colorlog
+except ModuleNotFoundError as e:
+    ch.setFormatter(logging.Formatter(Log.FORMAT_SCREEN_NO_COLOR, datefmt=Log.DATEFMT))
+    log.addHandler(ch)
+    log.warning("Could not load module 'colorlog'. Continuing logging without colored formatter.")
+else:
+    cf = colorlog.ColoredFormatter(Log.FORMAT_SCREEN_COLOR, datefmt=Log.DATEFMT)
+    cf.log_colors['ESSENS'] = 'green'
+    cf.log_colors['DETAIL'] = 'cyan'
+    cf.log_colors['TRACE'] = 'grey'
+    ch.setFormatter(cf)
+    log.addHandler(ch)
