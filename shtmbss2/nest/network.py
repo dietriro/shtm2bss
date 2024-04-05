@@ -33,8 +33,6 @@ class SHTMBase(network.SHTMBase, ABC):
                  **kwargs):
         global MCNeuron
 
-        self.neurons_exc_all = None
-
         super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, instance_id=instance_id,
                          seed_offset=seed_offset, p=p, **kwargs)
 
@@ -45,14 +43,9 @@ class SHTMBase(network.SHTMBase, ABC):
 
     def init_all_neurons_exc(self, num_neurons=None):
         neurons_exc = list()
-
-        self.neurons_exc_all = self.init_neurons_exc(
-            num_neurons=self.p.Network.num_neurons * self.p.Network.num_symbols)
-
         for i in range(self.p.Network.num_symbols):
             # create all neurons for symbol i
-            neurons_symbol = pynn.PopulationView(self.neurons_exc_all, np.arange(i * self.p.Network.num_neurons,
-                                                                                 (i + 1) * self.p.Network.num_neurons))
+            neurons_symbol = self.init_neurons_exc(num_neurons=num_neurons, symbol_id=i)
 
             # record voltage and spikes from all dendrites/somas
             neurons_symbol.record([RECORDING_VALUES[NeuronType.Dendrite][RecTypes.SPIKES],
@@ -74,11 +67,6 @@ class SHTMBase(network.SHTMBase, ABC):
         if num_neurons is None:
             num_neurons = self.p.Network.num_neurons
 
-        if symbol_id is None:
-            label = "exc"
-        else:
-            label = f"exc_{id_to_symbol(symbol_id)}"
-
         # ToDo: Replace MCNeuron parameters with actual parameters from file
         all_neurons = pynn.Population(num_neurons, MCNeuron(
             theta_dAP=self.p.Neurons.Dendrite.theta_dAP,
@@ -96,7 +84,7 @@ class SHTMBase(network.SHTMBase, ABC):
         ), initial_values={
             "V_m": self.p.Neurons.Excitatory.v_rest,
             # "I_dend": 0
-        }, label=label)
+        }, label=f"exc_{id_to_symbol(symbol_id)}")
 
         return all_neurons
 
@@ -140,38 +128,29 @@ class SHTMBase(network.SHTMBase, ABC):
         self.run_state = False
 
     def get_neurons(self, neuron_type, symbol_id=None):
+        neurons = None
+        if neuron_type == NeuronType.Inhibitory:
+            neurons = self.neurons_inh
+        elif neuron_type in [NeuronType.Dendrite, NeuronType.Soma]:
+            neurons = self.neurons_exc
+
         if symbol_id is None:
-            if neuron_type == NeuronType.Inhibitory:
-                return self.neurons_inh
-            elif neuron_type in [NeuronType.Dendrite, NeuronType.Soma]:
-                return self.neurons_exc_all
+            return neurons
         else:
             if neuron_type == NeuronType.Inhibitory:
                 return pynn.PopulationView(self.neurons_inh, [symbol_id])
             else:
-                return self.neurons_exc[symbol_id]
-
-    def get_analog_data(self, neuron_type, value_type, symbol_id=None):
-        for signal in self.neuron_data[neuron_type].segments[-1].analogsignals:
-            if signal.name == RECORDING_VALUES[neuron_type][value_type]:
-                if symbol_id is None or neuron_type == NeuronType.Inhibitory:
-                    return signal
-                else:
-                    return signal[:,
-                                  symbol_id * self.p.Network.num_neurons:(symbol_id + 1) * self.p.Network.num_neurons]
-        return None
+                return neurons[symbol_id]
 
     def get_neuron_data(self, neuron_type, neurons=None, value_type="spikes", symbol_id=None, neuron_id=None,
                         runtime=None, dtype=None):
         if neurons is None:
             neurons = self.get_neurons(neuron_type, symbol_id=symbol_id)
 
-        if neuron_type not in self.neuron_data.keys() or self.neuron_data[neuron_type] is None:
-            self.neuron_data[neuron_type] = self.get_neurons(neuron_type).get_data()
-
         if value_type == RecTypes.SPIKES:
             if neuron_type == NeuronType.Dendrite:
-                spikes_binary = self.get_analog_data(neuron_type, value_type, symbol_id=symbol_id)
+                spikes_binary = neurons.get_data(
+                    RECORDING_VALUES[neuron_type][value_type]).segments[-1].analogsignals[0]
                 spike_ids = np.asarray(np.argwhere(np.array(spikes_binary) > 0), dtype=float)
 
                 if dtype is np.ndarray:
@@ -194,9 +173,7 @@ class SHTMBase(network.SHTMBase, ABC):
                                         for spikes_i in spikes]
                         data = SpikeTrainList(spike_trains)
             else:
-                data = self.neuron_data[neuron_type].segments[-1].spiketrains
-                if neuron_type in [NeuronType.Soma, NeuronType.Dendrite]:
-                    data = data[symbol_id * self.p.Network.num_neurons:(symbol_id + 1) * self.p.Network.num_neurons]
+                data = neurons.get_data(RECORDING_VALUES[neuron_type][value_type]).segments[-1].spiketrains
                 if dtype is np.ndarray:
                     spike_times = data.multiplexed
                     if len(spike_times[0]) > 0:
@@ -209,7 +186,7 @@ class SHTMBase(network.SHTMBase, ABC):
         elif value_type == RecTypes.V:
             # Return the analogsignal of the last segment (only one analogsignal in the list because we specified
             # that we want to have the voltage in get_data())
-            data = self.get_analog_data(neuron_type, value_type, symbol_id=symbol_id)
+            data = neurons.get_data(RECORDING_VALUES[neuron_type][value_type]).segments[-1].analogsignals[0]
             if neuron_id is not None and neuron_type in [NeuronType.Dendrite, NeuronType.Soma]:
                 if neuron_id >= data.shape[1]:
                     log.warning(f"Neuron ID {neuron_id} out of bounds for data with shape {data.shape}. "
@@ -394,15 +371,6 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                  **kwargs):
         super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
                          plasticity_cls=Plasticity, instance_id=instance_id, seed_offset=seed_offset, p=p, **kwargs)
-
-    def __retrieve_neuron_data(self):
-        self.neuron_data = dict()
-
-        self.neuron_data[NeuronType.Soma] = self.get_neurons(NeuronType.Soma).get_data()
-        self.neuron_data[NeuronType.Dendrite] = self.neuron_data[NeuronType.Soma]
-        self.neuron_data[NeuronType.Inhibitory] = self.get_neurons(NeuronType.Inhibitory).get_data()
-
-        super().__retrieve_neuron_data()
 
 
 class Plasticity(network.Plasticity):
