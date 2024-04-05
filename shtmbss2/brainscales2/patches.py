@@ -23,11 +23,11 @@ def patch_pynn_calibration(padi_bus_dacen_extension = 0, correlation_amplitude =
         )
         
         calibration_options = calix.spiking.SpikingCalibOptions(
-            #correlation_options=calix.spiking.correlation.CorrelationCalibOptions(
-            #    calibrate_synapses=False,
-            #    branches=calix.spiking.correlation.CorrelationBranches.CAUSAL,
-            #    default_amp_calib=1, v_res_meas=0.95 * pq.V
-            #)
+            correlation_options=calix.spiking.correlation.CorrelationCalibOptions(
+                calibrate_synapses=False,
+                branches=calix.spiking.correlation.CorrelationBranches.CAUSAL,
+                default_amp_calib=1, v_res_meas=0.95 * pq.V
+            )
         )
         
         neuron_target = calix.spiking.neuron.NeuronCalibTarget().DenseDefault
@@ -51,8 +51,8 @@ def patch_pynn_calibration(padi_bus_dacen_extension = 0, correlation_amplitude =
                               "initial_config. Initial configuration will be "
                               "overwritten")
             calib_target = calix.spiking.SpikingCalibTarget(
-                neuron_target=neuron_target#,
-                #correlation_target=correlation_target
+                neuron_target=neuron_target,
+                correlation_target=correlation_target
             )
             # release JITGraphExecuter connection to establish a new one for
             # calibration (JITGraphExecuter conenctions can not be shared with
@@ -90,6 +90,8 @@ def patch_pynn_calibration(padi_bus_dacen_extension = 0, correlation_amplitude =
             # increase dacen pulse extension in synapse drivers for stronger synaptic events
             for synapse_driver_block in self.grenade_chip_config.synapse_driver_blocks:
                 synapse_driver_block.padi_bus.dacen_pulse_extension.fill(synapse_driver_block.padi_bus.DacenPulseExtension(padi_bus_dacen_extension))
+            for neuron in self.grenade_chip_config.neuron_block.atomic_neurons:
+                neuron.reset.enable_multiplication = True
 
         for population in changed:
             if hasattr(population.celltype, 'add_to_chip'):

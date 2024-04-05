@@ -170,11 +170,12 @@ class SHTMBase(ABC):
         spike_time = None
 
         sequence_offset = self.p.Encoding.t_exc_start
-        for i_seq, sequence in enumerate(self.p.Experiment.sequences):
-            for i_element, element in enumerate(sequence):
-                spike_time = sequence_offset + i_element * self.p.Encoding.dt_stm
-                spike_times[SYMBOLS[element]].append(spike_time)
-            sequence_offset = spike_time + self.p.Encoding.dt_seq
+        for _ in range(self.p.Encoding.num_repetitions):
+            for i_seq, sequence in enumerate(self.p.Experiment.sequences):
+                for i_element, element in enumerate(sequence):
+                    spike_time = sequence_offset + i_element * self.p.Encoding.dt_stm
+                    spike_times[SYMBOLS[element]].append(spike_time)
+                sequence_offset = spike_time + self.p.Encoding.dt_seq
 
         self.last_ext_spike_time = spike_time
 
@@ -587,7 +588,7 @@ class SHTMTotal(SHTMBase, ABC):
         axs[-1].set_xlabel("Connection [#]")
         fig.text(0.02, 0.5, "Weights diff / connection direction", va="center", rotation="vertical")
 
-    def __retrieve_neuron_data(self):
+    def _retrieve_neuron_data(self):
         self.neuron_events = dict()
 
         for neuron_type in NeuronType.get_all_types():
@@ -681,7 +682,7 @@ class SHTMTotal(SHTMBase, ABC):
 
             self.run_sim(runtime)
 
-            self.__retrieve_neuron_data()
+            self._retrieve_neuron_data()
 
             if self.p.Performance.compute_performance:
                 self.performance.compute(neuron_events=self.neuron_events, method=self.p.Performance.method)
