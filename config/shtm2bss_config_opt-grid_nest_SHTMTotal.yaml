@@ -1,7 +1,7 @@
 experiment:
   parameter_matching: 'all'
   fig_save: True
-  num_instances: null
+  num_instances: 3
 parameters:
   Plasticity.lambda_plus:
     enabled: False

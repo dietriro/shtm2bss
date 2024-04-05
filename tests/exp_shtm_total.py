@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from shtmbss2.nest.network import SHTMTotal
-from shtmbss2.core.helpers import NeuronType
+from shtmbss2.common.config import NeuronType
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
 
@@ -42,11 +42,13 @@ shtm.init_external_input()
 
 
 # shtm.set_weights_exc_exc(10, 1, post_ids=[3,4,5], p_con=1.0)
-shtm.run(steps=100, plasticity_enabled=True)
+shtm.run(steps=20, plasticity_enabled=True)
+
+# shtm.plot_v_exc(alphabet_range=[2], neuron_range="all", neuron_type=NeuronType.Soma)
 
 
 ### Plot
-shtm.plot_events(neuron_types="all", size=(24, 10))
+# shtm.plot_events(neuron_types="all", size=(24, 10))
 
 # shtm.plot_v_exc(alphabet_range=[0], neuron_range=range(3), neuron_type=NeuronType.Inhibitory, show_legend=True)
 
@@ -54,7 +56,7 @@ shtm.plot_events(neuron_types="all", size=(24, 10))
 
 # shtm.plot_permanence_diff()
 
-shtm.plot_performance()
+# shtm.plot_performance()
 
 # shtm.plot_permanence_history(plot_con_ids=[0, 1])
 
