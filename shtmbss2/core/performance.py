@@ -183,10 +183,10 @@ class Performance(ABC):
         data_performance = np.load(file_path)
 
         for metric_name in data_performance.files:
-            if instance_id is None:
-                self.data[metric_name] = data_performance[metric_name].tolist()
-            else:
+            if instance_id is not None and type(self) is PerformanceMulti:
                 self.data[instance_id][metric_name] = data_performance[metric_name].tolist()
+            else:
+                self.data[metric_name] = data_performance[metric_name].tolist()
 
 
 

@@ -874,10 +874,10 @@ class SHTMTotal(SHTMBase, ABC):
         self.save_performance_data()
         self.save_network_data()
 
-    def load_network_data(self, experiment_type, experiment_num, instance_id=None):
+    def load_network_data(self, experiment_type, experiment_num, experiment_subnum=None, instance_id=None):
         # ToDo: Check if this works with bss2
         folder_path = get_experiment_folder(self, experiment_type, self.p.Experiment.id, experiment_num,
-                                            instance_id=instance_id)
+                                            experiment_subnum=experiment_subnum, instance_id=instance_id)
 
         # Load weights
         file_path = join(folder_path, "weights.npz")
@@ -906,16 +906,20 @@ class SHTMTotal(SHTMBase, ABC):
 
     @staticmethod
     def load_full_state(network_type, experiment_id, experiment_num, experiment_type=ExperimentType.EVAL_SINGLE,
-                        instance_id=None, debug=False):
+                        experiment_subnum=None, instance_id=None, debug=False):
         log.debug("Loading full state of network and experiment.")
 
         p = Parameters(network_type=network_type)
         p.load_experiment_params(experiment_type=experiment_type, experiment_id=experiment_id,
-                                 experiment_num=experiment_num, instance_id=instance_id)
+                                 experiment_num=experiment_num, experiment_subnum=experiment_subnum,
+                                 instance_id=instance_id)
 
         shtm = network_type(p=p)
-        shtm.performance.load_data(shtm, experiment_type, experiment_id, experiment_num, instance_id=instance_id)
-        data_weights, data_plasticity = shtm.load_network_data(experiment_type, experiment_num, instance_id=instance_id)
+        shtm.performance.load_data(shtm, experiment_type, experiment_id, experiment_num,
+                                   experiment_subnum=experiment_subnum, instance_id=instance_id)
+        data_weights, data_plasticity = shtm.load_network_data(experiment_type, experiment_num,
+                                                               experiment_subnum=experiment_subnum,
+                                                               instance_id=instance_id)
 
         shtm.init_neurons()
         shtm.init_connections(debug=debug)
