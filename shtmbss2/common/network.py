@@ -48,8 +48,13 @@ NON_PICKLE_OBJECTS = ["post_somas", "projection", "shtm"]
 
 
 class SHTMBase(ABC):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
-                 **kwargs):
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None,
+                 seed_offset=None, p=None, **kwargs):
+        if experiment_type == ExperimentType.OPT_GRID:
+            self.optimized_parameters = kwargs
+        else:
+            self.optimized_parameters = None
+
         # Load pre-defined parameters
         if p is None:
             self.p = Parameters(network_type=self)
@@ -75,16 +80,12 @@ class SHTMBase(ABC):
         self.last_ext_spike_time = None
         self.neuron_events = None
 
-        # Declare performance containers
-        self.performance_error = None
-        self.performance_fp = None
-        self.performance_fn = None
-        self.performance_active_somas = None
-        self.num_active_dendrites_post = None
-
         self.experiment_num = None
+        self.experiment_subnum = experiment_subnum
         self.experiment_episodes = 0
         self.instance_id = instance_id
+
+        self.run_state = False
 
         self.performance = PerformanceSingle(parameters=self.p)
 
@@ -96,7 +97,11 @@ class SHTMBase(ABC):
         else:
             self.p.Experiment.seed_offset = seed_offset
 
-        instance_offset = self.instance_id if self.instance_id is not None else 0
+        if self.p.Experiment.type in [ExperimentType.EVAL_MULTI, ExperimentType.EVAL_SINGLE,
+                                      ExperimentType.OPT_GRID_MULTI]:
+            instance_offset = self.instance_id if self.instance_id is not None else 0
+        else:
+            instance_offset = 0
         np.random.seed(self.p.Experiment.seed_offset + instance_offset)
 
     def load_params(self, **kwargs):
@@ -263,6 +268,10 @@ class SHTMBase(ABC):
     def reset(self):
         pass
 
+    def run_sim(self, runtime):
+        pynn.run(runtime)
+        self.run_state = True
+
     @abstractmethod
     def get_neurons(self, neuron_type, symbol_id=None):
         pass
@@ -401,11 +410,10 @@ class SHTMBase(ABC):
 
         for alphabet_id in alphabet_range:
             # retrieve and save spike times
-            spikes = self.get_neuron_data(neuron_type, value_type=RecTypes.SPIKES,
-                                          symbol_id=alphabet_id, dtype=np.ndarray)
+            spikes = self.neuron_events[neuron_type][alphabet_id]
             for neuron_id in neuron_range:
                 # add spikes to list for printing
-                spike_times[0].append(spikes[:, 1].round(5).tolist())
+                spike_times[0].append(np.array(spikes[neuron_id]).round(5).tolist())
                 header_spikes.append(f"{id_to_symbol(alphabet_id)}[{neuron_id}]")
 
                 # retrieve voltage data
@@ -443,10 +451,10 @@ class SHTMBase(ABC):
 
 
 class SHTMTotal(SHTMBase, ABC):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, plasticity_cls=None, instance_id=None,
-                 seed_offset=None, p=None, **kwargs):
-        super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset, p=p,
-                         **kwargs)
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, plasticity_cls=None,
+                 instance_id=None, seed_offset=None, p=None, **kwargs):
+        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, instance_id=instance_id,
+                         seed_offset=seed_offset, p=p, **kwargs)
 
         self.con_plastic = None
         self.trace_dendrites = self.trace_dendrites = np.zeros(shape=(self.p.Network.num_symbols,
@@ -663,7 +671,7 @@ class SHTMTotal(SHTMBase, ABC):
             log.info(f'Running emulation step {t + 1}/{steps}')
 
             # reset the simulator and the network state if not first run
-            if pynn.get_current_time() > 0 and t > 0:
+            if self.run_state:
                 self.reset()
 
             # set start time to 0.0 because
@@ -672,7 +680,7 @@ class SHTMTotal(SHTMBase, ABC):
             sim_start_time = 0.0
             log.detail(f"Current time: {sim_start_time}")
 
-            pynn.run(runtime)
+            self.run_sim(runtime)
 
             self._retrieve_neuron_data()
 
@@ -785,7 +793,7 @@ class SHTMTotal(SHTMBase, ABC):
 
     def save_config(self):
         folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
-                                            instance_id=self.instance_id)
+                                            experiment_subnum=self.experiment_subnum, instance_id=self.instance_id)
         file_path = join(folder_path, f"config.yaml")
 
         with open(file_path, 'w') as file:
@@ -793,7 +801,7 @@ class SHTMTotal(SHTMBase, ABC):
 
     def save_performance_data(self):
         folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
-                                            instance_id=self.instance_id)
+                                            experiment_subnum=self.experiment_subnum, instance_id=self.instance_id)
         file_path = join(folder_path, "performance")
 
         np.savez(file_path, **self.performance.data)
@@ -801,7 +809,7 @@ class SHTMTotal(SHTMBase, ABC):
     def save_network_data(self):
         # ToDo: Check if this works with bss2
         folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
-                                            instance_id=self.instance_id)
+                                            experiment_subnum=self.experiment_subnum, instance_id=self.instance_id)
 
         # Save weights
         file_path = join(folder_path, "weights")
@@ -840,34 +848,31 @@ class SHTMTotal(SHTMBase, ABC):
 
         np.savez(file_path, **plasticity_dict)
 
-    def save_full_state(self):
+    def save_full_state(self, running_avg_perc=0.5, optimized_parameter_ranges=None):
         log.debug("Saving full state of network and experiment.")
 
-        if self.p.Experiment.type == ExperimentType.EVAL_MULTI:
+        if (self.p.Experiment.type in
+                [ExperimentType.EVAL_MULTI, ExperimentType.OPT_GRID, ExperimentType.OPT_GRID_MULTI]):
             if self.instance_id is not None and self.instance_id == 0:
                 self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
-                                                              instance_id=self.instance_id)
-            save_instance_setup(net=self, performance=self.performance.get_performance_dict(final_result=True),
-                                experiment_num=self.experiment_num, instance_id=self.instance_id)
+                                                              experiment_subnum=self.experiment_subnum,
+                                                              instance_id=self.instance_id,
+                                                              optimized_parameter_ranges=optimized_parameter_ranges)
+            save_instance_setup(net=self.__str__(), parameters=self.p,
+                                performance=self.performance.get_performance_dict(final_result=True,
+                                                                                  running_avg_perc=running_avg_perc,
+                                                                                  decimals=3),
+                                experiment_num=self.experiment_num, experiment_subnum=self.experiment_subnum,
+                                instance_id=self.instance_id,
+                                optimized_parameters=self.optimized_parameters)
         else:
             self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
+                                                          experiment_subnum=self.experiment_subnum,
                                                           instance_id=self.instance_id)
 
         self.save_config()
         self.save_performance_data()
         self.save_network_data()
-
-    def load_performance_data(self, experiment_type, experiment_num, instance_id=None):
-        folder_path = get_experiment_folder(self, experiment_type, self.p.Experiment.id, experiment_num,
-                                            instance_id=instance_id)
-
-        file_path = join(folder_path, "performance.npz")
-        data_performance = np.load(file_path)
-
-        self.performance.data = dict()
-
-        for metric_name in data_performance.files:
-            self.performance.data[metric_name] = data_performance[metric_name].tolist()
 
     def load_network_data(self, experiment_type, experiment_num, instance_id=None):
         # ToDo: Check if this works with bss2
@@ -900,16 +905,17 @@ class SHTMTotal(SHTMBase, ABC):
         return data_weights, data_plasticity
 
     @staticmethod
-    def load_full_state(network_type, experiment_id, experiment_num, debug=False):
+    def load_full_state(network_type, experiment_id, experiment_num, experiment_type=ExperimentType.EVAL_SINGLE,
+                        instance_id=None, debug=False):
         log.debug("Loading full state of network and experiment.")
 
         p = Parameters(network_type=network_type)
-        p.load_experiment_params(experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=experiment_id,
-                                 experiment_num=experiment_num)
+        p.load_experiment_params(experiment_type=experiment_type, experiment_id=experiment_id,
+                                 experiment_num=experiment_num, instance_id=instance_id)
 
         shtm = network_type(p=p)
-        shtm.load_performance_data(ExperimentType.EVAL_SINGLE, experiment_num)
-        data_weights, data_plasticity = shtm.load_network_data(ExperimentType.EVAL_SINGLE, experiment_num)
+        shtm.performance.load_data(shtm, experiment_type, experiment_id, experiment_num, instance_id=instance_id)
+        data_weights, data_plasticity = shtm.load_network_data(experiment_type, experiment_num, instance_id=instance_id)
 
         shtm.init_neurons()
         shtm.init_connections(debug=debug)
@@ -926,9 +932,9 @@ class SHTMTotal(SHTMBase, ABC):
 class Plasticity(ABC):
     def __init__(self, projection: Projection, post_somas, shtm, index, proj_post_soma_inh=None, debug=False,
                  learning_factor=None, permanence_init_min=None, permanence_init_max=None, permanence_max=None,
-                 threshold=None, w_mature=None, y=None, lambda_plus=None,
-                 lambda_minus=None, lambda_h=None, target_rate_h=None, tau_plus=None, tau_h=None, delta_t_min=None,
-                 delta_t_max=None, dt=None, **kwargs):
+                 threshold=None, w_mature=None, y=None, lambda_plus=None, weight_learning=None,
+                 weight_learning_scale=None, lambda_minus=None, lambda_h=None, target_rate_h=None, tau_plus=None,
+                 tau_h=None, delta_t_min=None, delta_t_max=None, dt=None, **kwargs):
         # custom objects
         self.projection = projection
         self.proj_post_soma_inh = proj_post_soma_inh
@@ -936,11 +942,16 @@ class Plasticity(ABC):
         self.post_somas = post_somas
 
         # editable/changing variables
-        self.permanence_min = np.asarray(np.random.randint(permanence_init_min, permanence_init_max,
-                                                           size=(len(self.projection),)), dtype=float)
+        if permanence_init_min == permanence_init_max:
+            self.permanence_min = np.ones(shape=(len(self.projection),), dtype=float) * permanence_init_min
+        else:
+            self.permanence_min = np.asarray(np.random.randint(permanence_init_min, permanence_init_max,
+                                                               size=(len(self.projection),)), dtype=float)
         self.permanence = copy.copy(self.permanence_min)
         self.permanences = None
         self.weights = None
+        self.weight_learning = None
+        self.weight_learning_scale = None
         self.x = np.zeros((len(self.projection.pre)))
         self.z = np.zeros((len(self.projection.post)))
 
@@ -968,6 +979,12 @@ class Plasticity(ABC):
         self.symbol_id_pre = SYMBOLS[symbol_from_label(self.projection.label, ID_PRE)]
         self.symbol_id_post = SYMBOLS[symbol_from_label(self.projection.label, ID_POST)]
 
+        self.connections = list()
+        for c, connection in enumerate(self.get_connections()):
+            i = self.get_connection_id_post(connection)
+            j = self.get_connection_id_pre(connection)
+            self.connections.append([c, j, i])
+
     def rule(self, permanence, threshold, x, z, runtime, permanence_min,
              neuron_spikes_pre, neuron_spikes_post_soma, neuron_spikes_post_dendrite,
              delay, sim_start_time=0.0):
@@ -979,7 +996,7 @@ class Plasticity(ABC):
 
         permanence_before = permanence
 
-        log.debug(f"{self.id}  permanence before: {permanence}")
+        # log.debug(f"{self.id}  permanence before: {permanence}")
 
         # loop through pre-synaptic spikes
         for spike_pre in neuron_spikes_pre:
@@ -990,7 +1007,7 @@ class Plasticity(ABC):
             for spike_post in neuron_spikes_post_soma:
                 spike_dt = (spike_post + delay) - spike_pre
 
-                log.debug(f"{self.id}  spikes: {spike_pre}, {spike_post}, {spike_dt}")
+                # log.debug(f"{self.id}  spikes: {spike_pre}, {spike_post}, {spike_dt}")
 
                 # check if spike-dif is in boundaries
                 if self.delta_t_min < spike_dt < self.delta_t_max:
@@ -1001,18 +1018,23 @@ class Plasticity(ABC):
 
                     # hebbian learning
                     permanence = self.__facilitate(permanence, x_tmp)
-                    log.debug(f"{self.id}  d_permanence facilitate: {permanence - permanence_before}")
+                    d_facilitate = permanence - permanence_before
+                    # log.debug(f"{self.id}  d_permanence facilitate: {d_facilitate}")
                     permanence_before = permanence
 
                     permanence = self.__homeostasis_control(permanence, z_tmp, permanence_min)
                     log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
+                    # if self.debug and permanence - permanence_before < 0:
+                        # log.info(f"{self.id}  spikes: {spike_pre}, {spike_post}, {spike_dt}")
+                        # log.info(f"{self.id}  d_permanence facilitate: {d_facilitate}")
+                        # log.info(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
                     permanence_before = permanence
 
             permanence = self.__depress(permanence, permanence_min)
             last_spike_pre = spike_pre
-            log.debug(f"{self.id}  permanence depression: {permanence - permanence_before}")
+            # log.debug(f"{self.id}  permanence depression: {permanence - permanence_before}")
 
-        log.debug(f"{self.id}  permanence after: {permanence}")
+        # log.debug(f"{self.id}  permanence after: {permanence}")
 
         # update x (kplus) and z
         x = x * np.exp(-(runtime - last_spike_pre) / self.tau_plus)
@@ -1047,52 +1069,68 @@ class Plasticity(ABC):
 
         permanence_before = permanence
 
-        log.debug(f"{self.id}  permanence before: {permanence}")
+        # log.debug(f"{self.id}  permanence before: {permanence}")
 
         x = 0
-        z = 0
+        z_tmp = 0
 
         # Calculate accumulated x
+        spike_pairs_soma_soma = 0
         for spike_pre in neuron_spikes_pre:
             for spike_post in neuron_spikes_post_soma:
                 spike_dt = spike_post - spike_pre
 
-                # ToDo: Replace with check based on trace
                 # ToDo: Update rule based on actual trace calculation from BSS-2
-                if self.delta_t_min < spike_dt < self.delta_t_max:
-                    log.debug(f"{self.id}  spikes: {spike_pre}, {spike_post}, {spike_dt}")
+                if spike_dt >= 0:
+                    spike_pairs_soma_soma += 1
+                    # log.debug(f"{self.id}  spikes (ss): {spike_pre}, {spike_post}, {spike_dt}")
                     x += np.exp(-spike_dt / self.tau_plus)
 
         # Calculate accumulated z
+        spike_pairs_dend_soma = 0
         for spike_post_dendrite in neuron_spikes_post_dendrite:
             for spike_post in neuron_spikes_post_soma:
                 spike_dt = spike_post - spike_post_dendrite
 
-                # ToDo: Replace with check based on trace
                 # ToDo: Update rule based on actual trace calculation from BSS-2
-                if self.delta_t_min < spike_dt < self.delta_t_max:
-                    log.debug(f"{self.id}  spikes: {spike_post_dendrite}, {spike_post}, {spike_dt}")
-                    z += np.exp(-spike_dt / self.tau_h)
+                if spike_dt >= 0:
+                    spike_pairs_dend_soma += 1
+                    # log.debug(f"{self.id}  spikes (ds): {spike_post_dendrite}, {spike_post}, {spike_dt}")
+                    z_tmp += np.exp(-spike_dt / self.tau_plus)
 
-        log.debug(f"{self.id}  x: {x},  z: {z}")
+        # log.debug(f"{self.id}  x: {x},  z: {z_tmp}")
+
+        x_mean = x / spike_pairs_soma_soma if spike_pairs_soma_soma > 0 else 0
+        z_mean = z_tmp / spike_pairs_dend_soma if spike_pairs_dend_soma > 0 else 0
+
+        # Calculcation of z based on x
+        z = np.exp(-(-self.tau_plus*z_mean)/self.tau_h) * spike_pairs_dend_soma
+        # Calculcation of z using only number of pre-post spike pairs
+        # z = spike_pairs_dend_soma
+
+        trace_treshold = np.exp(-self.delta_t_max / self.tau_plus)
+
+        # log.debug(f"{self.id} threshold: {trace_treshold}")
+        # log.debug(f"{self.id} x: {x},   x_mean: {x_mean}")
+        # log.debug(f"{self.id} z: {z},   z_mean: {z_mean}")
 
         # hebbian learning
         # Only run facilitate/homeostasis if a spike pair exists with a delta within boundaries,
         # i.e. x or z > 0
-        if x > 0 or z > 0:
+        if x_mean > trace_treshold:
             permanence = self.__facilitate_bss2(permanence, x)
-        log.debug(f"{self.id}  d_permanence facilitate: {permanence - permanence_before}")
+        # log.debug(f"{self.id}  d_permanence facilitate: {permanence - permanence_before}")
         permanence_before = permanence
 
-        if x > 0 or z > 0:
+        if x_mean > trace_treshold:
             permanence = self.__homeostasis_control_bss2(permanence, z, permanence_min)
-        log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
+        # log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
         permanence_before = permanence
 
         permanence = self.__depress_bss2(permanence, permanence_min, num_spikes=len(neuron_spikes_pre))
-        log.debug(f"{self.id}  permanence depression: {permanence - permanence_before}")
+        # log.debug(f"{self.id}  permanence depression: {permanence - permanence_before}")
 
-        log.debug(f"{self.id}  permanence after: {permanence}")
+        # log.debug(f"{self.id}  permanence after: {permanence}")
 
         return permanence, x, permanence >= threshold
 
@@ -1149,20 +1187,19 @@ class Plasticity(ABC):
         spikes_post_soma = self.shtm.neuron_events[NeuronType.Soma][self.symbol_id_post]
 
         weight = self.projection.get("weight", format="array")
+        weight_before = np.copy(weight)
 
-        for c, connection in enumerate(self.get_connections()):
-            i = self.get_connection_id_post(connection)
-            j = self.get_connection_id_pre(connection)
+        for c, j, i in self.connections:
             neuron_spikes_pre = spikes_pre[j]
             neuron_spikes_post_dendrite = spikes_post_dendrite[i]
             neuron_spikes_post_soma = spikes_post_soma[i]
             z = self.shtm.trace_dendrites[self.symbol_id_post, i]
 
-            if self.debug:
-                log.debug(f"Permanence calculation for connection {c} [{i}, {j}]")
-                log.debug(f"Spikes pre [soma]: {neuron_spikes_pre}")
-                log.debug(f"Spikes post [dend]: {neuron_spikes_post_dendrite}")
-                log.debug(f"Spikes post [soma]: {neuron_spikes_post_soma}")
+            # if self.debug:
+            #     log.debug(f"Permanence calculation for connection {c} [{i}, {j}]")
+            #     log.debug(f"Spikes pre [soma]: {neuron_spikes_pre}")
+            #     log.debug(f"Spikes post [dend]: {neuron_spikes_post_dendrite}")
+            #     log.debug(f"Spikes post [soma]: {neuron_spikes_post_soma}")
 
             permanence, x, mature = (self.learning_rules[self.shtm.p.Plasticity.type]
                                      (permanence=self.permanence[c],
@@ -1179,11 +1216,12 @@ class Plasticity(ABC):
             self.x[j] = x
 
             if mature:
-                weight[j, i] = self.w_mature
+                weight_offset = (permanence-self.threshold)*self.weight_learning_scale if self.weight_learning else 0
+                weight[j, i] = self.w_mature + weight_offset
                 if self.proj_post_soma_inh is not None:
                     weight_inh = self.proj_post_soma_inh.get("weight", format="array")
                     weight_inh[i, :] = 250
-                    log.debug(f"+ | W_inh[{i}] = {weight_inh.flatten()}")
+                    # log.debug(f"+ | W_inh[{i}] = {weight_inh.flatten()}")
                     self.proj_post_soma_inh.set(weight=weight_inh)
             else:
                 weight[j, i] = 0
@@ -1191,11 +1229,13 @@ class Plasticity(ABC):
                     weight_inh = self.proj_post_soma_inh.get("weight", format="array")
                     weight_inh_old = np.copy(weight_inh)
                     weight_inh[i, :] = 0
-                    if np.sum(weight_inh_old.flatten() - weight_inh.flatten()) == 0:
-                        log.debug(f"- | W_inh[{i}] = {weight_inh.flatten()}")
+                    # if np.sum(weight_inh_old.flatten() - weight_inh.flatten()) == 0:
+                    #     log.debug(f"- | W_inh[{i}] = {weight_inh.flatten()}")
                     self.proj_post_soma_inh.set(weight=weight_inh)
 
-        self.projection.set(weight=weight)
+        weight_diff = weight-weight_before
+        if np.logical_and(weight_diff != 0, ~np.isnan(weight_diff)).any():
+            self.projection.set(weight=weight)
 
         if self.permanences is not None:
             self.permanences.append(np.copy(np.round(self.permanence, 6)))

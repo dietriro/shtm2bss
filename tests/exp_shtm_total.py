@@ -13,6 +13,8 @@ import shtmbss2.addsrc
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
 
+np.set_printoptions(threshold=np.inf, suppress=True, linewidth=np.inf)
+warnings.filterwarnings(action='ignore', category=UserWarning)
 
 # In[3]:
 
@@ -63,6 +65,7 @@ debug = False
 
 experiment_num = None
 
+### Initialize
 
 # ## Network Initialization
 
@@ -85,9 +88,12 @@ if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
     
 shtm.experiment_num = experiment_num
 
+### Run
 
 # In[7]:
 
+# shtm.set_weights_exc_exc(10, 1, post_ids=[3,4,5], p_con=1.0)
+shtm.run(steps=100, plasticity_enabled=True)
 
 #shtm = SHTMTotal.load_full_state(SHTMTotal, "test", 12)
 
@@ -156,6 +162,7 @@ plt.colorbar()
 
 shtm.plot_events(neuron_types="all", size=(24, 10))
 
+# shtm.plot_v_exc(alphabet_range=[0], neuron_range=range(3), neuron_type=NeuronType.Inhibitory, show_legend=True)
 
 # In[ ]:
 

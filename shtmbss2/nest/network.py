@@ -16,10 +16,7 @@ from shtmbss2.common.config import NeuronType, RecTypes
 import nest
 import pyNN.nest as pynn
 
-
-# setup(timestep=0.001, spike_precision='on_grid')
 pynn.setup(timestep=0.1, t_flush=500, spike_precision="on_grid")
-
 
 RECORDING_VALUES = {
     NeuronType.Soma: {RecTypes.SPIKES: "spikes", RecTypes.V: "V_m"},
@@ -31,14 +28,17 @@ MCNeuron = pynn.NativeCellType
 
 class SHTMBase(network.SHTMBase, ABC):
 
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None,
+                 seed_offset=None, p=None,
                  **kwargs):
         global MCNeuron
 
-        super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset, p=p,
-                         **kwargs)
+        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, instance_id=instance_id,
+                         seed_offset=seed_offset, p=p, **kwargs)
 
-        nest.Install(self.p.Backend.module_name)
+        if not RuntimeConfig.backend_initialization:
+            nest.Install(self.p.Backend.module_name)
+            RuntimeConfig.backend_initialization = True
         MCNeuron = pynn.native_cell_type(self.p.Backend.neuron_name)
 
     def init_all_neurons_exc(self, num_neurons=None):
@@ -121,9 +121,11 @@ class SHTMBase(network.SHTMBase, ABC):
 
     def reset(self):
         # ToDo: Have a look if we can keep pynn from running 'store_to_cache' - this takes about a second for 5 epochs
-        pynn.reset()
+        pynn.reset(store_to_cache=False)
         # re-initialize external input, but not the recorders (doesn't work with nest)
         self.init_external_input(init_recorder=False, init_performance=False)
+
+        self.run_state = False
 
     def get_neurons(self, neuron_type, symbol_id=None):
         neurons = None
@@ -364,10 +366,11 @@ class SHTMBase(network.SHTMBase, ABC):
 
 
 class SHTMTotal(SHTMBase, network.SHTMTotal):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None,
+                 seed_offset=None, p=None,
                  **kwargs):
-        super().__init__(experiment_type=experiment_type, plasticity_cls=Plasticity, instance_id=instance_id,
-                         seed_offset=seed_offset, p=p, **kwargs)
+        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
+                         plasticity_cls=Plasticity, instance_id=instance_id, seed_offset=seed_offset, p=p, **kwargs)
 
 
 class Plasticity(network.Plasticity):

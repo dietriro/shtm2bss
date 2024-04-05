@@ -31,10 +31,10 @@ RECORDING_VALUES = {
 
 class SHTMBase(network.SHTMBase, ABC):
 
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None, use_on_chip_plasticity=False,
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None, seed_offset=None, p=None, use_on_chip_plasticity=False,
                  **kwargs):
-        super().__init__(experiment_type=experiment_type, instance_id=instance_id, seed_offset=seed_offset, p=p,
-                         **kwargs)
+        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, instance_id=instance_id,
+                         seed_offset=seed_offset, p=p, **kwargs)
         self.use_on_chip_plasticity = use_on_chip_plasticity
         self.exc_to_exc_soma_to_soma_dummy = None
         self.exc_to_exc_dendrite_to_soma_dummy = None
@@ -246,14 +246,14 @@ class SHTMBase(network.SHTMBase, ABC):
                 for v_leak in range(450, 600, 10):
                     self.neurons_exc[alphabet_id][1].actual_hwparams[neuron_id].leak.v_leak = v_leak
                     self.init_rec_exc(alphabet_id=alphabet_id, neuron_id=neuron_id, neuron_type=NeuronType.Soma)
-                    pynn.run(0.02)
+                    self.run_sim(0.02)
                     membrane = self.rec_neurons_exc.get_data("v").segments[-1].irregularlysampledsignals[0].base[1]
                     self.reset_rec_exc()
                     if v_rest_calib <= membrane.mean():
                         for v_leak_inner in range(v_leak - 10, v_leak + 10, 1):
                             self.neurons_exc[alphabet_id][1].actual_hwparams[neuron_id].leak.v_leak = v_leak_inner
                             self.init_rec_exc(alphabet_id=alphabet_id, neuron_id=neuron_id, neuron_type=NeuronType.Soma)
-                            pynn.run(0.02)
+                            self.run_sim(0.02)
                             membrane = \
                                 self.rec_neurons_exc.get_data("v").segments[-1].irregularlysampledsignals[0].base[1]
                             self.reset_rec_exc()
@@ -269,6 +269,20 @@ class SHTMBase(network.SHTMBase, ABC):
 
     def reset_rec_exc(self):
         self.rec_neurons_exc.record(None)
+
+    def reset(self):
+        pynn.reset()
+
+        # # Restart recording of spikes
+        # for i_symbol in range(self.p.Network.num_symbols):
+        #     somas = pynn.PopulationView(self.neurons_exc[i_symbol], slice(NeuronType.Soma.ID,
+        #                                                                   self.p.Network.num_neurons * 2, 2))
+        #     dendrites = pynn.PopulationView(self.neurons_exc[i_symbol], slice(NeuronType.Dendrite.ID,
+        #                                                                       self.p.Network.num_neurons * 2, 2))
+        #     somas.record([RECORDING_VALUES[NeuronType.Soma][RecTypes.SPIKES]])
+        #     dendrites.record([RECORDING_VALUES[NeuronType.Dendrite][RecTypes.SPIKES]])
+
+        self.run_state = False
 
     def get_neurons(self, neuron_type, symbol_id=None):
         if symbol_id is None:
@@ -321,93 +335,18 @@ class SHTMBase(network.SHTMBase, ABC):
                 log.error(f"Could not retrieve voltage data for {neuron_type}")
                 return None
 
+            self.reset()
+
             self.reset_rec_exc()
             self.init_rec_exc(alphabet_id=symbol_id, neuron_id=neuron_id, neuron_type=neuron_type)
 
-            pynn.run(runtime)
+            self.run_sim(runtime)
 
             data = self.rec_neurons_exc.get_data("v").segments[-1].irregularlysampledsignals[0]
         else:
             log.error(f"Error retrieving neuron data! Unknown value_type: '{value_type}'.")
             return None
         return data
-
-    def run(self, runtime=None, steps=None, plasticity_enabled=True, dyn_exc_inh=False, run_type=RunType.SINGLE):
-        if not self.use_on_chip_plasticity:
-            super().run(runtime=runtime, steps=steps, plasticity_enabled=plasticity_enabled, dyn_exc_inh=dyn_exc_inh, run_type=run_type)
-        else:
-            if runtime is None:
-                runtime = self.p.Experiment.runtime
-            if steps is None:
-                steps = self.p.Experiment.episodes
-            self.p.Experiment.episodes = 0
-
-            if type(runtime) is str:
-                if str(runtime).lower() == 'max':
-                    runtime = self.last_ext_spike_time + (self.p.Encoding.dt_seq - self.p.Encoding.t_exc_start)
-            elif type(runtime) is float or type(runtime) is int:
-                pass
-            elif runtime is None:
-                log.debug("No runtime specified. Setting runtime to last spike time + 2xdt_stm")
-                runtime = self.last_ext_spike_time + (self.p.Encoding.dt_seq - self.p.Encoding.t_exc_start)
-            else:
-                log.error("Error! Wrong runtime")
-
-            self.p.Experiment.runtime = runtime
-
-            for t in range(steps):
-                log.info(f'Running emulation step {t + 1}/{steps}')
-
-                # reset the simulator and the network state if not first run
-                if pynn.get_current_time() > 0 and t > 0:
-                    self.reset()
-
-                # set start time to 0.0 because
-                # - nest is reset and always starts with 0.0
-                # - bss2 resets the time itself after each run to 0.0
-                sim_start_time = 0.0
-                log.detail(f"Current time: {sim_start_time}")
-
-                pynn.run(runtime)
-
-                # retrieve permanence data from plasticity processor and inject into next execution
-                pynn.simulator.state.injected_config.ppu_symbols = {
-                    "permanences": pynn.get_post_realtime_read_ppu_symbols()["permanences"]}
-
-                # update weight data in projection
-                assert len(self.exc_to_exc) == 1
-                weights_post = np.array(self.exc_to_exc[0].get_data("data")[-1].data).reshape((len(self.exc_to_exc[0])))
-                self.exc_to_exc[0].set(weight=weights_post)
-
-                self._retrieve_neuron_data()
-
-                # expose data in plasticity rule dummy (one call suffices)
-                self.con_plastic[0].rule()
-
-                if self.p.Performance.compute_performance:
-                    self.performance.compute(neuron_events=self.neuron_events, method=self.p.Performance.method)
-
-                if plasticity_enabled:
-                    if run_type == RunType.MULTI:
-                        log.warn(
-                            f"Multi-core version of plasticity calculation is currently not working. Please choose the "
-                            f"single-core version. Not calculating plasticity.")
-                        # self.__run_plasticity_parallel(runtime, sim_start_time, dyn_exc_inh=dyn_exc_inh)
-                    elif run_type == RunType.SINGLE:
-                        self.__run_plasticity_singular(runtime, sim_start_time, dyn_exc_inh=dyn_exc_inh)
-
-                if self.p.Experiment.save_auto and self.p.Experiment.save_auto_epoches > 0:
-                    if (t + 1) % self.p.Experiment.save_auto_epoches == 0:
-                        self.p.Experiment.episodes = self.experiment_episodes + t + 1
-                        self.save_full_state()
-
-            self.experiment_episodes += steps
-            self.p.Experiment.episodes = self.experiment_episodes
-
-            if self.p.Experiment.save_final or self.p.Experiment.save_auto:
-                self.save_full_state()
-
-
 
 
 class SHTMSingleNeuron(SHTMBase):
@@ -666,9 +605,9 @@ class SHTMPlasticity(SHTMSingleNeuron):
 
 
 class SHTMTotal(SHTMBase, network.SHTMTotal):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, instance_id=None, seed_offset=None, p=None,
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None, seed_offset=None, p=None,
                  **kwargs):
-        super().__init__(experiment_type=experiment_type, plasticity_cls=Plasticity, instance_id=instance_id,
+        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, plasticity_cls=Plasticity, instance_id=instance_id,
                          seed_offset=seed_offset, p=p, **kwargs)
 
 

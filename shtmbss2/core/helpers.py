@@ -18,7 +18,7 @@ class Process(mp.Process):
         except Exception as e:
             tb = traceback.format_exc()
             # ToDo: Figure out why the exception doesn't get carried back to top
-            print(e.with_traceback())
+            # print(e.with_traceback(None))
             self._cconn.send((e, tb))
 
     @property

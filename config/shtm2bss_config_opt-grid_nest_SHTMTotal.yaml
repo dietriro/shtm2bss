@@ -1,0 +1,24 @@
+experiment:
+  parameter_matching: 'all'
+  fig_save: True
+  num_instances: 3
+parameters:
+  Plasticity.lambda_plus:
+    enabled: False
+    min: 0.02
+    max: 0.04
+    step: 0.01
+    dtype: float
+  Plasticity.lambda_minus:
+    enabled: True
+    min: 0.001
+    max: 0.102
+    step: 0.0005
+    dtype: float
+  Synapses.p_exc_exc:
+    enabled: True
+    values: [0.2, 0.4]
+    min: 0.001
+    max: 0.002
+    step: 0.0005
+    dtype: float

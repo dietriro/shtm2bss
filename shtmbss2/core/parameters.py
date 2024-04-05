@@ -90,6 +90,8 @@ class Parameters(ParameterGroup):
     class Plasticity(ParameterGroup):
         type: str = None
         learning_factor: float = None
+        weight_learning: bool = None
+        weight_learning_scale: float = None
         permanence_init_min: float = None
         permanence_init_max: float = None
         permanence_max: float = None
@@ -181,13 +183,19 @@ class Parameters(ParameterGroup):
                 category_obj = self
                 for category_name in category_objs[:-1]:
                     category_obj = getattr(category_obj, category_name)
-                setattr(category_obj, name, value)
+                setattr(category_obj, category_objs[-1], value)
 
         log.debug(f"Successfully set custom parameters for '{self.network_type}'")
 
-    def load_experiment_params(self, experiment_type, experiment_id, experiment_num):
+    def load_experiment_params(self, experiment_type, experiment_id, experiment_num, experiment_subnum=None,
+                               instance_id=None):
+        if ((experiment_type == ExperimentType.EVAL_MULTI or experiment_type == ExperimentType.OPT_GRID_MULTI)
+                and instance_id is None):
+            instance_id = 0
+
         experiment_folder_path = get_experiment_folder(self.network_type, experiment_type, experiment_id,
-                                                       experiment_num, instance_id=None)
+                                                       experiment_num, experiment_subnum=experiment_subnum,
+                                                       instance_id=instance_id)
 
         saved_params = load_yaml(experiment_folder_path, "config.yaml")
 

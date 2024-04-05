@@ -4,6 +4,7 @@ experiment:
 #  sequences: [['A', 'C', 'B'], ['D', 'C', 'B'], ['C', 'B', 'A'], ['B', 'D', 'A']]
   sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
 #  sequences: [['A', 'B', 'C']]
+#  sequences: [['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U']]
   runtime: null
   episodes: 100
   run_add_calib: False
@@ -37,6 +38,8 @@ encoding:
 plasticity:
   type: 'original'
   learning_factor: 1
+  weight_learning: False
+  weight_learning_scale: 0.0026
   permanence_init_min: 0
   permanence_init_max: 8
   permanence_max: 20.
@@ -81,7 +84,7 @@ synapses:
   dyn_weight_calculation: True
   w_exc_inh_dyn: null
   w_ext_exc: 4.1122
-  w_exc_exc: 0.01e-3
+  w_exc_exc: 0.0e-3
   w_exc_inh: 3.8747
   w_inh_exc: 12.9155
   p_exc_exc: 0.2

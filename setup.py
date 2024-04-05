@@ -9,10 +9,19 @@ setup(
     author="Robin Dietrich",
     packages=find_packages(exclude=[]),
     install_requires=[
-        "PyYAML",
-        "numpy",
         "colorlog",
+        "jupyter",
         "matplotlib",
-        "setuptools"
+        "numpy",
+        "PyYAML",
+        "setuptools",
+        "pandas",
+        "quantities",
+        "PyNN",
+        "neo",
+        "DateTime",
+        "tabulate",
+        "nestml",
+        "pygsl"
     ],
 )
