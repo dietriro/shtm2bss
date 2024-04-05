@@ -95,7 +95,7 @@ class GridSearch:
                               experiment_type=self.experiment_type, experiment_num=experiment_num,
                               experiment_subnum=experiment_subnum, parameter_ranges=optimized_parameter_ranges,
                               fig_save=False)
-        experiment_num = pe.run(steps=steps)
+        experiment_num = pe.run(steps=steps, additional_parameters=optimized_parameters)
 
         # retrieve parameters for performed experiment
         p = Parameters(network_type=self.model_type)

@@ -24,7 +24,7 @@ warnings.filterwarnings(action='ignore', category=UserWarning)
 
 class ParallelExecutor:
     def __init__(self, num_instances, experiment_id, experiment_type=ExperimentType.EVAL_MULTI, experiment_num=None,
-                 experiment_subnum=None, parameter_ranges=None, fig_save=True):
+                 experiment_subnum=None, parameter_ranges=None, fig_save=False):
         self.num_instances = num_instances
         self.experiment_id = experiment_id
 
@@ -38,9 +38,12 @@ class ParallelExecutor:
 
     @staticmethod
     def __run_experiment(process_id, file_save_status, lock, experiment_type, experiment_num, seed_offset,
-                         experiment_subnum=None, parameter_ranges=None, steps=None):
+                         experiment_subnum=None, additional_parameters=None, parameter_ranges=None, steps=None):
+        if additional_parameters is None:
+            additional_parameters = dict()
+
         shtm = SHTMTotal(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
-                         instance_id=process_id, seed_offset=seed_offset)
+                         instance_id=process_id, seed_offset=seed_offset, **additional_parameters)
 
         # set save_auto to false in order to minimize file lock timeouts
         shtm.p.Experiment.save_auto = False
@@ -67,7 +70,7 @@ class ParallelExecutor:
         # signal other processes, that this process has finished the data saving process
         file_save_status[process_id] = 1
 
-    def run(self, steps=None):
+    def run(self, steps=None, additional_parameters=None):
 
         lock = mp.Lock()
         file_save_status = mp.Array("i", [0 for _ in range(self.num_instances)])
@@ -86,7 +89,9 @@ class ParallelExecutor:
             processes.append(Process(target=self.__run_experiment, args=(i_inst, file_save_status, lock,
                                                                          self.experiment_type,
                                                                          self.experiment_num, seed_offset,
-                                                                         self.experiment_subnum, self.parameter_ranges,
+                                                                         self.experiment_subnum,
+                                                                         additional_parameters,
+                                                                         self.parameter_ranges,
                                                                          steps)))
             processes[i_inst].start()
 
@@ -99,12 +104,12 @@ class ParallelExecutor:
         if self.fig_save:
             # retrieve parameters for performed experiment
             p = Parameters(network_type=SHTMTotal)
-            p.load_experiment_params(experiment_type=ExperimentType.OPT_GRID_MULTI, experiment_id=self.experiment_id,
+            p.load_experiment_params(experiment_type=self.experiment_type, experiment_id=self.experiment_id,
                                      experiment_num=self.experiment_num)
 
             # retrieve performance data for entire set of instances for subnum
             pf = PerformanceMulti(p, self.num_instances)
-            pf.load_data(SHTMTotal, experiment_type=ExperimentType.OPT_GRID_MULTI,
+            pf.load_data(SHTMTotal, experiment_type=self.experiment_type,
                          experiment_id=self.experiment_id,
                          experiment_num=self.experiment_num)
 
