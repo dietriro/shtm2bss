@@ -154,14 +154,14 @@ class SHTMBase(network.SHTMBase, ABC):
     def reset(self):
         pynn.reset()
 
-        # Restart recording of spikes
-        for i_symbol in range(self.p.Network.num_symbols):
-            somas = pynn.PopulationView(self.neurons_exc[i_symbol], slice(NeuronType.Soma.ID,
-                                                                          self.p.Network.num_neuron * 2, 2))
-            dendrites = pynn.PopulationView(self.neurons_exc[i_symbol], slice(NeuronType.Dendrite.ID,
-                                                                              self.p.Network.num_neuron * 2, 2))
-            somas.record([RECORDING_VALUES[NeuronType.Soma][RecTypes.SPIKES]])
-            dendrites.record([RECORDING_VALUES[NeuronType.Dendrite][RecTypes.SPIKES]])
+        # # Restart recording of spikes
+        # for i_symbol in range(self.p.Network.num_symbols):
+        #     somas = pynn.PopulationView(self.neurons_exc[i_symbol], slice(NeuronType.Soma.ID,
+        #                                                                   self.p.Network.num_neurons * 2, 2))
+        #     dendrites = pynn.PopulationView(self.neurons_exc[i_symbol], slice(NeuronType.Dendrite.ID,
+        #                                                                       self.p.Network.num_neurons * 2, 2))
+        #     somas.record([RECORDING_VALUES[NeuronType.Soma][RecTypes.SPIKES]])
+        #     dendrites.record([RECORDING_VALUES[NeuronType.Dendrite][RecTypes.SPIKES]])
 
         self.run_state = False
 

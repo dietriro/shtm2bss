@@ -79,6 +79,7 @@ class SHTMBase(ABC):
         self.rec_neurons_exc = None
         self.last_ext_spike_time = None
         self.neuron_events = None
+        self.neuron_data = dict()
 
         self.experiment_num = None
         self.experiment_subnum = experiment_subnum
