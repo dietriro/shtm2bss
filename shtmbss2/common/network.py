@@ -985,10 +985,6 @@ class Plasticity(ABC):
         self.symbol_id_post = SYMBOLS[symbol_from_label(self.projection.label, ID_POST)]
 
         self.connections = list()
-        for c, connection in enumerate(self.get_connections()):
-            i = self.get_connection_id_post(connection)
-            j = self.get_connection_id_pre(connection)
-            self.connections.append([c, j, i])
 
     def rule(self, permanence, threshold, x, z, runtime, permanence_min,
              neuron_spikes_pre, neuron_spikes_post_soma, neuron_spikes_post_dendrite,
@@ -1186,7 +1182,16 @@ class Plasticity(ABC):
     def get_connections(self):
         pass
 
+    def init_connections(self):
+        for c, connection in enumerate(self.get_connections()):
+            i = self.get_connection_id_post(connection)
+            j = self.get_connection_id_pre(connection)
+            self.connections.append([c, j, i])
+
     def __call__(self, runtime: float, sim_start_time=0.0, q_plasticity=None):
+        if self.connections is None or len(self.connections) <= 0:
+            self.init_connections()
+
         spikes_pre = self.shtm.neuron_events[NeuronType.Soma][self.symbol_id_pre]
         spikes_post_dendrite = self.shtm.neuron_events[NeuronType.Dendrite][self.symbol_id_post]
         spikes_post_soma = self.shtm.neuron_events[NeuronType.Soma][self.symbol_id_post]
