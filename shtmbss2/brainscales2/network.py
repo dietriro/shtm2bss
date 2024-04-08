@@ -610,6 +610,82 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
         super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, plasticity_cls=Plasticity, instance_id=instance_id,
                          seed_offset=seed_offset, p=p, **kwargs)
 
+    def run(self, runtime=None, steps=None, plasticity_enabled=True, dyn_exc_inh=False, run_type=RunType.SINGLE):
+        if not self.use_on_chip_plasticity:
+            super().run(runtime=runtime, steps=steps, plasticity_enabled=plasticity_enabled, dyn_exc_inh=dyn_exc_inh,
+                        run_type=run_type)
+        else:
+            if runtime is None:
+                runtime = self.p.Experiment.runtime
+            if steps is None:
+                steps = self.p.Experiment.episodes
+            self.p.Experiment.episodes = 0
+
+            if type(runtime) is str:
+                if str(runtime).lower() == 'max':
+                    runtime = self.last_ext_spike_time + (self.p.Encoding.dt_seq - self.p.Encoding.t_exc_start)
+            elif type(runtime) is float or type(runtime) is int:
+                pass
+            elif runtime is None:
+                log.debug("No runtime specified. Setting runtime to last spike time + 2xdt_stm")
+                runtime = self.last_ext_spike_time + (self.p.Encoding.dt_seq - self.p.Encoding.t_exc_start)
+            else:
+                log.error("Error! Wrong runtime")
+
+            self.p.Experiment.runtime = runtime
+
+            for t in range(steps):
+                log.info(f'Running emulation step {t + 1}/{steps}')
+
+                # reset the simulator and the network state if not first run
+                if pynn.get_current_time() > 0 and t > 0:
+                    self.reset()
+
+                # set start time to 0.0 because
+                # - nest is reset and always starts with 0.0
+                # - bss2 resets the time itself after each run to 0.0
+                sim_start_time = 0.0
+                log.detail(f"Current time: {sim_start_time}")
+
+                pynn.run(runtime)
+
+                # retrieve permanence data from plasticity processor and inject into next execution
+                pynn.simulator.state.injected_config.ppu_symbols = {
+                    "permanences": pynn.get_post_realtime_read_ppu_symbols()["permanences"]}
+
+                # update weight data in projection
+                assert len(self.exc_to_exc) == 1
+                weights_post = np.array(self.exc_to_exc[0].get_data("data")[-1].data).reshape((len(self.exc_to_exc[0])))
+                self.exc_to_exc[0].set(weight=weights_post)
+
+                self._retrieve_neuron_data()
+
+                # expose data in plasticity rule dummy (one call suffices)
+                self.con_plastic[0].rule()
+
+                if self.p.Performance.compute_performance:
+                    self.performance.compute(neuron_events=self.neuron_events, method=self.p.Performance.method)
+
+                if plasticity_enabled:
+                    if run_type == RunType.MULTI:
+                        log.warn(
+                            f"Multi-core version of plasticity calculation is currently not working. Please choose the "
+                            f"single-core version. Not calculating plasticity.")
+                        # self.__run_plasticity_parallel(runtime, sim_start_time, dyn_exc_inh=dyn_exc_inh)
+                    elif run_type == RunType.SINGLE:
+                        self.__run_plasticity_singular(runtime, sim_start_time, dyn_exc_inh=dyn_exc_inh)
+
+                if self.p.Experiment.save_auto and self.p.Experiment.save_auto_epoches > 0:
+                    if (t + 1) % self.p.Experiment.save_auto_epoches == 0:
+                        self.p.Experiment.episodes = self.experiment_episodes + t + 1
+                        self.save_full_state()
+
+            self.experiment_episodes += steps
+            self.p.Experiment.episodes = self.experiment_episodes
+
+            if self.p.Experiment.save_final or self.p.Experiment.save_auto:
+                self.save_full_state()
+
 
 class Plasticity(network.Plasticity):
     def __init__(self, projection: pynn.Projection, post_somas, shtm, index, **kwargs):

@@ -293,7 +293,7 @@ class SHTMBase(ABC):
         else:
             return
 
-        if window == "initial":
+        if window in ["initial", "final"]:
             max_time = self.p.Experiment.runtime
         else:
             max_time = pynn.get_current_time()
@@ -301,6 +301,8 @@ class SHTMBase(ABC):
         if x_lim_lower is None:
             if window == "initial":
                 x_lim_lower = 0.
+            elif window == "final":
+                x_lim_lower = self.p.Experiment.runtime - (self.p.Experiment.runtime / self.p.Encoding.num_repetitions)
             else:
                 x_lim_lower = pynn.get_current_time() - self.p.Experiment.runtime
         if x_lim_upper is None:
@@ -326,10 +328,6 @@ class SHTMBase(ABC):
                 ax = axs
             else:
                 ax = axs[i_symbol]
-
-            # neurons_all = dict()
-            # neurons_all[NeuronType.Dendrite], neurons_all[NeuronType.Soma], = self.neurons_exc[i_symbol]
-            # neurons_all[NeuronType.Inhibitory] = pynn.PopulationView(self.neurons_inh, [i_symbol])
 
             for neurons_i in neuron_types:
                 # Retrieve and plot spikes from selected neurons
@@ -366,7 +364,10 @@ class SHTMBase(ABC):
         custom_lines = [Line2D([0], [0], color=f"C{n.ID}", label=n.NAME.capitalize(), lw=3) for n in neuron_types]
 
         ax.set_xlabel("Time [ms]", fontsize=26, labelpad=14)
-        ax.xaxis.set_ticks(np.arange(x_lim_lower, x_lim_upper, self.p.Encoding.dt_stm / 2))
+        if (x_lim_upper-x_lim_lower) / self.p.Encoding.dt_stm > 200:
+            log.info("Minor ticks not set because the number of ticks would be too high.")
+        else:
+            ax.xaxis.set_ticks(np.arange(x_lim_lower, x_lim_upper, self.p.Encoding.dt_stm / 2))
         ax.tick_params(axis='x', labelsize=18)
 
         plt.figlegend(handles=custom_lines, loc=(0.377, 0.885), ncol=3, labelspacing=0., fontsize=18, fancybox=True,
