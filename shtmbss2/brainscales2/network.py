@@ -69,7 +69,8 @@ class SHTMBase(network.SHTMBase, ABC):
             lambda_plus=self.p.Plasticity.lambda_plus,
             lambda_minus=self.p.Plasticity.lambda_minus,
             lambda_h=self.p.Plasticity.lambda_h,
-            learning_factor=self.p.Plasticity.learning_factor
+            learning_factor=self.p.Plasticity.learning_factor,
+            p_exc_exc=self.p.Synapses.p_exc_exc
             )
 
         # read-out permanence to retain between epochs
@@ -172,71 +173,6 @@ class SHTMBase(network.SHTMBase, ABC):
         pop.record(RECORDING_VALUES[NeuronType.Inhibitory][RecTypes.SPIKES])
 
         return pop
-    
-    def init_connections(self, exc_to_exc=None, exc_to_inh=None, debug=None):
-        if not self.use_on_chip_plasticity:
-            super().init_connections(exc_to_exc=exc_to_exc, exc_to_inh=exc_to_inh, debug=debug)        
-        else:
-            self.ext_to_exc = []
-            for i in range(self.p.Network.num_symbols):
-                self.ext_to_exc.append(Projection(
-                    PopulationView(self.neurons_ext, [i]),
-                    self.get_neurons(NeuronType.Soma, symbol_id=i),
-                    AllToAllConnector(),
-                    synapse_type=StaticSynapse(weight=self.p.Synapses.w_ext_exc, delay=self.p.Synapses.delay_ext_exc),
-                    receptor_type=self.p.Synapses.receptor_ext_exc))
-
-            self.exc_to_exc = []
-            self.exc_to_exc_soma_to_soma_dummy = []
-            self.exc_to_exc_dendrite_to_soma_dummy = []
-            num_connections = int(self.p.Network.num_neurons * self.p.Synapses.p_exc_exc)
-            weight = self.p.Synapses.w_exc_exc if exc_to_exc is None else exc_to_exc[i_w]
-            seed = self.p.Experiment.seed_offset
-            if self.instance_id is not None:
-                seed += self.instance_id * self.p.Network.num_symbols ** 2
-            all_dendrites, all_somas = self.neurons_exc_all
-            self.exc_to_exc.append(Projection(
-                all_somas,
-                all_dendrites,
-                AllToAllConnector(),
-                synapse_type=pynn.standardmodels.synapses.PlasticSynapse(weight=weight, delay=self.p.Synapses.delay_exc_exc, plasticity_rule=self.plasticity_rule),
-                receptor_type=self.p.Synapses.receptor_exc_exc,
-                label=f"exc-exc_soma_to_dendrite"))
-            self.exc_to_exc_soma_to_soma_dummy.append(Projection(
-                all_somas,
-                all_somas,
-                AllToAllConnector(),
-                synapse_type=pynn.standardmodels.synapses.PlasticSynapse(weight=0, plasticity_rule=self.plasticity_rule),
-                receptor_type=self.p.Synapses.receptor_exc_exc,
-                label=f"exc-exc_soma_to_soma-dummy"))
-            self.exc_to_exc_dendrite_to_soma_dummy.append(Projection(
-                all_dendrites,
-                all_somas,
-                AllToAllConnector(),
-                synapse_type=pynn.standardmodels.synapses.PlasticSynapse(weight=0, plasticity_rule=self.plasticity_rule),
-                receptor_type=self.p.Synapses.receptor_exc_exc,
-                label=f"exc-exc_dendrite_to_soma-dummy"))
-
-            self.exc_to_inh = []
-            for i in range(self.p.Network.num_symbols):
-                weight = self.p.Synapses.w_exc_inh if exc_to_inh is None else exc_to_inh[i]
-                self.exc_to_inh.append(Projection(
-                    self.get_neurons(NeuronType.Soma, symbol_id=i),
-                    PopulationView(self.neurons_inh, [i]),
-                    AllToAllConnector(),
-                    synapse_type=StaticSynapse(weight=weight, delay=self.p.Synapses.delay_exc_inh),
-                    receptor_type=self.p.Synapses.receptor_exc_inh))
-
-            self.inh_to_exc = []
-            for i in range(self.p.Network.num_symbols):
-                self.inh_to_exc.append(Projection(
-                    PopulationView(self.neurons_inh, [i]),
-                    self.get_neurons(NeuronType.Soma, symbol_id=i),
-                    AllToAllConnector(),
-                    synapse_type=StaticSynapse(weight=self.p.Synapses.w_inh_exc, delay=self.p.Synapses.delay_inh_exc),
-                    receptor_type=self.p.Synapses.receptor_inh_exc))
-
-            self.con_plastic = [OnChipPlasticityDummy(self.exc_to_exc[0], self)] * len(self.exc_to_exc[0])
 
     def run_add_calibration(self, v_rest_calib=275):
         self.reset_rec_exc()
@@ -610,6 +546,114 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
         super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, plasticity_cls=Plasticity, instance_id=instance_id,
                          seed_offset=seed_offset, p=p, **kwargs)
 
+    def init_connections(self, exc_to_exc=None, exc_to_inh=None, debug=None):
+        if not self.use_on_chip_plasticity:
+            super().init_connections(exc_to_exc=exc_to_exc, exc_to_inh=exc_to_inh, debug=debug)
+        else:
+            self.ext_to_exc = []
+            for i in range(self.p.Network.num_symbols):
+                self.ext_to_exc.append(Projection(
+                    PopulationView(self.neurons_ext, [i]),
+                    self.get_neurons(NeuronType.Soma, symbol_id=i),
+                    AllToAllConnector(),
+                    synapse_type=StaticSynapse(weight=self.p.Synapses.w_ext_exc, delay=self.p.Synapses.delay_ext_exc),
+                    receptor_type=self.p.Synapses.receptor_ext_exc))
+
+            self.exc_to_exc = []
+            self.exc_to_exc_soma_to_soma_dummy = []
+            self.exc_to_exc_dendrite_to_soma_dummy = []
+            num_connections = int(self.p.Network.num_neurons * self.p.Synapses.p_exc_exc)
+            weight = self.p.Synapses.w_exc_exc if exc_to_exc is None else exc_to_exc
+            seed = self.p.Experiment.seed_offset
+            if self.instance_id is not None:
+                seed += self.instance_id * self.p.Network.num_symbols ** 2
+            all_dendrites, all_somas = self.neurons_exc_all
+            self.exc_to_exc.append(Projection(
+                all_somas,
+                all_dendrites,
+                AllToAllConnector(),
+                synapse_type=pynn.standardmodels.synapses.PlasticSynapse(weight=weight, delay=self.p.Synapses.delay_exc_exc, plasticity_rule=self.plasticity_rule),
+                receptor_type=self.p.Synapses.receptor_exc_exc,
+                label=f"exc-exc_soma_to_dendrite"))
+            self.exc_to_exc_soma_to_soma_dummy.append(Projection(
+                all_somas,
+                all_somas,
+                AllToAllConnector(),
+                synapse_type=pynn.standardmodels.synapses.PlasticSynapse(weight=0, plasticity_rule=self.plasticity_rule),
+                receptor_type=self.p.Synapses.receptor_exc_exc,
+                label=f"exc-exc_soma_to_soma-dummy"))
+            self.exc_to_exc_dendrite_to_soma_dummy.append(Projection(
+                all_dendrites,
+                all_somas,
+                AllToAllConnector(),
+                synapse_type=pynn.standardmodels.synapses.PlasticSynapse(weight=0, plasticity_rule=self.plasticity_rule),
+                receptor_type=self.p.Synapses.receptor_exc_exc,
+                label=f"exc-exc_dendrite_to_soma-dummy"))
+
+            self.exc_to_inh = []
+            for i in range(self.p.Network.num_symbols):
+                weight = self.p.Synapses.w_exc_inh if exc_to_inh is None else exc_to_inh[i]
+                self.exc_to_inh.append(Projection(
+                    self.get_neurons(NeuronType.Soma, symbol_id=i),
+                    PopulationView(self.neurons_inh, [i]),
+                    AllToAllConnector(),
+                    synapse_type=StaticSynapse(weight=weight, delay=self.p.Synapses.delay_exc_inh),
+                    receptor_type=self.p.Synapses.receptor_exc_inh))
+
+            self.inh_to_exc = []
+            for i in range(self.p.Network.num_symbols):
+                self.inh_to_exc.append(Projection(
+                    PopulationView(self.neurons_inh, [i]),
+                    self.get_neurons(NeuronType.Soma, symbol_id=i),
+                    AllToAllConnector(),
+                    synapse_type=StaticSynapse(weight=self.p.Synapses.w_inh_exc, delay=self.p.Synapses.delay_inh_exc),
+                    receptor_type=self.p.Synapses.receptor_inh_exc))
+
+            self.con_plastic = list()
+            for i in range(self.p.Network.num_symbols * (self.p.Network.num_symbols-1)):
+                self.con_plastic.append(OnChipPlasticityDummy(self.exc_to_exc[0], self, id=i))
+
+    def __update_plasticity(self):
+        num_neurons_total = self.p.Network.num_neurons * self.p.Network.num_symbols
+        num_neurons = self.p.Network.num_neurons
+
+        # calculate weights
+        weights = self.exc_to_exc[0].get("weight", format="array")
+
+        # calculate rates
+        rates = np.array(self.exc_to_exc_soma_to_soma_dummy[0].get_data("data")[-1].data)
+        rates = rates.reshape((num_neurons_total, num_neurons_total))
+
+        # calculate permanences
+        permanences = np.array(self.exc_to_exc_dendrite_to_soma_dummy[0].get_data("data")[-1].data).flatten()
+        permanences = permanences.reshape((num_neurons_total, num_neurons_total))
+
+        # calculate correlations
+        x = np.array(self.exc_to_exc_soma_to_soma_dummy[0].get_data("correlation")[-1].data)
+        x = x.reshape((num_neurons_total, num_neurons_total))
+        z = np.array(self.exc_to_exc_dendrite_to_soma_dummy[0].get_data("correlation")[-1].data)
+        z = z.reshape((num_neurons_total, num_neurons_total))
+
+        # calculate values for each connection pair (symbol-i to symbol-k)
+        i_plastic = 0
+        for i in range(self.p.Network.num_symbols):
+            for k in range(self.p.Network.num_symbols):
+                if i == k:
+                    continue
+
+                i_neuron = i * num_neurons
+                k_neuron = k * num_neurons
+
+                weights_tmp = weights[i_neuron:i_neuron+num_neurons, k_neuron:k_neuron+num_neurons].flatten().copy()
+                rates_tmp = rates[i_neuron:i_neuron+num_neurons, k_neuron:k_neuron+num_neurons].flatten().copy()
+                permanences_tmp = permanences[i_neuron:i_neuron+num_neurons, k_neuron:k_neuron+num_neurons].flatten().copy()
+                x_tmp = x[i_neuron:i_neuron+num_neurons, k_neuron:k_neuron+num_neurons].flatten().copy()
+                z_tmp = z[i_neuron:i_neuron+num_neurons, k_neuron:k_neuron+num_neurons].flatten().copy()
+
+                self.con_plastic[i_plastic].update_values(weights_tmp, rates_tmp, permanences_tmp, x_tmp, z_tmp)
+
+                i_plastic += 1
+
     def run(self, runtime=None, steps=None, plasticity_enabled=True, dyn_exc_inh=False, run_type=RunType.SINGLE):
         if not self.use_on_chip_plasticity:
             super().run(runtime=runtime, steps=steps, plasticity_enabled=plasticity_enabled, dyn_exc_inh=dyn_exc_inh,
@@ -661,7 +705,7 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                 self._retrieve_neuron_data()
 
                 # expose data in plasticity rule dummy (one call suffices)
-                self.con_plastic[0].rule()
+                self.__update_plasticity()
 
                 if self.p.Performance.compute_performance:
                     self.performance.compute(neuron_events=self.neuron_events, method=self.p.Performance.method)
@@ -726,7 +770,7 @@ class PlasticitySingleNeuron:
 
 
 class OnChipPlasticityDummy(ABC):
-    def __init__(self, projection: Projection, shtm):
+    def __init__(self, projection: Projection, shtm, id=0):
         # custom objects
         self.projection = projection
         self.shtm: SHTMTotal = shtm
@@ -739,20 +783,22 @@ class OnChipPlasticityDummy(ABC):
         self.x = []
         self.z = []
 
-    def rule(self):
+        self.id = id
+
+    def update_values(self, weights, rates, permanences, x, z):
         # save weights
-        self.weights.append(self.shtm.exc_to_exc[0].get("weight", format="array"))
+        self.weights.append(weights)
 
         # save rates
-        self.rates.append(np.array(self.shtm.exc_to_exc_soma_to_soma_dummy[0].get_data("data")[-1].data).reshape((len(self.shtm.exc_to_exc_soma_to_soma_dummy[0]))))
+        self.rates.append(rates)
 
         # save permanences
-        self.permanences.append(np.array(self.shtm.exc_to_exc_dendrite_to_soma_dummy[0].get_data("data")[-1].data).reshape((len(self.shtm.exc_to_exc_dendrite_to_soma_dummy[0]))))
+        self.permanences.append(permanences)
         self.permanence = self.permanences[-1]
 
         # save correlations
-        self.x.append(np.array(self.shtm.exc_to_exc_soma_to_soma_dummy[0].get_data("correlation")[-1].data).reshape((len(self.shtm.exc_to_exc_soma_to_soma_dummy[0]))))
-        self.z.append(np.array(self.shtm.exc_to_exc_dendrite_to_soma_dummy[0].get_data("correlation")[-1].data).reshape((len(self.shtm.exc_to_exc_dendrite_to_soma_dummy[0]))))
+        self.x.append(x)
+        self.z.append(z)
 
     def enable_permanence_logging(self):
         pass

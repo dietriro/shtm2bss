@@ -3,7 +3,8 @@ import pynn_brainscales.brainscales2 as pynn
 
 
 class PlasticityOnChip(pynn.PlasticityRule):
-    def __init__(self, timer: pynn.Timer, num_neurons: int, permanence_threshold: int, w_mature: int, target_rate_h, lambda_plus, lambda_minus, lambda_h, learning_factor):
+    def __init__(self, timer: pynn.Timer, num_neurons: int, permanence_threshold: int, w_mature: int, target_rate_h,
+                 lambda_plus, lambda_minus, lambda_h, learning_factor, p_exc_exc=0.2):
         # observables recorded for each invocation of rule during experiment
         # [weights, permanences, one correlation]
         obsv_data = pynn.PlasticityRule.ObservablePerSynapse()
@@ -16,13 +17,13 @@ class PlasticityOnChip(pynn.PlasticityRule):
             "correlation": obsv_data,
         })
         self.num_neurons = num_neurons
-        print(num_neurons)
         self.permanence_threshold = permanence_threshold
         self.w_mature = w_mature
         self.target_rate_h = target_rate_h
         self.lambda_plus = lambda_plus * learning_factor
         self.lambda_minus = lambda_minus * learning_factor
         self.lambda_h = lambda_h * learning_factor
+        self.p_exc_exc = p_exc_exc
 
     def generate_kernel(self) -> str:
         """
@@ -121,6 +122,15 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 for (size_t column_mask_index = column_mask_begin; column_mask_index < column_mask_end; ++column_mask_index) {{
                     column_mask[column_mask_index] = 0;
                 }}
+                
+                // update column mask to incorporate sampling of connections, 
+                // -> only p percent of connections should be active
+                for (size_t column_mask_index = 0; column_mask_index < synapses_soma_to_dendrite.columns.size; column_mask_index+=2) {{
+                    if ((column_mask_index/2) % {round(1/self.p_exc_exc)} != 0) {{
+                        column_mask[column_mask_index] = 0;
+                    }}
+                }}
+                
 
                 // get causal correlations and reset accumulated signals
                 // in [-128, 127] integer
@@ -158,14 +168,13 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 synapses_soma_to_dendrite.set_weights(weights, synapse_row_soma_to_dendrite_index);
 
                 // record observables
-                for (size_t active_column = 0, column = 0;
-                     column < synapses_soma_to_dendrite.columns.size; ++column) {{
+                for (size_t active_column = 0, column = 0; column < synapses_soma_to_dendrite.columns.size; ++column) {{
                     if (!synapses_soma_to_dendrite.columns.test(column)) {{
                         continue;
                     }}
                     std::get<0>(recording.data)[used_synapse_row_index][active_column] = weights[column];
                     std::get<1>(recording.data)[used_synapse_row_index][active_column] = pre_neuron_soma_num_spikes;
-                    std::get<2>(recording.data)[used_synapse_row_index][active_column] = permanence[column];
+                    std::get<2>(recording.data)[used_synapse_row_index][active_column] = permanence[column] * column_mask[column];
                     std::get<1>(recording.correlation)[used_synapse_row_index][active_column] = causal_correlation_soma_to_soma[column];
                     std::get<2>(recording.correlation)[used_synapse_row_index][active_column] = causal_correlation_dendrite_to_soma[column];
                     active_column++;
