@@ -556,14 +556,21 @@ class SHTMTotal(SHTMBase, ABC):
 
         fig, axs = plt.subplots(len(plot_con_ids), 1, sharex="all", figsize=(14, len(plot_con_ids) * 4))
 
-        for i_plot, i_perm in enumerate(plot_con_ids):
-            permanence = self.con_plastic[i_perm].permanences
-            num_connections = len(permanence)
+        for i_plot, i_con in enumerate(plot_con_ids):
+            permanences = np.array(self.con_plastic[i_con].permanences)
+
+            ind = np.where(np.sum(permanences == 0, axis=0) == 0)[0]
+            permanences = permanences[:, ind].tolist()
+
+            permanences_plot = list()
+            for i_perm in range(len(permanences)):
+                if not np.equal(permanences[i_perm], 0).all():
+                    permanences_plot.append(permanences[i_perm])
 
             # Plot all previous permanences as a line over time
-            axs[i_plot].plot(range(num_connections), permanence)
+            axs[i_plot].plot(range(len(permanences_plot)), permanences_plot)
 
-            axs[i_plot].set_ylabel(self.con_plastic[i_perm].projection.label.split('_')[1], weight='bold')
+            axs[i_plot].set_ylabel(self.con_plastic[i_con].projection.label.split('_')[1], weight='bold')
             axs[i_plot].grid(True, which='both', axis='both')
 
         axs[-1].set_xlabel("Number of learning phases")
