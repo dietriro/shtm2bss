@@ -1,6 +1,8 @@
 experiment:
   id: 'test'
-  sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
+  # sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
+  sequences: [['D', 'A'], ['D', 'A']]
+  # sequences: [['A', 'C', 'B'], ['D', 'C', 'B'], ['A', 'D', 'C'], ['B', 'D', 'C']]
   runtime: null
   episodes: 100
   run_add_calib: False
@@ -17,32 +19,32 @@ plotting:
   save_figure: True
 performance:
   compute_performance: True
-  method: "last_symbol"
+  method: "all_symbols"
 network:
   num_symbols: 4
   num_neurons: 15
-  pattern_size: 3
+  pattern_size: 4
 encoding:
   dt_stm: 20.e-3
   dt_seq: 600.e-3
   t_exc_start: 15.e-3
   t_scaling_factor: 1.e-3
-  num_repetitions: 500
+  num_repetitions: 200
 plasticity:
   type: 'original'
-  learning_factor: 1
+  learning_factor: 0.00006
   weight_learning: False
-  weight_learning_scale: 1.0
-  permanence_init_min: 0
-  permanence_init_max: 8
+  weight_learning_scale: 1
+  permanence_init_min: 5
+  permanence_init_max: 5
   permanence_max: 20.
   threshold: 100.
   w_mature: 50
   y: 1
-  lambda_plus: 102 # 0.08 * 1270
-  lambda_minus: 127 # 2: 0.0015 * 1270, max: 127, min: 0
-  lambda_h: 18 # 0.014 * 1270
-  target_rate_h: 50
+  lambda_plus: 10 # 102 = 0.08 * 1270
+  lambda_minus: 13 # 2: 127 = 0.0015 * 1270, max: 127, min: 0
+  lambda_h: 2 # 18 = 0.014 * 1270
+  target_rate_h: 25
   tau_plus: 10.e-3
   tau_h: null
   delta_t_min: 2.e-3
@@ -54,13 +56,13 @@ neurons:
     v_reset: 60
     v_thresh: 70
     tau_m: 2
-    tau_syn_I: 10
+    tau_syn_I: 1
     tau_syn_E: 0.5
     tau_refrac: 15
   excitatory:
-    v_rest: [60, 60]
-    v_reset: [100, 60]
-    v_thresh: [120, 120]
+    v_rest: [80, 60]
+    v_reset: [120, 60]
+    v_thresh: [140, 120]
     tau_m: 10
     tau_syn_I: [3, 1]
     tau_syn_E: [2, 5]
@@ -69,10 +71,10 @@ synapses:
   dyn_inh_weights: False
   dyn_weight_calculation: False
   w_exc_inh_dyn: null
-  w_ext_exc: 60
+  w_ext_exc: 55
   w_exc_exc: 0.0
-  w_exc_inh: 25
-  w_inh_exc: -80
+  w_exc_inh: 24
+  w_inh_exc: -330
   p_exc_exc: 0.4
   receptor_ext_exc: "excitatory"
   receptor_exc_exc: "excitatory"

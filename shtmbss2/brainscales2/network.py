@@ -70,7 +70,9 @@ class SHTMBase(network.SHTMBase, ABC):
             lambda_minus=self.p.Plasticity.lambda_minus,
             lambda_h=self.p.Plasticity.lambda_h,
             learning_factor=self.p.Plasticity.learning_factor,
-            p_exc_exc=self.p.Synapses.p_exc_exc
+            p_exc_exc=self.p.Synapses.p_exc_exc,
+            delta_t_max=self.p.Plasticity.delta_t_max,
+            tau_plus=self.p.Plasticity.tau_plus
             )
 
         # read-out permanence to retain between epochs

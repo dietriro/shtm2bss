@@ -1,10 +1,11 @@
 import textwrap
+import numpy as np
 import pynn_brainscales.brainscales2 as pynn
 
 
 class PlasticityOnChip(pynn.PlasticityRule):
     def __init__(self, timer: pynn.Timer, num_neurons: int, permanence_threshold: int, w_mature: int, target_rate_h,
-                 lambda_plus, lambda_minus, lambda_h, learning_factor, p_exc_exc=0.2):
+                 lambda_plus, lambda_minus, lambda_h, learning_factor, delta_t_max, tau_plus, p_exc_exc=0.2):
         # observables recorded for each invocation of rule during experiment
         # [weights, permanences, one correlation]
         obsv_data = pynn.PlasticityRule.ObservablePerSynapse()
@@ -24,6 +25,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
         self.lambda_minus = lambda_minus * learning_factor
         self.lambda_h = lambda_h * learning_factor
         self.p_exc_exc = p_exc_exc
+        self.threshold = np.exp(-delta_t_max / tau_plus)
 
     def generate_kernel(self) -> str:
         """
@@ -149,12 +151,25 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 auto& permanence = reinterpret_cast<VectorRowFracSat8&>(permanences[used_synapse_row_index]);
 
                 // update permanence values
-                // facilitate
-                permanence += causal_correlation_soma_to_soma * {self.lambda_plus};
-                // homeostasis
-                permanence += ({self.target_rate_h} - causal_correlation_dendrite_to_soma) * {self.lambda_h};
-                // depress
-                permanence -= ({self.lambda_minus} * 255) / pre_neuron_soma_num_spikes;
+                //auto threshold = {self.threshold} * pre_neuron_soma_num_spikes
+                
+                for (size_t column = 0; column < synapses_soma_to_dendrite.columns.size; ++column) {{
+                    if (column_mask[column] == 0) {{
+                        permanence[column] = 0;
+                    }}
+                    else {{
+                        if (causal_correlation_soma_to_soma[column] > 50) {{
+                            // facilitate
+                            permanence[column] += causal_correlation_soma_to_soma[column] * {self.lambda_plus};
+                            // homeostasis
+                            permanence[column] += ({self.target_rate_h} - causal_correlation_dendrite_to_soma[column]) * {self.lambda_h}; 
+                        }}  
+                        // depress
+                        permanence[column] -= ({self.lambda_minus} * 255) * pre_neuron_soma_num_spikes;
+                    }}
+                }}
+                
+                
 
                 // update weights
                 auto weights = synapses_soma_to_dendrite.get_weights(synapse_row_soma_to_dendrite_index);
@@ -174,7 +189,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
                     }}
                     std::get<0>(recording.data)[used_synapse_row_index][active_column] = weights[column];
                     std::get<1>(recording.data)[used_synapse_row_index][active_column] = pre_neuron_soma_num_spikes;
-                    std::get<2>(recording.data)[used_synapse_row_index][active_column] = permanence[column] * column_mask[column];
+                    std::get<2>(recording.data)[used_synapse_row_index][active_column] = permanence[column];
                     std::get<1>(recording.correlation)[used_synapse_row_index][active_column] = causal_correlation_soma_to_soma[column];
                     std::get<2>(recording.correlation)[used_synapse_row_index][active_column] = causal_correlation_dendrite_to_soma[column];
                     active_column++;
