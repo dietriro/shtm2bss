@@ -19,7 +19,7 @@ from pynn_brainscales.brainscales2 import Projection, PopulationView
 from pynn_brainscales.brainscales2.connectors import AllToAllConnector, FixedNumberPreConnector
 from pynn_brainscales.brainscales2.standardmodels.synapses import StaticSynapse
 from pyNN.random import NumpyRNG
-from dlens_vx_v3 import sta, halco, hal
+from dlens_vx_v3 import sta, halco, hal, lola
 
 
 RECORDING_VALUES = {
@@ -677,6 +677,14 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                 log.error("Error! Wrong runtime")
 
             self.p.Experiment.runtime = runtime
+
+            initial_permanences = lola.ExternalPPUMemoryBlock(
+                halco.ExternalPPUMemoryBlockSize(256 * 60))
+            # TODO: support drawing initial values between min and max
+            initial_permanences.bytes = [hal.ExternalPPUMemoryByte(
+                hal.ExternalPPUMemoryByte.Value(self.p.Plasticity.permanence_init_min))] * 256 * 60
+            pynn.simulator.state.injected_config.ppu_symbols = {
+                "permanences": initial_permanences}
 
             for t in range(steps):
                 log.info(f'Running emulation step {t + 1}/{steps}')
