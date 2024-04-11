@@ -151,25 +151,30 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 auto& permanence = reinterpret_cast<VectorRowFracSat8&>(permanences[used_synapse_row_index]);
 
                 // update permanence values
-                //auto threshold = {self.threshold} * pre_neuron_soma_num_spikes
-                
-                for (size_t column = 0; column < synapses_soma_to_dendrite.columns.size; ++column) {{
-                    if (column_mask[column] == 0) {{
-                        permanence[column] = 0;
-                    }}
-                    else {{
-                        if (causal_correlation_soma_to_soma[column] > 50) {{
-                            // facilitate
-                            permanence[column] += causal_correlation_soma_to_soma[column] * {self.lambda_plus};
-                            // homeostasis
-                            permanence[column] += ({self.target_rate_h} - causal_correlation_dendrite_to_soma[column]) * {self.lambda_h}; 
-                        }}  
-                        // depress
-                        permanence[column] -= ({self.lambda_minus} * 255) * pre_neuron_soma_num_spikes;
-                    }}
-                }}
-                
-                
+                permanence += vector_if(
+                    column_mask, VectorIfCondition::greater,
+                    vector_if(
+                        causal_correlation_soma_to_soma - 80,
+                        VectorIfCondition::greater_equal,
+                        causal_correlation_soma_to_soma * {self.lambda_plus},
+                        VectorRowFracSat8(0)),
+                    VectorRowFracSat8(0));
+
+                permanence += vector_if(
+                    column_mask, VectorIfCondition::greater,
+                    vector_if(
+                        causal_correlation_soma_to_soma - 80,
+                        VectorIfCondition::greater_equal,
+                        ({self.target_rate_h} - causal_correlation_dendrite_to_soma) * {self.lambda_h},
+                        VectorRowFracSat8(0)),
+                    VectorRowFracSat8(0));
+
+                //permanence -= vector_if(column_mask, VectorIfCondition::greater,
+                //                       VectorRowFracSat8(std::min(
+                //                           static_cast<size_t>(127),
+                //// TODO: * 255 seems wrong, since the result is required to be in [-128, 127)
+                //                           static_cast<size_t>(({self.lambda_minus} * 255) * pre_neuron_soma_num_spikes))),
+                //                       VectorRowFracSat8(0));
 
                 // update weights
                 auto weights = synapses_soma_to_dendrite.get_weights(synapse_row_soma_to_dendrite_index);

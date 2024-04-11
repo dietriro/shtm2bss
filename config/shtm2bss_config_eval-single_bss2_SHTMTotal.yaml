@@ -32,7 +32,7 @@ encoding:
   num_repetitions: 200
 plasticity:
   type: 'original'
-  learning_factor: 0.00006
+  learning_factor: 1.
   weight_learning: False
   weight_learning_scale: 1
   permanence_init_min: 5
