@@ -367,7 +367,7 @@ class SHTMBase(ABC):
         ax.set_xlabel("Time [ms]", fontsize=26, labelpad=14)
         if (x_lim_upper-x_lim_lower) / self.p.Encoding.dt_stm > 200:
             log.info("Minor ticks not set because the number of ticks would be too high.")
-        else:
+        elif (x_lim_upper-x_lim_lower) / self.p.Encoding.dt_stm < 15:
             ax.xaxis.set_ticks(np.arange(x_lim_lower, x_lim_upper, self.p.Encoding.dt_stm / 2))
         ax.tick_params(axis='x', labelsize=18)
 

@@ -764,6 +764,50 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
             if self.p.Experiment.save_final or self.p.Experiment.save_auto:
                 self.save_full_state()
 
+    def plot_data_overview(self, data_types="all"):
+        # define structure to hold all data
+        plot_data = dict()
+        # define total number of neurons
+        num_neurons_total = self.p.Network.num_neurons * self.p.Network.num_symbols
+
+        # retrieve current data
+        plot_data["spikes"] = np.array(self.exc_to_exc_soma_to_soma_dummy[0].get_data("correlation")[-1].data)
+        plot_data["permanences"] = np.array(self.exc_to_exc_dendrite_to_soma_dummy[0].get_data("data")[-1].data)
+        plot_data["weights"] = self.exc_to_exc[0].get("weight", format="array")
+
+        # reformat data into arrays
+        plot_data["spikes"] = plot_data["spikes"].reshape((num_neurons_total, num_neurons_total))
+        plot_data["permanences"] = plot_data["permanences"].reshape((num_neurons_total, num_neurons_total))
+
+        # plot data
+        fig, axs = plt.subplots(1, len(plot_data), figsize=(20, 20))
+        i_plot = 0
+        for data_name, data_arr in plot_data.items():
+            axs[i_plot].imshow(data_arr, interpolation='nearest')
+
+            # Major ticks
+            ticks_major = np.arange(self.p.Network.num_neurons/2, num_neurons_total, self.p.Network.num_neurons)
+            axs[i_plot].set_xticks(ticks_major)
+            axs[i_plot].set_yticks(ticks_major)
+
+            symbols = [sym for sym in SYMBOLS[:self.p.Network.num_symbols]]
+            axs[i_plot].set_xticklabels(symbols)
+            axs[i_plot].set_yticklabels(symbols)
+
+            # Minor ticks
+            axs[i_plot].set_xticks(np.arange(-0.5, num_neurons_total + 0.5, self.p.Network.num_neurons), minor=True)
+            axs[i_plot].set_yticks(np.arange(-0.5, num_neurons_total + 0.5, self.p.Network.num_neurons), minor=True)
+
+            axs[i_plot].grid(which='minor', color='w', linestyle='-', linewidth=1)
+
+            axs[i_plot].set_title(data_name, fontsize=20)
+            axs[i_plot].set_xlabel("Target", fontsize=16)
+            axs[i_plot].set_ylabel("Source", fontsize=16)
+
+            i_plot += 1
+
+        fig.show()
+
 
 class Plasticity(network.Plasticity):
     def __init__(self, projection: pynn.Projection, post_somas, shtm, index, **kwargs):
