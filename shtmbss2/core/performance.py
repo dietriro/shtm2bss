@@ -48,13 +48,14 @@ class Performance(ABC):
     def add_data_point(self, data_point, metric, sequence_id):
         pass
 
-    def compute(self, neuron_events, method=PerformanceType.ALL_SYMBOLS):
+    def compute(self, neuron_events, method=PerformanceType.ALL_SYMBOLS, t_min=None):
         log.info(f"Computing performance for {len(self.p.Experiment.sequences)} Sequences.")
 
         ratio_fp_activation = 0.5
         ratio_fn_activation = 0.5
 
-        t_min = self.p.Encoding.t_exc_start
+        if t_min is None:
+            t_min = self.p.Encoding.t_exc_start
 
         for i_seq, seq in enumerate(self.p.Experiment.sequences):
             seq_performance = {metric: list() for metric in PerformanceMetrics.get_all()}

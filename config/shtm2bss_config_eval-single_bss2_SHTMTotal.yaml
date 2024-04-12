@@ -32,6 +32,8 @@ encoding:
   num_repetitions: 200
 plasticity:
   type: 'original'
+  execution_start: 19.
+  execution_interval: 20.
   learning_factor: 1.
   weight_learning: False
   weight_learning_scale: 1

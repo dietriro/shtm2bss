@@ -57,10 +57,10 @@ class SHTMBase(ABC):
 
         # Load pre-defined parameters
         if p is None:
-            self.p = Parameters(network_type=self)
+            self.p: Parameters = Parameters(network_type=self)
             self.load_params(**kwargs)
         else:
-            self.p = deepcopy(p)
+            self.p: Parameters = deepcopy(p)
         self.p.Experiment.type = experiment_type
 
         # Declare neuron populations
@@ -338,7 +338,8 @@ class SHTMBase(ABC):
                     spikes.insert(0, [])
                 if neurons_i == NeuronType.Dendrite:
                     spikes_post = deepcopy(self.neuron_events[NeuronType.Soma][i_symbol])
-                    plot_dendritic_events(ax, spikes[1:], spikes_post, tau_dap=self.p.Neurons.Dendrite.tau_dAP,
+                    plot_dendritic_events(ax, spikes[1:], spikes_post,
+                                          tau_dap=self.p.Neurons.Dendrite.tau_dAP*self.p.Encoding.t_scaling_factor,
                                           color=f"C{neurons_i.ID}", label=neurons_i.NAME.capitalize(),
                                           seq_start=seq_start, seq_end=seq_end)
                 else:

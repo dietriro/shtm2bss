@@ -89,6 +89,8 @@ class Parameters(ParameterGroup):
 
     class Plasticity(ParameterGroup):
         type: str = None
+        execution_start: float = None
+        execution_interval: float = None
         learning_factor: float = None
         weight_learning: bool = None
         weight_learning_scale: float = None
