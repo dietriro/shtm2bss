@@ -771,18 +771,31 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
         num_neurons_total = self.p.Network.num_neurons * self.p.Network.num_symbols
 
         # retrieve current data
-        plot_data["spikes"] = np.array(self.exc_to_exc_soma_to_soma_dummy[0].get_data("correlation")[-1].data)
+        plot_data["cor_soma-soma"] = np.array(self.exc_to_exc_soma_to_soma_dummy[0].get_data("correlation")[-1].data)
+        plot_data["cor_dend-soma"] = np.array(self.exc_to_exc_soma_to_soma_dummy[0].get_data("correlation")[-1].data)
         plot_data["permanences"] = np.array(self.exc_to_exc_dendrite_to_soma_dummy[0].get_data("data")[-1].data)
         plot_data["weights"] = self.exc_to_exc[0].get("weight", format="array")
 
-        # reformat data into arrays
-        plot_data["spikes"] = plot_data["spikes"].reshape((num_neurons_total, num_neurons_total))
-        plot_data["permanences"] = plot_data["permanences"].reshape((num_neurons_total, num_neurons_total))
+        # define plotted data types
+        if data_types is None or (type(data_types) is str and data_types == "all"):
+            data_types = plot_data.keys()
+        elif type(data_types) is list():
+            pass
+        elif type(data_types) is str:
+            if data_types in plot_data.keys():
+                data_types = [data_types]
+            else:
+                log.error(f"Value of parameter 'data_types' is not known: {data_types}")
+                return
+        else:
+            log.error(f"Parameter 'data_types' has an unsupported type '{type(data_types)}'.")
+            return
 
-        # plot data
-        fig, axs = plt.subplots(1, len(plot_data), figsize=(20, 20))
-        i_plot = 0
-        for data_name, data_arr in plot_data.items():
+            # plot data
+        fig, axs = plt.subplots(1, len(data_types), figsize=(len(data_types)*5, 5))
+        for i_plot, data_name in data_types:
+            data_arr = plot_data[data_name].reshape((num_neurons_total, num_neurons_total))
+
             axs[i_plot].imshow(data_arr, interpolation='nearest')
 
             # Major ticks
