@@ -168,13 +168,11 @@ class PlasticityOnChip(pynn.PlasticityRule):
                         ({self.target_rate_h} - causal_correlation_dendrite_to_soma) * {self.lambda_h},
                         VectorRowFracSat8(0)),
                     VectorRowFracSat8(0));
-
-                //permanence -= vector_if(column_mask, VectorIfCondition::greater,
-                //                       VectorRowFracSat8(std::min(
-                //                           static_cast<size_t>(127),
-                //// TODO: * 255 seems wrong, since the result is required to be in [-128, 127)
-                //                           static_cast<size_t>(({self.lambda_minus} * 255) * pre_neuron_soma_num_spikes))),
-                //                       VectorRowFracSat8(0));
+                    
+                // TODO: * 255 seems wrong, since the result is required to be in [-128, 127)
+                permanence -= vector_if(column_mask, VectorIfCondition::greater,
+                    VectorRowFracSat8(std::min(static_cast<size_t>(127), static_cast<size_t>(({self.lambda_minus} * 255) * pre_neuron_soma_num_spikes))),
+                                       VectorRowFracSat8(0));
 
                 // update weights
                 auto weights = synapses_soma_to_dendrite.get_weights(synapse_row_soma_to_dendrite_index);
@@ -196,7 +194,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
                     std::get<1>(recording.data)[used_synapse_row_index][active_column] = pre_neuron_soma_num_spikes;
                     std::get<2>(recording.data)[used_synapse_row_index][active_column] = permanence[column];
                     std::get<1>(recording.correlation)[used_synapse_row_index][active_column] = causal_correlation_soma_to_soma[column];
-                    std::get<2>(recording.correlation)[used_synapse_row_index][active_column] = causal_correlation_dendrite_to_soma[column];
+                    std::get<2>(recording.correlation)[used_synapse_row_index][active_column] = z_permanence_depr[column];
                     active_column++;
                 }}
                 ++synapse_row_soma_to_soma_index;

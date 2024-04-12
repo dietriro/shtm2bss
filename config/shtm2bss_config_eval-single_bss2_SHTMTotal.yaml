@@ -1,7 +1,7 @@
 experiment:
   id: 'test'
-  # sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
-  sequences: [['D', 'A'], ['D', 'A']]
+  sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
+  # sequences: [['D', 'A'], ['D', 'A']]
   # sequences: [['A', 'C', 'B'], ['D', 'C', 'B'], ['A', 'D', 'C'], ['B', 'D', 'C']]
   runtime: null
   episodes: 100
@@ -32,8 +32,8 @@ encoding:
   num_repetitions: 200
 plasticity:
   type: 'original'
-  execution_start: 19.
-  execution_interval: 20.
+  execution_start: 39.
+  execution_interval: 40.
   learning_factor: 0.75
   weight_learning: False
   weight_learning_scale: 1
@@ -44,7 +44,7 @@ plasticity:
   w_mature: 50
   y: 1
   lambda_plus: 102 # 102 = 0.08 * 1270
-  lambda_minus: 127 # 2: 127 = 0.0015 * 1270, max: 127, min: 0
+  lambda_minus: 0.012 # 2: 127 = 0.0015 * 1270, max: 127, min: 0
   lambda_h: 18 # 18 = 0.014 * 1270
   target_rate_h: 25
   tau_plus: 10.e-3

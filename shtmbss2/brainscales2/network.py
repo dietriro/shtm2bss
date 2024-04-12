@@ -772,7 +772,7 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
 
         # retrieve current data
         plot_data["cor_soma-soma"] = np.array(self.exc_to_exc_soma_to_soma_dummy[0].get_data("correlation")[-1].data)
-        plot_data["cor_dend-soma"] = np.array(self.exc_to_exc_soma_to_soma_dummy[0].get_data("correlation")[-1].data)
+        plot_data["cor_dend-soma"] = np.array(self.exc_to_exc_dendrite_to_soma_dummy[0].get_data("correlation")[-1].data)
         plot_data["permanences"] = np.array(self.exc_to_exc_dendrite_to_soma_dummy[0].get_data("data")[-1].data)
         plot_data["weights"] = self.exc_to_exc[0].get("weight", format="array")
 
@@ -793,7 +793,7 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
 
             # plot data
         fig, axs = plt.subplots(1, len(data_types), figsize=(len(data_types)*5, 5))
-        for i_plot, data_name in data_types:
+        for i_plot, data_name in enumerate(data_types):
             data_arr = plot_data[data_name].reshape((num_neurons_total, num_neurons_total))
 
             axs[i_plot].imshow(data_arr, interpolation='nearest')
@@ -803,7 +803,7 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
             axs[i_plot].set_xticks(ticks_major)
             axs[i_plot].set_yticks(ticks_major)
 
-            symbols = [sym for sym in SYMBOLS[:self.p.Network.num_symbols]]
+            symbols = [id_to_symbol(sym_i) for sym_i in range(self.p.Network.num_symbols)]
             axs[i_plot].set_xticklabels(symbols)
             axs[i_plot].set_yticklabels(symbols)
 
