@@ -194,7 +194,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
                     std::get<1>(recording.data)[used_synapse_row_index][active_column] = pre_neuron_soma_num_spikes;
                     std::get<2>(recording.data)[used_synapse_row_index][active_column] = permanence[column];
                     std::get<1>(recording.correlation)[used_synapse_row_index][active_column] = causal_correlation_soma_to_soma[column];
-                    std::get<2>(recording.correlation)[used_synapse_row_index][active_column] = z_permanence_depr[column];
+                    std::get<2>(recording.correlation)[used_synapse_row_index][active_column] = causal_correlation_dendrite_to_soma[column];
                     active_column++;
                 }}
                 ++synapse_row_soma_to_soma_index;
