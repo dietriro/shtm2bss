@@ -1,0 +1,96 @@
+experiment:
+  id: 'test'
+  sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
+  # sequences: [['D', 'A'], ['D', 'A']]
+  # sequences: [['A', 'C', 'B'], ['D', 'C', 'B'], ['A', 'D', 'C'], ['B', 'D', 'C']]
+  runtime: null
+  episodes: 100
+  run_add_calib: False
+  save_final: False
+  save_auto: False
+  save_auto_epoches: 5
+  generate_rand_seed_offset: False
+  seed_offset: null
+  log_weights: True
+  log_permanence: True
+plotting:
+  size: [10, 12]
+  file_type: 'pdf'
+  save_figure: True
+performance:
+  compute_performance: True
+  method: "all_symbols"
+network:
+  num_symbols: 4
+  num_neurons: 15
+  pattern_size: 4
+encoding:
+  dt_stm: 20.e-3
+  dt_seq: 50.e-3
+  t_exc_start: 15.e-3
+  t_scaling_factor: 1.e-3
+  num_repetitions: 1
+plasticity:
+  type: 'original'
+  execution_start: 39.
+  execution_interval: 40.
+  learning_factor: 1.0
+  weight_learning: False
+  weight_learning_scale: 1
+  permanence_init_min: 5
+  permanence_init_max: 5
+  permanence_max: 20.
+  threshold: 10.
+  w_mature: 50
+  y: 1
+  lambda_plus: 0.08
+  lambda_minus: 0.0015
+  lambda_h: 0.014
+  target_rate_h: 1
+  tau_plus: 10.e-3
+  tau_h: null
+  delta_t_min: 2.e-3
+  delta_t_max: 38.e-3
+  dt: 0.1e-3
+neurons:
+  inhibitory:
+    v_rest: 60
+    v_reset: 60
+    v_thresh: 70
+    tau_m: 2
+    tau_syn_I: 1
+    tau_syn_E: 0.5
+    tau_refrac: 15
+  excitatory:
+    v_rest: [80, 60]
+    v_reset: [120, 60]
+    v_thresh: [140, 120]
+    tau_m: [10, 10]
+    tau_syn_I: [3, 1]
+    tau_syn_E: [2, 5]
+    tau_refrac: [30, 5]
+synapses:
+  dyn_inh_weights: False
+  dyn_weight_calculation: False
+  w_exc_inh_dyn: null
+  w_ext_exc: 65
+  w_exc_exc: 0.0
+  w_exc_inh: 28
+  w_inh_exc: -400
+  p_exc_exc: 0.4
+  receptor_ext_exc: "excitatory"
+  receptor_exc_exc: "excitatory"
+  receptor_exc_inh: "excitatory"
+  receptor_inh_exc: "inhibitory"
+  delay_ext_exc: 0.0
+  delay_exc_exc: 0.0
+  delay_exc_inh: 0.0
+  delay_inh_exc: 0.0
+  j_ext_exc_psp: None
+  j_exc_inh_psp: None
+  j_inh_exc_psp: None
+calibration:
+  v_rest_calib: 275
+  padi_bus_dacen_extension: 9
+  correlation_amplitude: 1.5
+  correlation_time_constant: 30

@@ -17,7 +17,7 @@ from copy import deepcopy
 
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
-from shtmbss2.core.parameters import NetworkParameters
+from shtmbss2.core.parameters import NetworkParameters, PlottingParameters
 from shtmbss2.core.performance import PerformanceSingle
 from shtmbss2.core.helpers import (Process, symbol_from_label, id_to_symbol, calculate_trace,
                                    psp_max_2_psc_max)
@@ -67,6 +67,7 @@ class SHTMBase(ABC):
         # Load pre-defined parameters
         if p is None:
             self.p: NetworkParameters = NetworkParameters(network_type=self)
+            self.p_plot: PlottingParameters = PlottingParameters(network_type=self)
             self.load_params(**kwargs)
         else:
             self.p: NetworkParameters = deepcopy(p)
@@ -115,6 +116,7 @@ class SHTMBase(ABC):
 
     def load_params(self, **kwargs):
         self.p.load_default_params(custom_params=kwargs)
+        self.p_plot.load_default_params()
 
         self.p.evaluate(recursive=True)
 
@@ -456,7 +458,7 @@ class SHTMBase(ABC):
                                   'wb'))  # This is for Python 3 - py2 may need `file` instead of `open`
 
     def plot_performance(self, statistic=StatisticalMetrics.MEAN, sequences="statistic"):
-        self.performance.plot(statistic=statistic, sequences=sequences)
+        self.performance.plot(self.p_plot, statistic=statistic, sequences=sequences)
 
     def getsize(self):
         """sum size of object & members."""

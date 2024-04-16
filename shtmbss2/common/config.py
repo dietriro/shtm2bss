@@ -84,6 +84,11 @@ class ConfigType(NamedStorage):
     PLOTTING = 'plotting'
 
 
+class PlasticityLocation(NamedStorage):
+    ON_CHIP = 'on-chip'
+    OFF_CHIP = 'off-chip'
+
+
 class ParameterMatchingType(NamedStorage):
     ALL = 'all'
     SINGLE = 'single'
@@ -116,6 +121,7 @@ class LogHandler(NamedStorage):
 
 class RuntimeConfig(NamedStorage):
     backend = None
+    plasticity_location = PlasticityLocation.OFF_CHIP
     backend_initialization = False
     config_prefix = "shtm2bss_config"
     plot_file_types = [PlotFileType.PNG, PlotFileType.PDF]

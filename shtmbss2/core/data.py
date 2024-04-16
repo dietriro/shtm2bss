@@ -26,7 +26,7 @@ def load_config(network_type, config_type, experiment_type=ExperimentType.EVAL_S
 
     if config_type == ConfigType.NETWORK:
         config_file_name = (f"{RuntimeConfig.config_prefix}_{experiment_type}_"
-                            f"{RuntimeConfig.backend}_{network_type.__name__}.yaml")
+                            f"{RuntimeConfig.backend}_{network_type.__name__}_{RuntimeConfig.plasticity_location}.yaml")
     elif config_type == ConfigType.PLOTTING:
         config_file_name = f"{RuntimeConfig.config_prefix}_{config_type}.yaml"
     else:
