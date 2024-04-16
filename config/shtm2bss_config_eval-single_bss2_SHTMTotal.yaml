@@ -25,7 +25,7 @@ network:
   num_neurons: 15
   pattern_size: 4
 encoding:
-  dt_stm: 20.e-3
+  dt_stm: 50.e-3
   dt_seq: 600.e-3
   t_exc_start: 15.e-3
   t_scaling_factor: 1.e-3
@@ -34,7 +34,7 @@ plasticity:
   type: 'original'
   execution_start: 39.
   execution_interval: 40.
-  learning_factor: 0.75
+  learning_factor: 1.5
   weight_learning: False
   weight_learning_scale: 1
   permanence_init_min: 5
@@ -44,7 +44,7 @@ plasticity:
   w_mature: 50
   y: 1
   lambda_plus: 102 # 102 = 0.08 * 1270
-  lambda_minus: 0.012 # 2: 127 = 0.0015 * 1270, max: 127, min: 0
+  lambda_minus: 0.002 # 2: 127 = 0.0015 * 1270, max: 127, min: 0
   lambda_h: 18 # 18 = 0.014 * 1270
   target_rate_h: 25
   tau_plus: 10.e-3
@@ -65,7 +65,7 @@ neurons:
     v_rest: [80, 60]
     v_reset: [120, 60]
     v_thresh: [140, 120]
-    tau_m: 10
+    tau_m: [10, 10]
     tau_syn_I: [3, 1]
     tau_syn_E: [2, 5]
     tau_refrac: [30, 5]
@@ -73,10 +73,10 @@ synapses:
   dyn_inh_weights: False
   dyn_weight_calculation: False
   w_exc_inh_dyn: null
-  w_ext_exc: 55
+  w_ext_exc: 65
   w_exc_exc: 0.0
-  w_exc_inh: 24
-  w_inh_exc: -330
+  w_exc_inh: 28
+  w_inh_exc: -400
   p_exc_exc: 0.4
   receptor_ext_exc: "excitatory"
   receptor_exc_exc: "excitatory"

@@ -15,7 +15,7 @@ import shtmbss2.common.network as network
 from shtmbss2.common.config import NeuronType, RecTypes
 
 from pynn_brainscales import brainscales2 as pynn
-from pynn_brainscales.brainscales2 import Projection, PopulationView
+from pynn_brainscales.brainscales2 import simulator, Projection, PopulationView
 from pynn_brainscales.brainscales2.connectors import AllToAllConnector, FixedNumberPreConnector
 from pynn_brainscales.brainscales2.standardmodels.synapses import StaticSynapse
 from pyNN.random import NumpyRNG
@@ -135,7 +135,7 @@ class SHTMBase(network.SHTMBase, ABC):
 
         dendrites = pynn.Population(num_neurons, pynn.cells.CalibHXNeuronCuba(
             plasticity_rule=self.plasticity_rule,
-            tau_m=self.p.Neurons.Excitatory.tau_m,
+            tau_m=self.p.Neurons.Excitatory.tau_m[0],
             tau_syn_I=self.p.Neurons.Excitatory.tau_syn_I[0],
             tau_syn_E=self.p.Neurons.Excitatory.tau_syn_E[0],
             v_rest=self.p.Neurons.Excitatory.v_rest[0],
@@ -146,7 +146,7 @@ class SHTMBase(network.SHTMBase, ABC):
 
         somas = pynn.Population(num_neurons, pynn.cells.CalibHXNeuronCuba(
             plasticity_rule=self.plasticity_rule,
-            tau_m=self.p.Neurons.Excitatory.tau_m,
+            tau_m=self.p.Neurons.Excitatory.tau_m[1],
             tau_syn_I=self.p.Neurons.Excitatory.tau_syn_I[1],
             tau_syn_E=self.p.Neurons.Excitatory.tau_syn_E[1],
             v_rest=self.p.Neurons.Excitatory.v_rest[1],
@@ -220,8 +220,13 @@ class SHTMBase(network.SHTMBase, ABC):
     def reset_rec_exc(self):
         self.rec_neurons_exc.record(None)
 
-    def reset(self):
+    def reset(self, store_to_cache=False):
         pynn.reset()
+
+        # disable caching of segments (takes lots of time and space)
+        if not store_to_cache:
+            for recorder in simulator.state.recorders:
+                recorder.clear_flag = True
 
         # # Restart recording of spikes
         # for i_symbol in range(self.p.Network.num_symbols):
@@ -675,7 +680,8 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
 
                 i_plastic += 1
 
-    def run(self, runtime=None, steps=None, plasticity_enabled=True, dyn_exc_inh=False, run_type=RunType.SINGLE):
+    def run(self, runtime=None, steps=None, plasticity_enabled=True, store_to_cache=False, store_plasticity_values=True,
+            dyn_exc_inh=False, run_type=RunType.SINGLE):
         if not self.use_on_chip_plasticity:
             super().run(runtime=runtime, steps=steps, plasticity_enabled=plasticity_enabled, dyn_exc_inh=dyn_exc_inh,
                         run_type=run_type)
@@ -708,7 +714,7 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                 "permanences": initial_permanences}
 
             run_length = self.p.Experiment.runtime / self.p.Encoding.num_repetitions
-            performance_t_min = (np.ceil(self.p.Plasticity.execution_start * 2 / run_length) * run_length
+            performance_t_min = ((np.ceil(self.p.Plasticity.execution_start / run_length) - 2) * run_length
                                  + self.p.Encoding.t_exc_start)
 
             for t in range(steps):
@@ -738,7 +744,8 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                 self._retrieve_neuron_data()
 
                 # expose data in plasticity rule dummy (one call suffices)
-                self.__update_plasticity()
+                if store_plasticity_values:
+                    self.__update_plasticity()
 
                 if self.p.Performance.compute_performance:
                     self.performance.compute(neuron_events=self.neuron_events, method=self.p.Performance.method,
@@ -791,7 +798,7 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
             log.error(f"Parameter 'data_types' has an unsupported type '{type(data_types)}'.")
             return
 
-            # plot data
+        # plot data
         fig, axs = plt.subplots(1, len(data_types), figsize=(len(data_types)*5, 5))
         for i_plot, data_name in enumerate(data_types):
             data_arr = plot_data[data_name].reshape((num_neurons_total, num_neurons_total))
@@ -820,6 +827,16 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
             i_plot += 1
 
         fig.show()
+
+    def plot_permanence_histogram(self, bin_width=5):
+        # Get data
+        num_neurons_total = self.p.Network.num_neurons * self.p.Network.num_symbols
+        soma_cor = np.array(self.exc_to_exc_soma_to_soma_dummy[0].get_data("correlation")[-1].data)
+        soma_cor = soma_cor.reshape((num_neurons_total, num_neurons_total))
+
+        # Plot histogram
+        data = soma_cor.flatten()
+        plt.hist(data, bins=range(min(data), max(data) + bin_width, bin_width))
 
 
 class Plasticity(network.Plasticity):

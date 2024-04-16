@@ -3,8 +3,11 @@ import numpy as np
 import copy
 import pickle
 import yaml
+import sys
 import multiprocessing as mp
 
+from types import ModuleType, FunctionType
+from gc import get_referents
 from matplotlib import pyplot as plt
 from matplotlib.lines import Line2D
 from pyNN.random import NumpyRNG
@@ -45,6 +48,12 @@ else:
 ID_PRE = 0
 ID_POST = 1
 NON_PICKLE_OBJECTS = ["post_somas", "projection", "shtm"]
+
+
+# Custom objects know their class.
+# Function objects seem to know way too much, including modules.
+# Exclude modules as well.
+BLACKLIST = type, ModuleType, FunctionType
 
 
 class SHTMBase(ABC):
@@ -265,7 +274,8 @@ class SHTMBase(ABC):
 
         return target_firing_rate * t_exc
 
-    def reset(self):
+    @abstractmethod
+    def reset(self, store_to_cache=False):
         pass
 
     def run_sim(self, runtime):
@@ -447,6 +457,23 @@ class SHTMBase(ABC):
 
     def plot_performance(self, statistic=StatisticalMetrics.MEAN, sequences="statistic"):
         self.performance.plot(statistic=statistic, sequences=sequences)
+
+    def getsize(self):
+        """sum size of object & members."""
+        if isinstance(self, BLACKLIST):
+            raise TypeError('getsize() does not take argument of type: ' + str(type(self)))
+        seen_ids = set()
+        size = 0
+        objects = [self]
+        while objects:
+            need_referents = []
+            for obj in objects:
+                if not isinstance(obj, BLACKLIST) and id(obj) not in seen_ids:
+                    seen_ids.add(id(obj))
+                    size += sys.getsizeof(obj)
+                    need_referents.append(obj)
+            objects = get_referents(*need_referents)
+        return size
 
     def __str__(self):
         return type(self).__name__
@@ -656,7 +683,8 @@ class SHTMTotal(SHTMBase, ABC):
 
         return self.con_plastic[con_id].projection.get("weight", format="array")
 
-    def run(self, runtime=None, steps=None, plasticity_enabled=True, dyn_exc_inh=False, run_type=RunType.SINGLE):
+    def run(self, runtime=None, steps=None, plasticity_enabled=True, store_to_cache=False, dyn_exc_inh=False,
+            run_type=RunType.SINGLE):
         if runtime is None:
             runtime = self.p.Experiment.runtime
         if steps is None:
@@ -681,7 +709,7 @@ class SHTMTotal(SHTMBase, ABC):
 
             # reset the simulator and the network state if not first run
             if self.run_state:
-                self.reset()
+                self.reset(store_to_cache)
 
             # set start time to 0.0 because
             # - nest is reset and always starts with 0.0
