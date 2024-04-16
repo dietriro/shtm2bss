@@ -132,7 +132,7 @@ class Performance(ABC):
         :return:
         :rtype:
         """
-        fig, axs = plt.subplots(1, 3, figsize=[18, 4], dpi=600)
+        fig, axs = plt.subplots(1, 3, figsize=plt_config.Performance.size, dpi=plt_config.Performance.dpi)
 
         plt.subplots_adjust(wspace=0.25)
 
