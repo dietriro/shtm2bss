@@ -7,7 +7,7 @@ from shtmbss2.core.helpers import Process
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
 from shtmbss2.core.data import get_last_experiment_num, get_experiment_folder
-from shtmbss2.core.parameters import Parameters
+from shtmbss2.core.parameters import NetworkParameters, PlottingParameters
 from shtmbss2.core.performance import PerformanceMulti
 
 if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
@@ -103,9 +103,13 @@ class ParallelExecutor:
         # save figure of performance
         if self.fig_save:
             # retrieve parameters for performed experiment
-            p = Parameters(network_type=SHTMTotal)
+            p = NetworkParameters(network_type=SHTMTotal)
             p.load_experiment_params(experiment_type=self.experiment_type, experiment_id=self.experiment_id,
                                      experiment_num=self.experiment_num)
+
+            # retrieve plotting parameters
+            p_plot = PlottingParameters(network_type=SHTMTotal)
+            p_plot.load_default_params()
 
             # retrieve performance data for entire set of instances for subnum
             pf = PerformanceMulti(p, self.num_instances)
@@ -114,10 +118,11 @@ class ParallelExecutor:
                          experiment_num=self.experiment_num)
 
             # save figure
-            fig, _ = pf.plot(statistic=StatisticalMetrics.MEDIAN, fig_show=False)
+            fig, _ = pf.plot(p_plot, statistic=StatisticalMetrics.MEDIAN, fig_show=False)
             figure_path = join(get_experiment_folder(SHTMTotal, self.experiment_type, self.experiment_id,
                                                      self.experiment_num), "performance")
-            fig.savefig(figure_path)
+            for plot_file_type in RuntimeConfig.plot_file_types:
+                fig.savefig(f"{figure_path}.{plot_file_type}")
 
         log.handlers[LogHandler.STREAM].setLevel(logging.INFO)
 

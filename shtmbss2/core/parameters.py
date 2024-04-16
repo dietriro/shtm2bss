@@ -46,6 +46,55 @@ class ParameterGroup:
 
 
 class Parameters(ParameterGroup):
+    def __init__(self, network_type):
+        self.network_type = network_type
+        self.config_type = None
+
+    def load_default_params(self, custom_params=None):
+        default_params = load_config(self.network_type, self.config_type)
+        self.set_params(self, default_params)
+
+        log.debug(f"Successfully loaded parameters for '{self.network_type}'")
+
+        # Set specific parameters loaded from individual configuration
+        if custom_params is not None:
+            for name, value in custom_params.items():
+                category_objs = name.split('.')
+                category_obj = self
+                for category_name in category_objs[:-1]:
+                    category_obj = getattr(category_obj, category_name)
+                setattr(category_obj, category_objs[-1], value)
+
+        log.debug(f"Successfully set custom parameters for '{self.network_type}'")
+
+    def load_experiment_params(self, experiment_type, experiment_id, experiment_num, experiment_subnum=None,
+                               instance_id=None):
+        if ((experiment_type == ExperimentType.EVAL_MULTI or experiment_type == ExperimentType.OPT_GRID_MULTI)
+                and instance_id is None):
+            instance_id = 0
+
+        experiment_folder_path = get_experiment_folder(self.network_type, experiment_type, experiment_id,
+                                                       experiment_num, experiment_subnum=experiment_subnum,
+                                                       instance_id=instance_id)
+
+        saved_params = load_yaml(experiment_folder_path, f"config_{self.config_type}.yaml")
+
+        self.set_params(self, saved_params)
+
+    def set_params(self, category_obj, parameters):
+        for name, value in parameters.items():
+            if type(value) is dict:
+                if hasattr(category_obj, name.capitalize()):
+                    self.set_params(getattr(category_obj, name.capitalize()), value)
+                else:
+                    log.warn(f"'{category_obj}' does not have an object '{name.capitalize()}'")
+                    continue
+            else:
+                if hasattr(category_obj, name):
+                    setattr(category_obj, name, value)
+
+
+class NetworkParameters(Parameters):
     class Experiment(ParameterGroup):
         type: str = None
         id: str = None
@@ -170,47 +219,30 @@ class Parameters(ParameterGroup):
         correlation_time_constant = None
 
     def __init__(self, network_type):
-        self.network_type = network_type
+        super().__init__(network_type)
 
-    def load_default_params(self, custom_params=None):
-        default_params = load_config(self.network_type)
-        self.set_params(self, default_params)
+        self.config_type = ConfigType.NETWORK
 
-        log.debug(f"Successfully loaded parameters for '{self.network_type}'")
 
-        # Set specific parameters loaded from individual configuration
-        if custom_params is not None:
-            for name, value in custom_params.items():
-                category_objs = name.split('.')
-                category_obj = self
-                for category_name in category_objs[:-1]:
-                    category_obj = getattr(category_obj, category_name)
-                setattr(category_obj, category_objs[-1], value)
+class PlottingParametersBase(ParameterGroup):
+    size: list = None
+    dpi: int = None
+    line_width: int = None
 
-        log.debug(f"Successfully set custom parameters for '{self.network_type}'")
+    class Fontsize(ParameterGroup):
+        title: int = None
+        legend: int = None
+        axis_labels: int = None
+        tick_labels: int = None
 
-    def load_experiment_params(self, experiment_type, experiment_id, experiment_num, experiment_subnum=None,
-                               instance_id=None):
-        if ((experiment_type == ExperimentType.EVAL_MULTI or experiment_type == ExperimentType.OPT_GRID_MULTI)
-                and instance_id is None):
-            instance_id = 0
 
-        experiment_folder_path = get_experiment_folder(self.network_type, experiment_type, experiment_id,
-                                                       experiment_num, experiment_subnum=experiment_subnum,
-                                                       instance_id=instance_id)
+class PlottingParameters(Parameters):
+    class Performance(PlottingParametersBase):
+        pass
 
-        saved_params = load_yaml(experiment_folder_path, "config.yaml")
+    def __init__(self, network_type):
+        super().__init__(network_type)
 
-        self.set_params(self, saved_params)
+        self.config_type = ConfigType.PLOTTING
 
-    def set_params(self, category_obj, parameters):
-        for name, value in parameters.items():
-            if type(value) is dict:
-                if hasattr(category_obj, name.capitalize()):
-                    self.set_params(getattr(category_obj, name.capitalize()), value)
-                else:
-                    log.warn(f"'{category_obj}' does not have an object '{name.capitalize()}'")
-                    continue
-            else:
-                if hasattr(category_obj, name):
-                    setattr(category_obj, name, value)
+

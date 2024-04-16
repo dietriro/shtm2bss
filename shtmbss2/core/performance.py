@@ -6,10 +6,11 @@ from abc import ABC, abstractmethod
 
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
-from shtmbss2.core.parameters import Parameters
+from shtmbss2.core.parameters import NetworkParameters, PlottingParameters
 from shtmbss2.core.helpers import moving_average
 from shtmbss2.common.config import NeuronType
 from shtmbss2.core.data import get_experiment_folder
+from shtmbss2.common.plot import plot_panel_label
 
 
 class Performance(ABC):
@@ -17,7 +18,7 @@ class Performance(ABC):
         """
 
         :param parameters:
-        :type parameters: Parameters
+        :type parameters: NetworkParameters
         """
         self.p = parameters
 
@@ -119,8 +120,21 @@ class Performance(ABC):
             for metric in PerformanceMetrics.get_all():
                 self.add_data_point(np.mean(seq_performance[metric]), metric, sequence_id=i_seq)
 
-    def plot(self, statistic, sequences="mean"):
-        fig, axs = plt.subplots(1, 3, figsize=[12, 5])
+    def plot(self, plt_config, statistic, sequences="mean"):
+        """
+
+        :param plt_config:
+        :type plt_config: PlottingParameters
+        :param statistic:
+        :type statistic:
+        :param sequences:
+        :type sequences:
+        :return:
+        :rtype:
+        """
+        fig, axs = plt.subplots(1, 3, figsize=[18, 4], dpi=600)
+
+        plt.subplots_adjust(wspace=0.25)
 
         axs[0].set_ylabel("Prediction error")
         axs[0].set_xlabel("# Training Episodes")
@@ -135,21 +149,32 @@ class Performance(ABC):
         axs[2].set_ylabel("Rel. no. of active neurons")
         axs[2].set_xlabel("# Training Episodes")
 
-        fig.tight_layout()
+        for i_plot, letter in enumerate(['A', 'B', 'C']):
+            panel_label_pos = (-0.05, 1.14)
+            plot_panel_label(letter, panel_label_pos, axs[i_plot], size=plt_config.Performance.Fontsize.title)
+
+            axs[i_plot].title.set_size(plt_config.Performance.Fontsize.title)
+            axs[i_plot].xaxis.label.set_size(plt_config.Performance.Fontsize.axis_labels)
+            axs[i_plot].yaxis.label.set_size(plt_config.Performance.Fontsize.axis_labels)
+            axs[i_plot].tick_params(axis='both', labelsize=plt_config.Performance.Fontsize.tick_labels)
+
+        # fig.tight_layout()
 
         return fig, axs
 
-    def plot_seq(self, axs, perf_errors, perf_fps, perf_fns, num_active_somas_post, i_col=1):
+    def plot_seq(self, axs, plt_config, perf_errors, perf_fps, perf_fns, num_active_somas_post, i_col=1):
         # Plot 1: Performance error
-        axs[0].plot(moving_average(perf_errors), color=f"C{i_col}")
+        axs[0].plot(moving_average(perf_errors), color=f"C{i_col}", linewidth=plt_config.Performance.line_width)
 
         # Plot 2: False positives/negatives
-        axs[1].plot(moving_average(perf_fps), color=f"C{i_col}", label="False-positives")
-        axs[1].plot(moving_average(perf_fns), linestyle="dashed", color=f"C{i_col}", label="False-negatives")
+        axs[1].plot(moving_average(perf_fps), color=f"C{i_col}", label="False-positives",
+                    linewidth=plt_config.Performance.line_width)
+        axs[1].plot(moving_average(perf_fns), linestyle="dashed", color=f"C{i_col}", label="False-negatives",
+                    linewidth=plt_config.Performance.line_width)
 
         # Plot 3: Number of active neurons
         rel_num_active_neurons = moving_average(np.array(num_active_somas_post) / self.p.Network.num_neurons)
-        axs[2].plot(rel_num_active_neurons, color=f"C{i_col}")
+        axs[2].plot(rel_num_active_neurons, color=f"C{i_col}", linewidth=plt_config.Performance.line_width)
 
         return axs
 
@@ -167,12 +192,19 @@ class Performance(ABC):
 
         return axs
 
-    def plot_legend(self, axs):
-        axs[0].legend(["Prediction error"])
+    def plot_legend(self, axs, plt_config):
+        """
 
-        axs[1].legend(["False-positives", "False-negatives"])
-
-        axs[2].legend(["Target", "Actual"])
+        :param axs:
+        :type axs:
+        :param plt_config:
+        :type plt_config: PlottingParameters
+        :return:
+        :rtype:
+        """
+        axs[0].legend(["Prediction error"], fontsize=plt_config.Performance.Fontsize.legend)
+        axs[1].legend(["False-positives", "False-negatives"], fontsize=plt_config.Performance.Fontsize.legend)
+        axs[2].legend(["Target", "Actual"], fontsize=plt_config.Performance.Fontsize.legend)
 
         return axs
 
@@ -252,14 +284,14 @@ class PerformanceSingle(Performance):
     def add_data_point(self, data_point, metric, sequence_id):
         self.data[metric][sequence_id].append(data_point)
 
-    def plot(self, statistic=StatisticalMetrics.MEAN, sequences="statistic", fig_show=False):
-        fig, axs = super().plot(statistic=statistic, sequences=sequences)
+    def plot(self, plt_config, statistic=StatisticalMetrics.MEAN, sequences="statistic", fig_show=False):
+        fig, axs = super().plot(plt_config, statistic=statistic, sequences=sequences)
 
         sequence_range = None
 
         if type(sequences) is str:
             if sequences == "statistic":
-                axs = self.plot_seq(axs, self.get_statistic(statistic, PerformanceMetrics.ERROR),
+                axs = self.plot_seq(axs, plt_config, self.get_statistic(statistic, PerformanceMetrics.ERROR),
                                     self.get_statistic(statistic, PerformanceMetrics.FP),
                                     self.get_statistic(statistic, PerformanceMetrics.FN),
                                     self.get_statistic(statistic, PerformanceMetrics.ACTIVE_SOMAS), i_col=1)
@@ -270,12 +302,12 @@ class PerformanceSingle(Performance):
 
         if sequence_range is not None:
             for i_seq in sequence_range:
-                self.plot_seq(axs, self.get_all(PerformanceMetrics.ERROR, i_seq),
+                self.plot_seq(axs, plt_config, self.get_all(PerformanceMetrics.ERROR, i_seq),
                               self.get_all(PerformanceMetrics.FP, i_seq),
                               self.get_all(PerformanceMetrics.FN, i_seq),
                               self.get_all(PerformanceMetrics.ACTIVE_SOMAS, i_seq), i_col=i_seq)
 
-        axs = self.plot_legend(axs)
+        axs = self.plot_legend(axs, plt_config=plt_config)
 
         if fig_show:
             fig.show()
@@ -380,10 +412,11 @@ class PerformanceMulti(Performance):
     def add_data_point(self, data_point, metric, sequence_id, instance_id=None):
         self.data[instance_id][metric][sequence_id].append(data_point)
 
-    def plot(self, statistic, sequences=None, instances="statistic", fig_show=True):
-        fig, axs = super().plot(statistic=statistic, sequences=sequences)
+    def plot(self, plt_config, statistic=StatisticalMetrics.MEDIAN, sequences=None, instances="statistic",
+             fig_show=True):
+        fig, axs = super().plot(plt_config, statistic=statistic, sequences=sequences)
 
-        axs = self.plot_seq(axs, self.get_statistic(statistic, PerformanceMetrics.ERROR),
+        axs = self.plot_seq(axs, plt_config, self.get_statistic(statistic, PerformanceMetrics.ERROR),
                             self.get_statistic(statistic, PerformanceMetrics.FP),
                             self.get_statistic(statistic, PerformanceMetrics.FN),
                             self.get_statistic(statistic, PerformanceMetrics.ACTIVE_SOMAS), i_col=1)
@@ -409,7 +442,7 @@ class PerformanceMulti(Performance):
                                                                       percentile=95)
                                    )
 
-        axs = self.plot_legend(axs)
+        axs = self.plot_legend(axs, plt_config=plt_config)
 
         if fig_show:
             fig.show()

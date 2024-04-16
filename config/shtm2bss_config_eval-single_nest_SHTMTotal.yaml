@@ -1,5 +1,5 @@
 experiment:
-  id: 'test'
+  id: 'baseline'
 #  sequences: [[A, D, B, E], [F, D, B, C]]
 #  sequences: [['A', 'C', 'B'], ['D', 'C', 'B'], ['C', 'B', 'A'], ['B', 'D', 'A']]
   sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
@@ -96,6 +96,6 @@ synapses:
   delay_exc_exc: 2
   delay_exc_inh: 0.1
   delay_inh_exc: 0.1
-  j_ext_exc_psp: 1.1 * Parameters.Neurons.Excitatory.v_thresh
-  j_exc_inh_psp: 1.2 * Parameters.Neurons.Inhibitory.v_thresh / Parameters.Network.pattern_size
-  j_inh_exc_psp: -2 * Parameters.Neurons.Excitatory.v_thresh
+  j_ext_exc_psp: 1.1 * NetworkParameters.Neurons.Excitatory.v_thresh
+  j_exc_inh_psp: 1.2 * NetworkParameters.Neurons.Inhibitory.v_thresh / NetworkParameters.Network.pattern_size
+  j_inh_exc_psp: -2 * NetworkParameters.Neurons.Excitatory.v_thresh

@@ -9,7 +9,7 @@ from shtmbss2.common.config import *
 from shtmbss2.core.data import (load_config, get_last_experiment_num, get_experiment_folder, get_last_instance,
                                 save_instance_setup)
 from shtmbss2.common.executor import ParallelExecutor
-from shtmbss2.core.parameters import Parameters
+from shtmbss2.core.parameters import NetworkParameters
 from shtmbss2.core.performance import PerformanceMulti
 from shtmbss2.core.logging import log
 
@@ -98,7 +98,7 @@ class GridSearch:
         experiment_num = pe.run(steps=steps, additional_parameters=optimized_parameters)
 
         # retrieve parameters for performed experiment
-        p = Parameters(network_type=self.model_type)
+        p = NetworkParameters(network_type=self.model_type)
         p.load_experiment_params(experiment_type=ExperimentType.OPT_GRID_MULTI, experiment_id=self.experiment_id,
                                  experiment_subnum=experiment_subnum, experiment_num=experiment_num)
 

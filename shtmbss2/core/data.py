@@ -20,12 +20,18 @@ def load_yaml(path_yaml, file_name_yaml):
     return data
 
 
-def load_config(network_type, experiment_type=ExperimentType.EVAL_SINGLE):
+def load_config(network_type, config_type, experiment_type=ExperimentType.EVAL_SINGLE):
     if not inspect.isclass(network_type):
         network_type = type(network_type)
 
-    config_file_name = (f"{RuntimeConfig.config_prefix}_{experiment_type}_"
-                        f"{RuntimeConfig.backend}_{network_type.__name__}.yaml")
+    if config_type == ConfigType.NETWORK:
+        config_file_name = (f"{RuntimeConfig.config_prefix}_{experiment_type}_"
+                            f"{RuntimeConfig.backend}_{network_type.__name__}.yaml")
+    elif config_type == ConfigType.PLOTTING:
+        config_file_name = f"{RuntimeConfig.config_prefix}_{config_type}.yaml"
+    else:
+        log.error(f"Unknown config type '{config_type}'. Aborting.")
+        return None
     return load_yaml(PATH_CONFIG, config_file_name)
 
 

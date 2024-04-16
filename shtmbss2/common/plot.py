@@ -36,3 +36,26 @@ def plot_dendritic_events(axis, spikes_dend, spikes_post, color, label, tau_dap,
 
             axis.plot([spike_dend_i, spike_post_i], [i_neuron + y_offset, i_neuron + y_offset], color=color,
                       label=label)
+
+
+def plot_panel_label(s, pos, ax, title='', size=10):
+    """Creates a panel label (A,B,C,...) for the current axis object of a matplotlib figure.
+
+    NetworkParameters
+    ----------
+    s:   str
+        panel label
+    pos: tuple
+        x-/y- position of panel label (in units relative to the size of the current axis)
+
+    title: str
+        additional text describing the figure
+    """
+
+    plt.text(pos[0], pos[1], s, transform=ax.transAxes, horizontalalignment='center', verticalalignment='top', size=size,
+             weight='bold')
+    # plt.text(pos[0], pos[1], r'\bfseries{}%s %s' % (s, title), transform=ax.transAxes, horizontalalignment='center', verticalalignment='center',
+    #         size=10)
+    plt.text(pos[0] + 0.1, pos[1], title, transform=ax.transAxes, verticalalignment='top', size=size)
+
+    return 0

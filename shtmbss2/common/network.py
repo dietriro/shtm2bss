@@ -17,7 +17,7 @@ from copy import deepcopy
 
 from shtmbss2.common.config import *
 from shtmbss2.core.logging import log
-from shtmbss2.core.parameters import Parameters
+from shtmbss2.core.parameters import NetworkParameters
 from shtmbss2.core.performance import PerformanceSingle
 from shtmbss2.core.helpers import (Process, symbol_from_label, id_to_symbol, calculate_trace,
                                    psp_max_2_psc_max)
@@ -66,10 +66,10 @@ class SHTMBase(ABC):
 
         # Load pre-defined parameters
         if p is None:
-            self.p: Parameters = Parameters(network_type=self)
+            self.p: NetworkParameters = NetworkParameters(network_type=self)
             self.load_params(**kwargs)
         else:
-            self.p: Parameters = deepcopy(p)
+            self.p: NetworkParameters = deepcopy(p)
         self.p.Experiment.type = experiment_type
 
         # Declare neuron populations
@@ -831,7 +831,7 @@ class SHTMTotal(SHTMBase, ABC):
     def save_config(self):
         folder_path = get_experiment_folder(self, self.p.Experiment.type, self.p.Experiment.id, self.experiment_num,
                                             experiment_subnum=self.experiment_subnum, instance_id=self.instance_id)
-        file_path = join(folder_path, f"config.yaml")
+        file_path = join(folder_path, f"config_network.yaml")
 
         with open(file_path, 'w') as file:
             yaml.dump(self.p.dict(exclude_none=True), file)
@@ -946,7 +946,7 @@ class SHTMTotal(SHTMBase, ABC):
                         experiment_subnum=None, instance_id=None, debug=False):
         log.debug("Loading full state of network and experiment.")
 
-        p = Parameters(network_type=network_type)
+        p = NetworkParameters(network_type=network_type)
         p.load_experiment_params(experiment_type=experiment_type, experiment_id=experiment_id,
                                  experiment_num=experiment_num, experiment_subnum=experiment_subnum,
                                  instance_id=instance_id)

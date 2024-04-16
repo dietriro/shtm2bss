@@ -1,0 +1,9 @@
+performance:
+  size: [18, 4]
+  dpi: 600
+  line_width: 3
+  fontsize:
+    title: 18
+    legend: 11
+    axis_labels: 14
+    tick_labels: 11

@@ -722,7 +722,7 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
 
                 # reset the simulator and the network state if not first run
                 if self.run_state:
-                    self.reset()
+                    self.reset(store_to_cache)
 
                 # set start time to 0.0 because
                 # - nest is reset and always starts with 0.0
