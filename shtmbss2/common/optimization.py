@@ -9,7 +9,7 @@ from shtmbss2.common.config import *
 from shtmbss2.core.data import (load_config, get_last_experiment_num, get_experiment_folder, get_last_instance,
                                 save_instance_setup)
 from shtmbss2.common.executor import ParallelExecutor
-from shtmbss2.core.parameters import NetworkParameters
+from shtmbss2.core.parameters import NetworkParameters, PlottingParameters
 from shtmbss2.core.performance import PerformanceMulti
 from shtmbss2.core.logging import log
 
@@ -77,9 +77,13 @@ class GridSearch:
 
         model.save_full_state(running_avg_perc=0.5, optimized_parameter_ranges=optimized_parameter_ranges)
 
+        # retrieve plotting parameters
+        p_plot = PlottingParameters(network_type=self.model_type)
+        p_plot.load_default_params()
+
         # save figure of performance
         if fig_save:
-            fig, _ = model.performance.plot(statistic=StatisticalMetrics.MEDIAN, fig_show=False)
+            fig, _ = model.performance.plot(p_plot, statistic=StatisticalMetrics.MEDIAN, fig_show=False)
             figure_path = join(get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
                                                      experiment_num, instance_id=instance_id), "performance")
             fig.savefig(figure_path)
@@ -102,6 +106,10 @@ class GridSearch:
         p.load_experiment_params(experiment_type=ExperimentType.OPT_GRID_MULTI, experiment_id=self.experiment_id,
                                  experiment_subnum=experiment_subnum, experiment_num=experiment_num)
 
+        # retrieve plotting parameters
+        p_plot = PlottingParameters(network_type=self.model_type)
+        p_plot.load_default_params()
+
         # retrieve performance data for entire set of instances for subnum
         pf = PerformanceMulti(p, self.num_instances)
         pf.load_data(self.model_type, experiment_type=ExperimentType.OPT_GRID_MULTI, experiment_id=self.experiment_id,
@@ -109,7 +117,7 @@ class GridSearch:
 
         # save figure of performance
         if fig_save:
-            fig, _ = pf.plot(statistic=StatisticalMetrics.MEDIAN, fig_show=False)
+            fig, _ = pf.plot(p_plot, statistic=StatisticalMetrics.MEDIAN, fig_show=False)
             figure_path = join(get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
                                                      experiment_num, experiment_subnum=experiment_subnum),
                                "performance")
