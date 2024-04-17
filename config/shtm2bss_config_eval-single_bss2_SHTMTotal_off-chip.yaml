@@ -40,7 +40,7 @@ plasticity:
   permanence_init_min: 5
   permanence_init_max: 5
   permanence_max: 20.
-  threshold: 10.
+  permanence_threshold: 10.
   w_mature: 50
   y: 1
   lambda_plus: 0.08

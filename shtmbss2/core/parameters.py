@@ -146,7 +146,8 @@ class NetworkParameters(Parameters):
         permanence_init_min: float = None
         permanence_init_max: float = None
         permanence_max: float = None
-        threshold: float = None
+        permanence_threshold: float = None
+        correlation_threshold: int = None
         w_mature: float = None
         y: float = None
         lambda_plus: float = None

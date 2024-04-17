@@ -5,7 +5,8 @@ import pynn_brainscales.brainscales2 as pynn
 
 class PlasticityOnChip(pynn.PlasticityRule):
     def __init__(self, timer: pynn.Timer, num_neurons: int, permanence_threshold: int, w_mature: int, target_rate_h,
-                 lambda_plus, lambda_minus, lambda_h, learning_factor, delta_t_max, tau_plus, p_exc_exc=0.2):
+                 lambda_plus, lambda_minus, lambda_h, learning_factor, delta_t_max, tau_plus, p_exc_exc=0.2,
+                 correlation_threshold=0):
         # observables recorded for each invocation of rule during experiment
         # [weights, permanences, one correlation]
         obsv_data = pynn.PlasticityRule.ObservablePerSynapse()
@@ -26,6 +27,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
         self.lambda_h = lambda_h * learning_factor
         self.p_exc_exc = p_exc_exc
         self.threshold = np.exp(-delta_t_max / tau_plus)
+        self.correlation_threshold = correlation_threshold
 
     def generate_kernel(self) -> str:
         """
@@ -154,7 +156,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 permanence += vector_if(
                     column_mask, VectorIfCondition::greater,
                     vector_if(
-                        causal_correlation_soma_to_soma - 80,
+                        causal_correlation_soma_to_soma - {self.correlation_threshold},
                         VectorIfCondition::greater_equal,
                         causal_correlation_soma_to_soma * {self.lambda_plus},
                         VectorRowFracSat8(0)),
@@ -163,7 +165,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 permanence += vector_if(
                     column_mask, VectorIfCondition::greater,
                     vector_if(
-                        causal_correlation_soma_to_soma - 80,
+                        causal_correlation_soma_to_soma - {self.correlation_threshold},
                         VectorIfCondition::greater_equal,
                         ({self.target_rate_h} - causal_correlation_dendrite_to_soma) * {self.lambda_h},
                         VectorRowFracSat8(0)),

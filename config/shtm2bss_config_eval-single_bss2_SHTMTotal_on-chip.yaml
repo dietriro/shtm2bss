@@ -40,7 +40,8 @@ plasticity:
   permanence_init_min: 5
   permanence_init_max: 5
   permanence_max: 20.
-  threshold: 100.
+  permanence_threshold: 100.
+  correlation_threshold: 80
   w_mature: 50
   y: 1
   lambda_plus: 102 # 102 = 0.08 * 1270

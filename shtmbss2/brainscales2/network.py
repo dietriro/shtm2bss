@@ -74,8 +74,8 @@ class SHTMBase(network.SHTMBase, ABC):
         self.plasticity_rule = PlasticityOnChip(
             timer=timer,
             num_neurons=self.p.Network.num_symbols * self.p.Network.num_neurons,
-            permanence_threshold=self.p.Plasticity.threshold,
-            w_mature=self.p.Plasticity.w_mature,
+            permanence_threshold=int(self.p.Plasticity.permanence_threshold),
+            w_mature=int(self.p.Plasticity.w_mature),
             target_rate_h=self.p.Plasticity.target_rate_h,
             lambda_plus=self.p.Plasticity.lambda_plus,
             lambda_minus=self.p.Plasticity.lambda_minus,
@@ -83,7 +83,8 @@ class SHTMBase(network.SHTMBase, ABC):
             learning_factor=self.p.Plasticity.learning_factor,
             p_exc_exc=self.p.Synapses.p_exc_exc,
             delta_t_max=self.p.Plasticity.delta_t_max,
-            tau_plus=self.p.Plasticity.tau_plus
+            tau_plus=self.p.Plasticity.tau_plus,
+            correlation_threshold=self.p.Plasticity.correlation_threshold
         )
 
         # read-out permanence to retain between epochs
@@ -861,7 +862,7 @@ class PlasticitySingleNeuron:
         self.permanence_min = np.asarray(np.random.randint(0, 8, size=(len(self.projection),)), dtype=float)
         self.permanence = copy.copy(self.permanence_min)
         self.permanence_max = 20.
-        self.threshold = np.ones((len(self.projection))) * 20.
+        self.permanence_threshold = np.ones((len(self.projection))) * 20.
         self.lambda_plus = 0.08 * 1e3
         self.tau_plus = 20. / 1e3
         self.lambda_minus = 0.0015 * 1e3

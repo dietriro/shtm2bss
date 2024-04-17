@@ -975,7 +975,7 @@ class SHTMTotal(SHTMBase, ABC):
 class Plasticity(ABC):
     def __init__(self, projection: Projection, post_somas, shtm, index, proj_post_soma_inh=None, debug=False,
                  learning_factor=None, permanence_init_min=None, permanence_init_max=None, permanence_max=None,
-                 threshold=None, w_mature=None, y=None, lambda_plus=None, weight_learning=None,
+                 permanence_threshold=None, w_mature=None, y=None, lambda_plus=None, weight_learning=None,
                  weight_learning_scale=None, lambda_minus=None, lambda_h=None, target_rate_h=None, tau_plus=None,
                  tau_h=None, delta_t_min=None, delta_t_max=None, dt=None, **kwargs):
         # custom objects
@@ -1012,7 +1012,7 @@ class Plasticity(ABC):
         self.delta_t_min = delta_t_min
         self.delta_t_max = delta_t_max
         self.dt = dt
-        self.threshold = np.ones((len(self.projection))) * threshold
+        self.permanence_threshold = np.ones((len(self.projection))) * permanence_threshold
         self.lambda_plus = lambda_plus * learning_factor
         self.lambda_minus = lambda_minus * learning_factor
         self.lambda_h = lambda_h * learning_factor
@@ -1024,7 +1024,7 @@ class Plasticity(ABC):
 
         self.connections = list()
 
-    def rule(self, permanence, threshold, x, z, runtime, permanence_min,
+    def rule(self, permanence, permanence_threshold, x, z, runtime, permanence_min,
              neuron_spikes_pre, neuron_spikes_post_soma, neuron_spikes_post_dendrite,
              delay, sim_start_time=0.0):
         last_spike_pre = 0
@@ -1078,7 +1078,7 @@ class Plasticity(ABC):
         # update x (kplus) and z
         x = x * np.exp(-(runtime - last_spike_pre) / self.tau_plus)
 
-        if permanence >= threshold:
+        if permanence >= permanence_threshold:
             mature = True
         else:
             mature = False
@@ -1099,7 +1099,7 @@ class Plasticity(ABC):
         permanence = permanence - self.lambda_minus * self.permanence_max
         return max(permanence_min, permanence)
 
-    def rule_bss2(self, permanence, threshold, x, z, runtime, permanence_min,
+    def rule_bss2(self, permanence, permanence_threshold, x, z, runtime, permanence_min,
                   neuron_spikes_pre, neuron_spikes_post_soma, neuron_spikes_post_dendrite,
                   delay, sim_start_time=0.0):
         neuron_spikes_pre = np.array(neuron_spikes_pre)
@@ -1149,7 +1149,7 @@ class Plasticity(ABC):
 
         trace_treshold = np.exp(-self.delta_t_max / self.tau_plus)
 
-        # log.debug(f"{self.id} threshold: {trace_treshold}")
+        # log.debug(f"{self.id} permanence_threshold: {trace_treshold}")
         # log.debug(f"{self.id} x: {x},   x_mean: {x_mean}")
         # log.debug(f"{self.id} z: {z},   z_mean: {z_mean}")
 
@@ -1171,7 +1171,7 @@ class Plasticity(ABC):
 
         # log.debug(f"{self.id}  permanence after: {permanence}")
 
-        return permanence, x, permanence >= threshold
+        return permanence, x, permanence >= permanence_threshold
 
     def __facilitate_bss2(self, permanence, x):
         permanence = permanence + self.lambda_plus * x * self.permanence_max
@@ -1251,7 +1251,7 @@ class Plasticity(ABC):
 
             permanence, x, mature = (self.learning_rules[self.shtm.p.Plasticity.type]
                                      (permanence=self.permanence[c],
-                                      threshold=self.threshold[c],
+                                      permanence_threshold=self.permanence_threshold[c],
                                       runtime=runtime, x=self.x[j], z=z,
                                       permanence_min=self.permanence_min[c],
                                       neuron_spikes_pre=neuron_spikes_pre,
@@ -1264,7 +1264,8 @@ class Plasticity(ABC):
             self.x[j] = x
 
             if mature:
-                weight_offset = (permanence-self.threshold)*self.weight_learning_scale if self.weight_learning else 0
+                weight_offset = (
+                                            permanence - self.permanence_threshold) * self.weight_learning_scale if self.weight_learning else 0
                 weight[j, i] = self.w_mature + weight_offset
                 if self.proj_post_soma_inh is not None:
                     weight_inh = self.proj_post_soma_inh.get("weight", format="array")
