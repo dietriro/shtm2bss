@@ -51,7 +51,7 @@ class Parameters(ParameterGroup):
         self.config_type = None
 
     def load_default_params(self, custom_params=None):
-        default_params = load_config(self.network_type, self.config_type)
+        default_params = load_config(self.network_type, config_type=self.config_type)
         self.set_params(self, default_params)
 
         log.debug(f"Successfully loaded parameters for '{self.network_type}'")

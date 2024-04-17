@@ -20,13 +20,17 @@ def load_yaml(path_yaml, file_name_yaml):
     return data
 
 
-def load_config(network_type, config_type, experiment_type=ExperimentType.EVAL_SINGLE):
+def load_config(network_type, experiment_type=ExperimentType.EVAL_SINGLE, config_type=ConfigType.NETWORK):
     if not inspect.isclass(network_type):
         network_type = type(network_type)
 
     if config_type == ConfigType.NETWORK:
+        if experiment_type == ExperimentType.EVAL_SINGLE:
+            plasticity_location = f"_{RuntimeConfig.plasticity_location}"
+        else:
+            plasticity_location = ""
         config_file_name = (f"{RuntimeConfig.config_prefix}_{experiment_type}_"
-                            f"{RuntimeConfig.backend}_{network_type.__name__}_{RuntimeConfig.plasticity_location}.yaml")
+                            f"{RuntimeConfig.backend}_{network_type.__name__}{plasticity_location}.yaml")
     elif config_type == ConfigType.PLOTTING:
         config_file_name = f"{RuntimeConfig.config_prefix}_{config_type}.yaml"
     else:
