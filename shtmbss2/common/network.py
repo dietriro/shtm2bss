@@ -294,7 +294,7 @@ class SHTMBase(ABC):
         pass
 
     def plot_events(self, neuron_types="all", symbols="all", size=None, x_lim_lower=None, x_lim_upper=None, seq_start=0,
-                    seq_end=None, fig_title="", file_path=None, window="initial"):
+                    seq_end=None, fig_title="", file_path=None, window="initial", show_grid=False):
         if size is None:
             size = (12, 10)
 
@@ -366,7 +366,8 @@ class SHTMBase(ABC):
             ax.set_ylim(-1, self.p.Network.num_neurons + 1)
             ax.yaxis.set_ticks(range(self.p.Network.num_neurons + 2))
             ax.set_ylabel(id_to_symbol(i_symbol), weight='bold', fontsize=20)
-            # ax.grid(True, which='both', axis='both')
+            if show_grid:
+                ax.grid(True, which='both', axis='both')
 
             # Generate y-tick-labels based on number of neurons per symbol
             y_tick_labels = ['Inh', '', '0'] + ['' for _ in range(self.p.Network.num_neurons - 2)] + [
@@ -977,7 +978,8 @@ class Plasticity(ABC):
                  learning_factor=None, permanence_init_min=None, permanence_init_max=None, permanence_max=None,
                  permanence_threshold=None, w_mature=None, y=None, lambda_plus=None, weight_learning=None,
                  weight_learning_scale=None, lambda_minus=None, lambda_h=None, target_rate_h=None, tau_plus=None,
-                 tau_h=None, delta_t_min=None, delta_t_max=None, dt=None, **kwargs):
+                 tau_h=None, delta_t_min=None, delta_t_max=None, dt=None, correlation_threshold=None,
+                 homeostasis_depression_rate=None, **kwargs):
         # custom objects
         self.projection = projection
         self.proj_post_soma_inh = proj_post_soma_inh
@@ -1013,9 +1015,11 @@ class Plasticity(ABC):
         self.delta_t_max = delta_t_max
         self.dt = dt
         self.permanence_threshold = np.ones((len(self.projection))) * permanence_threshold
+        self.correlation_threshold = correlation_threshold
         self.lambda_plus = lambda_plus * learning_factor
         self.lambda_minus = lambda_minus * learning_factor
         self.lambda_h = lambda_h * learning_factor
+        self.homeostasis_depression_rate = homeostasis_depression_rate
 
         self.learning_rules = {"original": self.rule, "bss2": self.rule_bss2}
 
@@ -1062,7 +1066,8 @@ class Plasticity(ABC):
                     permanence_before = permanence
 
                     permanence = self.__homeostasis_control(permanence, z_tmp, permanence_min)
-                    log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
+                    # if permanence - permanence_before < 0:
+                    #     log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
                     # if self.debug and permanence - permanence_before < 0:
                         # log.info(f"{self.id}  spikes: {spike_pre}, {spike_post}, {spike_dt}")
                         # log.info(f"{self.id}  d_permanence facilitate: {d_facilitate}")
@@ -1142,12 +1147,14 @@ class Plasticity(ABC):
         x_mean = x / spike_pairs_soma_soma if spike_pairs_soma_soma > 0 else 0
         z_mean = z_tmp / spike_pairs_dend_soma if spike_pairs_dend_soma > 0 else 0
 
-        # Calculcation of z based on x
-        z = np.exp(-(-self.tau_plus*z_mean)/self.tau_h) * spike_pairs_dend_soma
-        # Calculcation of z using only number of pre-post spike pairs
+        # Calculation of z based on x
+        # z = np.exp(-(-self.tau_plus*z_mean)/self.tau_h) * spike_pairs_dend_soma
+        # Calculation of z using only number of pre-post spike pairs
         # z = spike_pairs_dend_soma
+        # Calculation of z according to current BSS-2 implementation
+        z = z_tmp
 
-        trace_treshold = np.exp(-self.delta_t_max / self.tau_plus)
+        # trace_treshold = np.exp(-self.delta_t_max / self.tau_plus)
 
         # log.debug(f"{self.id} permanence_threshold: {trace_treshold}")
         # log.debug(f"{self.id} x: {x},   x_mean: {x_mean}")
@@ -1156,14 +1163,15 @@ class Plasticity(ABC):
         # hebbian learning
         # Only run facilitate/homeostasis if a spike pair exists with a delta within boundaries,
         # i.e. x or z > 0
-        if x_mean > trace_treshold:
+        if x > self.correlation_threshold:
             permanence = self.__facilitate_bss2(permanence, x)
         # log.debug(f"{self.id}  d_permanence facilitate: {permanence - permanence_before}")
         permanence_before = permanence
 
-        if x_mean > trace_treshold:
+        if x > self.correlation_threshold:
             permanence = self.__homeostasis_control_bss2(permanence, z, permanence_min)
-        # log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
+        # if permanence - permanence_before < 0:
+            # log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
         permanence_before = permanence
 
         permanence = self.__depress_bss2(permanence, permanence_min, num_spikes=len(neuron_spikes_pre))
@@ -1178,7 +1186,11 @@ class Plasticity(ABC):
         return min(permanence, self.permanence_max)
 
     def __homeostasis_control_bss2(self, permanence, z, permanence_min):
-        permanence = permanence + self.lambda_h * (self.target_rate_h - z) * self.permanence_max
+        z_prime = (self.target_rate_h - z)
+        if z_prime < 0:
+            z_prime = -np.exp(-z_prime/self.homeostasis_depression_rate)
+
+        permanence = permanence + self.lambda_h * z_prime * self.permanence_max
         return max(min(permanence, self.permanence_max), permanence_min)
 
     def __depress_bss2(self, permanence, permanence_min, num_spikes):

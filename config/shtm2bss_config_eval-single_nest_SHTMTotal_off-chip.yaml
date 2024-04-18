@@ -36,7 +36,8 @@ encoding:
   t_scaling_factor: 1.
   num_repetitions: 1
 plasticity:
-  type: 'original'
+#  type: 'original'
+  type: 'bss2'
   learning_factor: 1
   weight_learning: False
   weight_learning_scale: 0.0026
@@ -44,13 +45,15 @@ plasticity:
   permanence_init_max: 8
   permanence_max: 20.
   permanence_threshold: 10.
+  correlation_threshold: 0.0005 # 0.06 for tau_+ = 20
   w_mature: 0.1298
   y: 1
   lambda_plus: 0.08
   lambda_minus: 0.0015
   lambda_h: 0.014
-  target_rate_h: 1.
-  tau_plus: 20
+  homeostasis_depression_rate: 1.0
+  target_rate_h: 0.1
+  tau_plus: 15
   tau_h: null       # computed during runtime based on sequence length
   delta_t_min: 4
   delta_t_max: 75

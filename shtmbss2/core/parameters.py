@@ -153,6 +153,7 @@ class NetworkParameters(Parameters):
         lambda_plus: float = None
         lambda_minus: float = None
         lambda_h: float = None
+        homeostasis_depression_rate: float = None
         target_rate_h: float = None
         tau_plus: float = None
         tau_h: float = None
