@@ -37,13 +37,15 @@ class ParallelExecutor:
         self.fig_save = fig_save
 
     @staticmethod
-    def __run_experiment(process_id, file_save_status, lock, experiment_type, experiment_num, seed_offset,
-                         experiment_subnum=None, additional_parameters=None, parameter_ranges=None, steps=None):
+    def __run_experiment(process_id, file_save_status, lock, experiment_type, experiment_id, experiment_num,
+                         seed_offset, experiment_subnum=None, additional_parameters=None, parameter_ranges=None,
+                         steps=None):
         if additional_parameters is None:
             additional_parameters = dict()
 
         shtm = SHTMTotal(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
-                         instance_id=process_id, seed_offset=seed_offset, **additional_parameters)
+                         instance_id=process_id, seed_offset=seed_offset,
+                         **{**additional_parameters, "Experiment.id": experiment_id})
 
         # set save_auto to false in order to minimize file lock timeouts
         shtm.p.Experiment.save_auto = False
@@ -88,6 +90,7 @@ class ParallelExecutor:
             log.essens(f'Starting network {i_inst}')
             processes.append(Process(target=self.__run_experiment, args=(i_inst, file_save_status, lock,
                                                                          self.experiment_type,
+                                                                         self.experiment_id,
                                                                          self.experiment_num, seed_offset,
                                                                          self.experiment_subnum,
                                                                          additional_parameters,
@@ -97,6 +100,12 @@ class ParallelExecutor:
 
         for i_inst in range(self.num_instances):
             processes[i_inst].join()
+
+            # Check if an exception occurred in the sub-process, then raise this exception
+            if processes[i_inst].exception:
+                exc, trc = processes[i_inst].exception
+                print(trc)
+                raise exc
 
             log.essens(f"Finished simulation {i_inst + 1}/{self.num_instances}")
 

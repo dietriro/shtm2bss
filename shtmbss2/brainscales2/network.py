@@ -103,7 +103,16 @@ class SHTMBase(network.SHTMBase, ABC):
         super().init_neurons()
 
         log.info("Starting preprocessing/calibration...")
-        pynn.preprocess()
+
+        preprocessing_completed = False
+        while not preprocessing_completed:
+            try:
+                pynn.preprocess()
+            except RuntimeError as e:
+                log.error(f"RuntimeError encountered, retrying calibration...")
+                log.error(e)
+            else:
+                preprocessing_completed = True
 
         for dendrites, somas in self.neurons_exc:
             self.init_neurons_exc_post_preprocess(dendrites, somas)

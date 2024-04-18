@@ -56,10 +56,10 @@ class GridSearch:
         with open(file_path, 'w') as file:
             yaml.dump(self.config, file)
 
-    def __run_experiment(self, optimized_parameters, experiment_num, instance_id, steps=None,
+    def __run_experiment(self, optimized_parameters, experiment_id, experiment_num, instance_id, steps=None,
                          optimized_parameter_ranges=None, fig_save=False):
         model = self.model_type(experiment_type=ExperimentType.OPT_GRID, instance_id=instance_id, seed_offset=0,
-                                **optimized_parameters)
+                                **{**optimized_parameters, "Experiment.id": experiment_id})
 
         # set save_auto to false in order to minimize file lock timeouts
         model.p.Experiment.save_auto = False
@@ -91,11 +91,11 @@ class GridSearch:
             # close figure in order to make it garbage-collectable
             plt.close(fig)
 
-    def __run_experiment_multi(self, optimized_parameters, experiment_num, experiment_subnum, steps=None,
+    def __run_experiment_multi(self, optimized_parameters, experiment_id, experiment_num, experiment_subnum, steps=None,
                                optimized_parameter_ranges=None, fig_save=False):
 
         # run experiments using parallel-executor
-        pe = ParallelExecutor(num_instances=self.num_instances, experiment_id=self.experiment_id,
+        pe = ParallelExecutor(num_instances=self.num_instances, experiment_id=experiment_id,
                               experiment_type=self.experiment_type, experiment_num=experiment_num,
                               experiment_subnum=experiment_subnum, parameter_ranges=optimized_parameter_ranges,
                               fig_save=False)
@@ -198,16 +198,33 @@ class GridSearch:
             parameters = {p_name: p_value for p_name, p_value in zip(parameter_names, parameter_combination)}
 
             if self.experiment_type == ExperimentType.OPT_GRID:
-                p = Process(target=self.__run_experiment, args=(parameters, self.experiment_num, run_i, steps,
-                                                                parameter_ranges, self.fig_save))
-                p.start()
-                p.join()
+                success = False
+                while not success:
+                    try:
+                        log.essens("Starting process")
+                        p = Process(target=self.__run_experiment, args=(parameters, self.experiment_id,
+                                                                        self.experiment_num, run_i, steps,
+                                                                        parameter_ranges, self.fig_save))
+                        log.essens("finished process")
+                        p.start()
+                        p.join()
+
+                        # Check if an exception occurred in the sub-process, then raise this exception
+                        if p.exception:
+                            exc, trc = p.exception
+                            raise exc
+                    except RuntimeError as e:
+                        log.error(f"RuntimeError encountered, running experiment {run_i} again")
+                        # log.error(e)
+                    else:
+                        success = True
             else:
                 success = False
                 while not success:
                     try:
-                        self.__run_experiment_multi(parameters, self.experiment_num, run_i, steps=steps,
-                                                    optimized_parameter_ranges=parameter_ranges, fig_save=self.fig_save)
+                        self.__run_experiment_multi(parameters, self.experiment_id, self.experiment_num, run_i,
+                                                    steps=steps, optimized_parameter_ranges=parameter_ranges,
+                                                    fig_save=self.fig_save)
                         success = True
                     except (RuntimeError, FileNotFoundError) as e:
                         success = False
