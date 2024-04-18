@@ -64,12 +64,14 @@ class Performance(ABC):
             t_min += i_seq * self.p.Encoding.dt_seq + i_seq * self.p.Encoding.dt_stm
 
             for i_element, element in enumerate(seq[1:]):
+                if i_element > 0:
+                    t_min += self.p.Encoding.dt_stm
+
                 if method == PerformanceType.LAST_SYMBOL and i_element < len(seq) - 2:
                     continue
 
                 # define min/max for time window of spikes
-                if i_element > 0:
-                    t_min += self.p.Encoding.dt_stm
+
                 t_max = t_min + self.p.Encoding.dt_stm
 
                 log.debug(f"t_min = {t_min},  t_max = {t_max}")
