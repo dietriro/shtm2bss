@@ -201,11 +201,9 @@ class GridSearch:
                 success = False
                 while not success:
                     try:
-                        log.essens("Starting process")
                         p = Process(target=self.__run_experiment, args=(parameters, self.experiment_id,
                                                                         self.experiment_num, run_i, steps,
                                                                         parameter_ranges, self.fig_save))
-                        log.essens("finished process")
                         p.start()
                         p.join()
 
