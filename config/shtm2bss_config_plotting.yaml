@@ -1,6 +1,6 @@
 performance:
   size: [18, 4]
-  dpi: 600
+  dpi: 150
   line_width: 3
   fontsize:
     title: 18
