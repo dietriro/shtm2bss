@@ -900,7 +900,7 @@ class SHTMTotal(SHTMBase, ABC):
                                                               optimized_parameter_ranges=optimized_parameter_ranges)
             save_instance_setup(net=self.__str__(), parameters=self.p,
                                 performance=self.performance.get_performance_dict(final_result=True,
-                                                                                  running_avg_perc=running_avg_perc,
+                                                                                  running_avgs=self.p.Performance.running_avgs,
                                                                                   decimals=3),
                                 experiment_num=self.experiment_num, experiment_subnum=self.experiment_subnum,
                                 instance_id=self.instance_id,

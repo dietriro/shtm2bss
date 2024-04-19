@@ -21,7 +21,8 @@ plotting:
   save_figure: True
 performance:
   compute_performance: True
-  method: "last_symbol"
+  method: "all_symbols"
+  running_avgs: [ 0.25, 0.5, 0.75, 1.0 ]
 network:
   num_symbols: 6
   num_neurons: 15
@@ -49,12 +50,12 @@ plasticity:
   correlation_threshold: 0.0005 # 0.06 for tau_+ = 20
   w_mature: 0.1298
   y: 1
-  lambda_plus: 0.08   # 0.25 for int
-  lambda_minus: 0.0015    # 0.0007 for int
-  lambda_h: 0.014        # 0.03 for int
+  lambda_plus: 0.06   # 0.25 for int
+  lambda_minus: 0.0005    # 0.0007 for int
+  lambda_h: 0.024        # 0.03 for int
   homeostasis_depression_rate: 1.0
-  target_rate_h: 0.1   # 0.14 for int
-  tau_plus: 15      # 20 for int
+  target_rate_h: 0.16   # 0.14 for int
+  tau_plus: 19      # 20 for int
   tau_h: null       # computed during runtime based on sequence length
   delta_t_min: 4
   delta_t_max: 75

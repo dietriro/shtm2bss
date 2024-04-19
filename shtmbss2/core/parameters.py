@@ -119,6 +119,7 @@ class NetworkParameters(Parameters):
     class Performance(ParameterGroup):
         compute_performance: bool = None
         method: str = None
+        running_avgs: list = None
 
     class Network(ParameterGroup):
         num_symbols: int = None

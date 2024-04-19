@@ -125,7 +125,8 @@ class GridSearch:
 
         # save performance and parameter data to overall sheet for experiment
         save_instance_setup(net=self.model_type, parameters=p,
-                            performance=pf.get_performance_dict(final_result=True, running_avg_perc=0.5, decimals=3),
+                            performance=pf.get_performance_dict(final_result=True,
+                                                                running_avgs=p.Performance.running_avgs, decimals=3),
                             experiment_num=self.experiment_num, experiment_subnum=experiment_subnum,
                             instance_id=None, optimized_parameters=optimized_parameters)
 

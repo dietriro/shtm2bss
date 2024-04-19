@@ -20,6 +20,7 @@ plotting:
 performance:
   compute_performance: True
   method: "all_symbols"
+  running_avgs: [0.25, 0.5, 0.75, 1.0]
 network:
   num_symbols: 4
   num_neurons: 15
@@ -40,7 +41,7 @@ plasticity:
   permanence_init_min: 5
   permanence_init_max: 5
   permanence_max: 20.
-  permanence_threshold: 100.
+  permanence_threshold: 128.
   correlation_threshold: 80
   w_mature: 50
   y: 1

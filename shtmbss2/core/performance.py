@@ -260,17 +260,35 @@ class PerformanceSingle(Performance):
         else:
             return self.data[metric][sequence_id]
 
-    def get_performance_dict(self, final_result=False, running_avg_perc=0.5, decimals=5):
+    def get_performance_dict(self, final_result=False, running_avgs=None, decimals=5):
+        if running_avgs is None:
+            running_avgs = [0.5]
         performance = dict()
         if final_result:
+            # find first training epoch from which error didn't fall below 0 anymore
+            error = self.get_all(PerformanceMetrics.ERROR)
+            error_max_reverse = np.flip(np.max(error, axis=0))
+            error_max_reverse = np.cumsum(error_max_reverse)
+            first_zero_id = np.argmax(error_max_reverse > 0)
+            if first_zero_id == 0:
+                # learning not finished yet
+                performance[f"num-epochs"] = -1
+            else:
+                performance[f"num-epochs"] = len(error_max_reverse) - first_zero_id
+            # add data from all metrics
             for metric_name in PerformanceMetrics.get_all():
                 metric = self.get_all(metric_name)
                 metric_means = np.mean(metric, axis=0)
+
+                # add mean of all training epochs to dict
+                for running_avg in running_avgs:
+                    start_id = int(len(metric_means) * (1-running_avg))
+                    end_id = len(metric_means)
+                    performance[f"{metric_name}_running-avg-{running_avg}"] = (
+                        np.round(np.mean(metric_means[start_id:end_id]), decimals))
+
                 # add final value to dict
                 performance[f"{metric_name}_last"] = np.round(metric_means[-1], decimals)
-                # add mean of all training epochs to dict
-                performance[f"{metric_name}_running-avg-{running_avg_perc}"] = (
-                    np.round(np.mean(metric_means[int(len(metric_means)*running_avg_perc):]), decimals))
         else:
             performance = self.data
         return performance
@@ -345,7 +363,7 @@ class PerformanceMulti(Performance):
 
             if not os.path.exists(inst_folder_path):
                 raise FileNotFoundError(f"Instance folder does not exist: {inst_folder_path}")
-                
+
             super().load_data(net, experiment_type, experiment_id, experiment_num, experiment_subnum=experiment_subnum,
                               instance_id=i_inst)
 
@@ -373,31 +391,57 @@ class PerformanceMulti(Performance):
         else:
             return self.data[instance_id][metric][sequence_id]
 
-    def get_performance_dict(self, final_result=False, running_avg_perc=0.5, decimals=5):
+    def get_performance_dict(self, final_result=False, running_avgs=None, decimals=5):
+        if running_avgs is None:
+            running_avgs = [0.5]
         performance = dict()
+        first_zero_finished = False
         if final_result:
             for metric_name in PerformanceMetrics.get_all():
                 for i_inst in range(self.num_instances):
                     metric = self.get_all(metric_name, instance_id=i_inst)
                     metric_means = np.mean(metric, axis=0)
 
-                    metric_last = metric_means[-1]
-                    metric_running_avg = np.mean(metric_means[int(len(metric_means) * running_avg_perc):])
-                    if i_inst == 0:
-                        # add final value to dict
-                        performance[f"{metric_name}_last"] = metric_last
-                        # add mean of all training epochs to dict
-                        performance[f"{metric_name}_running-avg-{running_avg_perc}"] = metric_running_avg
-                    else:
-                        # add final value to dict
-                        performance[f"{metric_name}_last"] += metric_last
-                        # add mean of all training epochs to dict
-                        performance[f"{metric_name}_running-avg-{running_avg_perc}"] += metric_running_avg
+                    # find first training epoch from which error didn't fall below 0 anymore
+                    if not first_zero_finished:
+                        error = self.get_all(PerformanceMetrics.ERROR, instance_id=i_inst)
+                        error_max_reverse = np.flip(np.max(error, axis=0))
+                        error_max_reverse = np.cumsum(error_max_reverse)
+                        first_zero_id = np.argmax(error_max_reverse > 0)
+                        if first_zero_id > 0:
+                            performance[f"num-epochs_avg"] = (performance.get(f"num-epochs_avg", 0) +
+                                                          len(error_max_reverse) - first_zero_id)
 
+                    # add running avgs to dict
+                    for running_avg in running_avgs:
+                        start_id = int(len(metric_means) * (1 - running_avg))
+                        end_id = len(metric_means)
+                        metric_running_avg = np.mean(metric_means[start_id:end_id])
+                        # add mean of all training epochs to dict
+                        performance[f"{metric_name}_running-avg-{running_avg}"] = (metric_running_avg +
+                                                    performance.get(f"{metric_name}_running-avg-{running_avg}", 0))
+
+                    # add final value to dict
+                    metric_last = metric_means[-1]
+                    performance[f"{metric_name}_last"] = performance.get(f"{metric_name}_last", 0) + metric_last
+
+                # compute average of running avgs
+                for running_avg in running_avgs:
+                    performance[f"{metric_name}_running-avg-{running_avg}"] = np.round(
+                            performance[f"{metric_name}_running-avg-{running_avg}"] / self.num_instances, decimals)
+
+                # compute average of last metric value
                 performance[f"{metric_name}_last"] = np.round(performance[f"{metric_name}_last"] / self.num_instances,
                                                               decimals)
-                performance[f"{metric_name}_running-avg-{running_avg_perc}"] = np.round(
-                        performance[f"{metric_name}_running-avg-{running_avg_perc}"] / self.num_instances, decimals)
+
+                # compute average of num-epochs, if this is the first round
+                if not first_zero_finished:
+                    if performance.get(f"num-epochs_avg", 0) == 0:
+                        performance[f"num-epochs_avg"] = -1
+                    else:
+                        performance[f"num-epochs_avg"] = np.round(performance[f"num-epochs_avg"] / self.num_instances)
+                    first_zero_finished = True
+
         else:
             performance = self.data
         return performance
