@@ -29,6 +29,23 @@ class PlasticityOnChip(pynn.PlasticityRule):
         self.threshold = np.exp(-delta_t_max / tau_plus)
         self.correlation_threshold = correlation_threshold
 
+    def get_placement(self):
+        if self._simulator.state.grenade_network_graph is None or not self._simulator.state.grenade_network.projections:
+            return "TODO"
+        synapse_rows = []
+        for projection in self._projections:
+            placed_connections = projection.placed_connections
+            synapse_rows.append([])
+            for placed_connection in placed_connections:
+                assert len(placed_connection) == 1
+                if (not synapse_rows[-1]) or (synapse_rows[-1][-1] != int(placed_connection[0].synapse_row)):
+                    synapse_rows[-1].append(int(placed_connection[0].synapse_row))
+        ret = []
+        for projection in synapse_rows:
+            assert len(projection) == 60
+            ret.append("std::array<size_t, 60>{" + ", ".join([str(i) for i in projection]) + "}")
+        return ",\n".join(ret)
+
     def generate_kernel(self) -> str:
         """
         Generate plasticity rule kernel to be compiled into PPU program.
@@ -76,6 +93,10 @@ class PlasticityOnChip(pynn.PlasticityRule):
         }}
         VectorRowFracSat8 correlation_baseline __attribute__((section("ext.data"))) = get_baselines().convert_contiguous();
 
+        std::array<std::array<size_t, 60>, 3> synapse_rows = {{
+        {self.get_placement()}
+        }};
+
         void PLASTICITY_RULE_KERNEL(
             std::array<SynapseArrayViewHandle, 3>& synapses,
             std::array<NeuronViewHandle, 2>& neurons,
@@ -97,44 +118,49 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 return;
             }}
 
-            size_t used_synapse_row_index = 0;
-            size_t synapse_row_dendrite_to_soma_index = 0;
-            size_t synapse_row_soma_to_soma_index = 0;
+            //size_t used_synapse_row_index = 0;
+            //size_t synapse_row_dendrite_to_soma_index = 0;
+            //size_t synapse_row_soma_to_soma_index = 0;
             size_t pre_neuron_soma_index = 0;
-            for (size_t synapse_row_soma_to_dendrite_index = 0; synapse_row_soma_to_dendrite_index < synapses_soma_to_dendrite.rows.size; ++synapse_row_soma_to_dendrite_index) {{
+            for (size_t used_synapse_row_index = 0; used_synapse_row_index < synapse_rows[0].size(); ++used_synapse_row_index) {{
+                size_t const synapse_row_soma_to_dendrite_index = synapse_rows[0][used_synapse_row_index];
+                size_t const synapse_row_soma_to_soma_index = synapse_rows[1][used_synapse_row_index];
+                size_t const synapse_row_dendrite_to_soma_index = synapse_rows[2][used_synapse_row_index];
+            //for (size_t synapse_row_soma_to_dendrite_index = 0; synapse_row_soma_to_dendrite_index < synapses_soma_to_dendrite.rows.size; ++synapse_row_soma_to_dendrite_index) {{
                 if (!synapses_soma_to_dendrite.rows.test(synapse_row_soma_to_dendrite_index)) {{
-                    continue;
+                    exit(1);
+                    //continue;
                 }}
 
-                while(!synapses_soma_to_soma.rows.test(synapse_row_soma_to_soma_index)) {{
-                   synapse_row_soma_to_soma_index++;
-                }}
+                //while(!synapses_soma_to_soma.rows.test(synapse_row_soma_to_soma_index)) {{
+                //   synapse_row_soma_to_soma_index++;
+                //}}
 
-                while(!synapses_dendrite_to_soma.rows.test(synapse_row_dendrite_to_soma_index)) {{
-                   synapse_row_dendrite_to_soma_index++;
-                }}
+                //while(!synapses_dendrite_to_soma.rows.test(synapse_row_dendrite_to_soma_index)) {{
+                //   synapse_row_dendrite_to_soma_index++;
+                //}}
 
                 while(!somas.columns.test(pre_neuron_soma_index)) {{
                    pre_neuron_soma_index++;
                 }}
 
                 // calculate new column mask masking out recurrent connections
-                // number of neurons per symbol times two
+                // number of neurons per symbol times three
                 size_t column_mask_begin = (used_synapse_row_index / 15) * 30;
                 size_t column_mask_end = ((used_synapse_row_index / 15) + 1) * 30;
                 VectorRowMod8 column_mask(1);
                 for (size_t column_mask_index = column_mask_begin; column_mask_index < column_mask_end; ++column_mask_index) {{
                     column_mask[column_mask_index] = 0;
                 }}
-                
-                // update column mask to incorporate sampling of connections, 
+
+                // update column mask to incorporate sampling of connections,
                 // -> only p percent of connections should be active
                 for (size_t column_mask_index = 0; column_mask_index < synapses_soma_to_dendrite.columns.size; column_mask_index+=2) {{
                     if ((column_mask_index/2) % {round(1/self.p_exc_exc)} != 0) {{
                         column_mask[column_mask_index] = 0;
                     }}
                 }}
-                
+
 
                 // get causal correlations and reset accumulated signals
                 // in [-128, 127] integer
@@ -143,7 +169,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 get_causal_correlation(&causal_correlation_soma_to_soma_raw.even.data, &causal_correlation_soma_to_soma_raw.odd.data, synapse_row_soma_to_soma_index);
                 get_causal_correlation(&causal_correlation_dendrite_to_soma_raw.even.data, &causal_correlation_dendrite_to_soma_raw.odd.data, synapse_row_dendrite_to_soma_index);
 
-                auto const causal_correlation_soma_to_soma = translate_columns(-(causal_correlation_soma_to_soma_raw.convert_contiguous() - correlation_baseline), synapses_soma_to_soma, synapses_soma_to_dendrite);
+                auto const causal_correlation_soma_to_soma = -translate_columns(causal_correlation_soma_to_soma_raw.convert_contiguous() - correlation_baseline, synapses_soma_to_soma, synapses_soma_to_dendrite);
                 auto const causal_correlation_dendrite_to_soma = -translate_columns(causal_correlation_dendrite_to_soma_raw.convert_contiguous() - correlation_baseline, synapses_dendrite_to_soma, synapses_soma_to_dendrite);
 
                 // get number of spikes since last invokation of pre neuron
@@ -170,7 +196,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
                         ({self.target_rate_h} - causal_correlation_dendrite_to_soma) * {self.lambda_h},
                         VectorRowFracSat8(0)),
                     VectorRowFracSat8(0));
-                    
+
                 // TODO: * 255 seems wrong, since the result is required to be in [-128, 127)
                 permanence -= vector_if(column_mask, VectorIfCondition::greater,
                     VectorRowFracSat8(std::min(static_cast<size_t>(127), static_cast<size_t>(({self.lambda_minus} * 255) * pre_neuron_soma_num_spikes))),
@@ -199,10 +225,10 @@ class PlasticityOnChip(pynn.PlasticityRule):
                     std::get<2>(recording.correlation)[used_synapse_row_index][active_column] = causal_correlation_dendrite_to_soma[column];
                     active_column++;
                 }}
-                ++synapse_row_soma_to_soma_index;
-                ++synapse_row_dendrite_to_soma_index;
+                //++synapse_row_soma_to_soma_index;
+                //++synapse_row_dendrite_to_soma_index;
                 ++pre_neuron_soma_index;
-                ++used_synapse_row_index;
+                //++used_synapse_row_index;
             }}
             reset_all_correlations();
 
