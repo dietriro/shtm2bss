@@ -1,6 +1,7 @@
 import textwrap
 import numpy as np
 import pynn_brainscales.brainscales2 as pynn
+import pygrenade_vx as grenade
 
 
 class PlasticityOnChip(pynn.PlasticityRule):
@@ -30,7 +31,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
         self.correlation_threshold = correlation_threshold
 
     def get_placement(self):
-        if self._simulator.state.grenade_network_graph is None or not self._simulator.state.grenade_network.projections:
+        if self._simulator.state.grenade_network_graph is None or not self._simulator.state.grenade_network.execution_instances[grenade.common.ExecutionInstanceID()].projections:
             return "TODO"
         synapse_rows = []
         for projection in self._projections:
