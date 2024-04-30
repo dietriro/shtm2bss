@@ -62,6 +62,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
         #include "libnux/vx/vector_if.h"
         #include "libnux/system.h"
         #include "libnux/vx/helper.h"
+        #include "libnux/vx/random.h"
 
         using namespace grenade::vx::ppu;
         using namespace libnux::vx;
@@ -119,6 +120,8 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 return;
             }}
 
+            uint32_t seed = 1234;
+
             //size_t used_synapse_row_index = 0;
             //size_t synapse_row_dendrite_to_soma_index = 0;
             //size_t synapse_row_soma_to_soma_index = 0;
@@ -157,7 +160,10 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 // update column mask to incorporate sampling of connections,
                 // -> only p percent of connections should be active
                 for (size_t column_mask_index = 0; column_mask_index < synapses_soma_to_dendrite.columns.size; column_mask_index+=2) {{
-                    if ((column_mask_index/2) % {round(1/self.p_exc_exc)} != 0) {{
+                    //if ((column_mask_index/2) % {round(1/self.p_exc_exc)} != 0) {{
+                    //    column_mask[column_mask_index] = 0;
+                    //}}
+                    if (xorshift32(&seed) >= {round(self.p_exc_exc * 2**32)}) {{
                         column_mask[column_mask_index] = 0;
                     }}
                 }}
