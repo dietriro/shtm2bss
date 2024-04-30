@@ -708,7 +708,7 @@ class SHTMTotal(SHTMBase, ABC):
         self.p.Experiment.runtime = runtime
 
         for t in range(steps):
-            log.info(f'Running emulation step {t + 1}/{steps}')
+            log.info(f'Running emulation step {self.experiment_episodes + t + 1}/{self.experiment_episodes + steps}')
 
             # reset the simulator and the network state if not first run
             if self.run_state:
@@ -1040,8 +1040,8 @@ class Plasticity(ABC):
         self.permanence_max = int(max_value)
         self.permanence_threshold = np.ones((len(self.projection)), dtype=int) * int(max_value/2)
 
-        self.target_rate_h *= max_value
-        self.correlation_threshold *= max_value
+        # self.target_rate_h *= max_value
+        # self.correlation_threshold *= max_value
 
     def rule(self, permanence, permanence_threshold, x, z, runtime, permanence_min,
              neuron_spikes_pre, neuron_spikes_post_soma, neuron_spikes_post_dendrite,
@@ -1146,10 +1146,10 @@ class Plasticity(ABC):
                 if spike_dt >= 0:
                     spike_pairs_soma_soma += 1
                     # log.debug(f"{self.id}  spikes (ss): {spike_pre}, {spike_post}, {spike_dt}")
-                    if self.int_conversion:
-                        x += self.__to_int(np.exp(-spike_dt / self.tau_plus))
-                    else:
-                        x += np.exp(-spike_dt / self.tau_plus)
+                    # if self.int_conversion:
+                    #     x += self.__to_int(np.exp(-spike_dt / self.tau_plus))
+                    # else:
+                    x += np.exp(-spike_dt / self.tau_plus)
 
 
         # Calculate accumulated z
@@ -1162,10 +1162,10 @@ class Plasticity(ABC):
                 if spike_dt >= 0:
                     spike_pairs_dend_soma += 1
                     # log.debug(f"{self.id}  spikes (ds): {spike_post_dendrite}, {spike_post}, {spike_dt}")
-                    if self.int_conversion:
-                        z_tmp += self.__to_int(np.exp(-spike_dt / self.tau_plus))
-                    else:
-                        z_tmp += np.exp(-spike_dt / self.tau_plus)
+                    # if self.int_conversion:
+                    #     z_tmp += self.__to_int(np.exp(-spike_dt / self.tau_plus))
+                    # else:
+                    z_tmp += np.exp(-spike_dt / self.tau_plus)
 
         # if z_tmp > 0:
         #     log.debug(f"{self.id}  x: {x},  z: {z_tmp}")
@@ -1188,27 +1188,27 @@ class Plasticity(ABC):
         # i.e. x or z > 0
         if x > self.correlation_threshold:
             permanence = self.__facilitate_bss2(permanence, x)
-        # log.debug(f"{self.id}  d_permanence facilitate: {permanence - permanence_before}")
+        log.debug(f"{self.id}  d_permanence facilitate: {permanence - permanence_before}")
         permanence_before = permanence
 
-        if self.int_conversion:
-            permanence = int(permanence)
+        # if self.int_conversion:
+        #     permanence = int(np.round(permanence))
 
         if x > self.correlation_threshold:
             permanence = self.__homeostasis_control_bss2(permanence, z, permanence_min)
         # if permanence - permanence_before < 0:
         # if z > 0:
-        # log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
+        log.debug(f"{self.id}  d_permanence homeostasis: {permanence - permanence_before}")
         permanence_before = permanence
 
-        if self.int_conversion:
-            permanence = int(permanence)
+        # if self.int_conversion:
+        #     permanence = int(np.round(permanence))
 
         permanence = self.__depress_bss2(permanence, permanence_min, num_spikes=len(neuron_spikes_pre))
-        # log.debug(f"{self.id}  permanence depression: {permanence - permanence_before}")
+        log.debug(f"{self.id}  permanence depression: {permanence - permanence_before}")
 
         if self.int_conversion:
-            permanence = int(permanence)
+            permanence = int(np.round(permanence))
 
         # log.debug(f"{self.id}  permanence after: {permanence}")
 
@@ -1216,15 +1216,15 @@ class Plasticity(ABC):
 
     def __facilitate_bss2(self, permanence, x):
         d_permanence = self.lambda_plus * x
-        if not self.int_conversion:
-            d_permanence *= self.permanence_max
+        # if not self.int_conversion:
+        d_permanence *= self.permanence_max
         permanence += d_permanence
         return min(permanence, self.permanence_max)
 
     def __homeostasis_control_bss2(self, permanence, z, permanence_min):
         z_prime = self.target_rate_h - z
-        if self.int_conversion:
-            z_prime /= 256
+        # if self.int_conversion:
+        #     z_prime /= 256
         if z_prime < 0:
             z_prime = -np.exp(-z_prime/self.homeostasis_depression_rate)
 

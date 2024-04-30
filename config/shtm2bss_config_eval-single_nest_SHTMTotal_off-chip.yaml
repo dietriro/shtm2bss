@@ -37,9 +37,9 @@ encoding:
   t_scaling_factor: 1.
   num_repetitions: 1
 plasticity:
-#  type: 'original'
+  type: 'original'
 #  type: 'bss2'
-  type: 'bss2'
+#  type: 'bss2_int'
   learning_factor: 1    # 2 for int
   weight_learning: False
   weight_learning_scale: 0.0026
