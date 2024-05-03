@@ -6,7 +6,7 @@ import pygrenade_vx as grenade
 
 class PlasticityOnChip(pynn.PlasticityRule):
     def __init__(self, timer: pynn.Timer, num_neurons: int, permanence_threshold: int, w_mature: int, target_rate_h,
-                 lambda_plus, lambda_minus, lambda_h, learning_factor, delta_t_max, tau_plus, p_exc_exc=0.2,
+                 lambda_plus, lambda_minus, lambda_h, learning_factor, delta_t_max, tau_plus, num_runs, p_exc_exc=0.2,
                  correlation_threshold=0):
         # observables recorded for each invocation of rule during experiment
         # [weights, permanences, one correlation]
@@ -29,6 +29,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
         self.p_exc_exc = p_exc_exc
         self.threshold = np.exp(-delta_t_max / tau_plus)
         self.correlation_threshold = correlation_threshold
+        self.num_runs = num_runs
 
     def get_placement(self):
         if self._simulator.state.grenade_network_graph is None or not self._simulator.state.grenade_network.execution_instances[grenade.common.ExecutionInstanceID()].projections:
@@ -206,7 +207,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
 
                 // TODO: * 255 seems wrong, since the result is required to be in [-128, 127)
                 permanence -= vector_if(column_mask, VectorIfCondition::greater,
-                    VectorRowFracSat8(std::min(static_cast<size_t>(127), static_cast<size_t>(({self.lambda_minus} * 255) * pre_neuron_soma_num_spikes))),
+                    VectorRowFracSat8(std::min(static_cast<size_t>(127), static_cast<size_t>(({self.lambda_minus} * 255) * (pre_neuron_soma_num_spikes / {self.num_runs})))),
                                        VectorRowFracSat8(0));
 
                 // update weights

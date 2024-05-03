@@ -84,6 +84,7 @@ class SHTMBase(network.SHTMBase, ABC):
             p_exc_exc=self.p.Synapses.p_exc_exc,
             delta_t_max=self.p.Plasticity.delta_t_max,
             tau_plus=self.p.Plasticity.tau_plus,
+            num_runs=self.p.Plasticity.execution_start / (self.p.Experiment.runtime / self.p.Encoding.num_repetitions),
             correlation_threshold=self.p.Plasticity.correlation_threshold
         )
 
@@ -723,9 +724,10 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
             pynn.simulator.state.injected_config.ppu_symbols = {
                 "permanences": initial_permanences}
 
-            run_length = self.p.Experiment.runtime / self.p.Encoding.num_repetitions
-            performance_t_min = ((np.ceil(self.p.Plasticity.execution_start / run_length) - 2) * run_length
-                                 + self.p.Encoding.t_exc_start)
+            # run_length = self.p.Experiment.runtime / self.p.Encoding.num_repetitions
+            # performance_t_min = ((np.ceil(self.p.Plasticity.execution_start / run_length) - 2) * run_length
+            #                      + self.p.Encoding.t_exc_start)
+            performance_t_min = None
 
             for t in range(steps):
                 log.info(f'Running emulation step {t + 1}/{steps}')
