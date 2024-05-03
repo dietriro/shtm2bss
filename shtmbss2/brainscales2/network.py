@@ -9,6 +9,7 @@ from abc import ABC
 from shtmbss2.brainscales2.config import *
 from shtmbss2.brainscales2.patches import patch_pynn_calibration
 from shtmbss2.brainscales2.plasticity import PlasticityOnChip
+from shtmbss2.brainscales2.hardware import hardware_initialization
 from shtmbss2.core.logging import log
 from shtmbss2.core.helpers import id_to_symbol
 import shtmbss2.common.network as network
@@ -577,6 +578,32 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
         super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
                          plasticity_cls=Plasticity, instance_id=instance_id,
                          seed_offset=seed_offset, p=p, **kwargs)
+
+        self.init_backend()
+
+    def init_backend(self, offset=0):
+        neuronPermutation = list()
+
+        alphabet_size = self.p.Network.num_symbols
+        num_neurons_per_symbol = self.p.Network.num_neurons
+        for a in range(alphabet_size):
+            # dendrites
+            for i in range(num_neurons_per_symbol):
+                neuronPermutation.append(((a * num_neurons_per_symbol + i) * 2) + offset)
+        for a in range(alphabet_size):
+            # somas
+            for i in range(num_neurons_per_symbol):
+                neuronPermutation.append((a * num_neurons_per_symbol + i) * 2 + 1 + offset)
+        for i in range(alphabet_size * num_neurons_per_symbol * 2 + offset, 512):
+            neuronPermutation.append(i)
+
+        hardware_initialization(neuronPermutation=neuronPermutation)
+
+    def init_prerun(self):
+        if RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP:
+            pynn.preprocess()
+            self.plasticity_rule.changed_since_last_run = True
+            pynn.preprocess()
 
     def init_connections(self, exc_to_exc=None, exc_to_inh=None, debug=None):
         if not self.use_on_chip_plasticity:

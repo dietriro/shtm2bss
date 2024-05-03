@@ -251,6 +251,10 @@ class SHTMBase(ABC):
                 synapse_type=StaticSynapse(weight=self.p.Synapses.w_inh_exc, delay=self.p.Synapses.delay_inh_exc),
                 receptor_type=self.p.Synapses.receptor_inh_exc))
 
+    @abstractmethod
+    def init_prerun(self):
+        pass
+
     def __compute_time_constant_dendritic_rate(self, dt_stm, dt_seq, target_firing_rate, calibration=0):
         """ Adapted from Bouhadjour et al. 2022
         Compute time constant of the dendritic AP rate,

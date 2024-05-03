@@ -4,6 +4,8 @@ import itertools
 import yaml
 import matplotlib.pyplot as plt
 
+from pynn_brainscales import brainscales2 as pynn
+
 from shtmbss2.core.helpers import Process
 from shtmbss2.common.config import *
 from shtmbss2.core.data import (load_config, get_last_experiment_num, get_experiment_folder, get_last_instance,
@@ -66,12 +68,20 @@ class GridSearch:
         model.p.Experiment.save_final = False
         model.experiment_num = experiment_num
 
+        if RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP:
+            model.init_plasticity_rule()
+
         model.init_neurons()
         model.init_connections(debug=False)
         model.init_external_input()
 
         if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
             model.init_rec_exc()
+
+        if RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP:
+            pynn.preprocess()
+            model.plasticity_rule.changed_since_last_run = True
+            pynn.preprocess()
 
         model.run(steps=steps, plasticity_enabled=True, run_type=RunType.SINGLE)
 
