@@ -60,8 +60,10 @@ class GridSearch:
 
     def __run_experiment(self, optimized_parameters, experiment_id, experiment_num, instance_id, steps=None,
                          optimized_parameter_ranges=None, fig_save=False):
-        model = self.model_type(experiment_type=ExperimentType.OPT_GRID, instance_id=instance_id, seed_offset=0,
+        model = self.model_type(use_on_chip_plasticity=RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP,
+                                experiment_type=ExperimentType.OPT_GRID, instance_id=instance_id, seed_offset=0,
                                 **{**optimized_parameters, "Experiment.id": experiment_id})
+        model.init_backend(offset=0)
 
         # set save_auto to false in order to minimize file lock timeouts
         model.p.Experiment.save_auto = False
@@ -78,12 +80,9 @@ class GridSearch:
         if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
             model.init_rec_exc()
 
-        if RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP:
-            pynn.preprocess()
-            model.plasticity_rule.changed_since_last_run = True
-            pynn.preprocess()
+        model.init_prerun()
 
-        model.run(steps=steps, plasticity_enabled=True, run_type=RunType.SINGLE)
+        model.run(steps=steps, plasticity_enabled=RuntimeConfig.plasticity_location != PlasticityLocation.ON_CHIP, run_type=RunType.SINGLE)
 
         model.save_full_state(running_avg_perc=0.5, optimized_parameter_ranges=optimized_parameter_ranges)
 

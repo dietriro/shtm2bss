@@ -46,11 +46,15 @@ class ParallelExecutor:
         shtm = SHTMTotal(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
                          instance_id=process_id, seed_offset=seed_offset,
                          **{**additional_parameters, "Experiment.id": experiment_id})
+        shtm.init_backend(offset=0)
 
         # set save_auto to false in order to minimize file lock timeouts
         shtm.p.Experiment.save_auto = False
         shtm.p.Experiment.save_final = False
         shtm.experiment_num = experiment_num
+
+        if RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP:
+            shtm.init_plasticity_rule()
 
         lock.acquire(block=True)
         shtm.init_neurons()
@@ -59,7 +63,9 @@ class ParallelExecutor:
         shtm.init_connections(debug=False)
         shtm.init_external_input()
 
-        shtm.run(steps=steps, plasticity_enabled=True, run_type=RunType.SINGLE)
+        shtm.init_prerun()
+
+        shtm.run(steps=steps, plasticity_enabled=RuntimeConfig.plasticity_location != PlasticityLocation.ON_CHIP, run_type=RunType.SINGLE)
 
         # wait until it's this processes turn to save data (order)
         while process_id > 0 and file_save_status[process_id-1] < 1:

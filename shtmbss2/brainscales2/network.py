@@ -85,7 +85,7 @@ class SHTMBase(network.SHTMBase, ABC):
             p_exc_exc=self.p.Synapses.p_exc_exc,
             delta_t_max=self.p.Plasticity.delta_t_max,
             tau_plus=self.p.Plasticity.tau_plus,
-            num_runs=self.p.Plasticity.execution_start / (self.p.Experiment.runtime / self.p.Encoding.num_repetitions),
+            num_runs=60,
             correlation_threshold=self.p.Plasticity.correlation_threshold
         )
 
@@ -579,31 +579,34 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                          plasticity_cls=Plasticity, instance_id=instance_id,
                          seed_offset=seed_offset, p=p, **kwargs)
 
-        self.init_backend()
-
     def init_backend(self, offset=0):
-        neuronPermutation = list()
+        neuron_permutation = None
+        if RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP:
+            neuron_permutation = list()
 
-        alphabet_size = self.p.Network.num_symbols
-        num_neurons_per_symbol = self.p.Network.num_neurons
-        for a in range(alphabet_size):
-            # dendrites
-            for i in range(num_neurons_per_symbol):
-                neuronPermutation.append(((a * num_neurons_per_symbol + i) * 2) + offset)
-        for a in range(alphabet_size):
-            # somas
-            for i in range(num_neurons_per_symbol):
-                neuronPermutation.append((a * num_neurons_per_symbol + i) * 2 + 1 + offset)
-        for i in range(alphabet_size * num_neurons_per_symbol * 2 + offset, 512):
-            neuronPermutation.append(i)
+            alphabet_size = self.p.Network.num_symbols
+            num_neurons_per_symbol = self.p.Network.num_neurons
+            for a in range(alphabet_size):
+                # dendrites
+                for i in range(num_neurons_per_symbol):
+                    neuron_permutation.append(((a * num_neurons_per_symbol + i) * 2) + offset)
+            for a in range(alphabet_size):
+                # somas
+                for i in range(num_neurons_per_symbol):
+                    neuron_permutation.append((a * num_neurons_per_symbol + i) * 2 + 1 + offset)
+            for i in range(alphabet_size * num_neurons_per_symbol * 2 + offset, 512):
+                neuron_permutation.append(i)
 
-        hardware_initialization(neuronPermutation=neuronPermutation)
+        hardware_initialization(neuron_permutation=neuron_permutation)
+
+        log.info("Initialized backend")
 
     def init_prerun(self):
         if RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP:
             pynn.preprocess()
             self.plasticity_rule.changed_since_last_run = True
             pynn.preprocess()
+            log.info("Finished prerun")
 
     def init_connections(self, exc_to_exc=None, exc_to_inh=None, debug=None):
         if not self.use_on_chip_plasticity:
@@ -656,6 +659,7 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
             self.exc_to_inh = []
             for i in range(self.p.Network.num_symbols):
                 weight = self.p.Synapses.w_exc_inh if exc_to_inh is None else exc_to_inh[i]
+                weight = 0 if self.p.Synapses.dyn_inh_weights else weight
                 self.exc_to_inh.append(Projection(
                     self.get_neurons(NeuronType.Soma, symbol_id=i),
                     PopulationView(self.neurons_inh, [i]),
