@@ -722,6 +722,27 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
 
                 i_plastic += 1
 
+    def __set_dyn_inh_weights(self):
+        weight_mask = np.zeros((self.p.Network.num_symbols, self.p.Network.num_neurons))
+        runtime_seq_set = self.p.Experiment.runtime / self.p.Encoding.num_repetitions
+        unique_seq_set = list()
+        for seq in self.p.Experiment.sequences:
+            unique_seq_set += seq
+        unique_seq_set = set(unique_seq_set)
+
+        for symbol_i in unique_seq_set:
+            i_symbol = SYMBOLS[symbol_i]
+            for i_neuron, events_neuron_i in enumerate(self.neuron_events[NeuronType.Dendrite][i_symbol]):
+                for i_seq in range(len(self.p.Experiment.sequences)):
+                    if len(events_neuron_i) > i_seq and events_neuron_i[i_seq] < runtime_seq_set:
+                        weight_mask[i_symbol, i_neuron] = 1
+
+            # set weights
+            # if np.sum(weight_mask[i_symbol]) >= self.p.Network.pattern_size:
+            self.exc_to_inh[i_symbol].set(weight=weight_mask[i_symbol] * self.p.Synapses.w_exc_inh)
+
+        log.debug(f"Weight mask: {weight_mask}")
+
     def run(self, runtime=None, steps=None, plasticity_enabled=True, store_to_cache=False, store_plasticity_values=True,
             dyn_exc_inh=False, run_type=RunType.SINGLE):
         if not self.use_on_chip_plasticity:
@@ -793,6 +814,9 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                 if self.p.Performance.compute_performance:
                     self.performance.compute(neuron_events=self.neuron_events, method=self.p.Performance.method,
                                              t_min=performance_t_min)
+
+                if self.p.Synapses.dyn_inh_weights:
+                    self.__set_dyn_inh_weights()
 
                 if plasticity_enabled:
                     if run_type == RunType.MULTI:
