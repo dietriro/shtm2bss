@@ -87,6 +87,7 @@ class SHTMBase(ABC):
 
         # Declare recordings
         self.rec_neurons_exc = None
+        self.spike_times_ext = None
         self.last_ext_spike_time = None
         self.neuron_events = None
 
@@ -196,6 +197,8 @@ class SHTMBase(ABC):
 
         self.neurons_ext.set(spike_times=spike_times)
 
+        self.spike_times_ext = spike_times
+
         if init_performance:
             log.info(f'Initialized external input for sequence(s) {self.p.Experiment.sequences}')
             # Initialize performance containers
@@ -251,7 +254,6 @@ class SHTMBase(ABC):
                 synapse_type=StaticSynapse(weight=self.p.Synapses.w_inh_exc, delay=self.p.Synapses.delay_inh_exc),
                 receptor_type=self.p.Synapses.receptor_inh_exc))
 
-    @abstractmethod
     def init_prerun(self):
         pass
 
@@ -298,7 +300,7 @@ class SHTMBase(ABC):
         pass
 
     def plot_events(self, neuron_types="all", symbols="all", size=None, x_lim_lower=None, x_lim_upper=None, seq_start=0,
-                    seq_end=None, fig_title="", file_path=None, window="initial", show_grid=False):
+                    seq_end=None, fig_title="", file_path=None, window="initial", show_grid=False, separate_seqs=False):
         if size is None:
             size = (12, 10)
 
@@ -329,71 +331,106 @@ class SHTMBase(ABC):
         elif type(symbols) is list:
             pass
 
+        n_cols = 1 if not separate_seqs else len(self.p.Experiment.sequences)
         if len(symbols) == 1:
-            fig, axs = plt.subplots(figsize=size)
+            fig, axs = plt.subplots(nrows=1, ncols=n_cols, figsize=size)
         else:
-            fig, axs = plt.subplots(self.p.Network.num_symbols, 1, sharex="all", figsize=size)
+            fig, axs = plt.subplots(self.p.Network.num_symbols, n_cols, sharex="col", sharey="row", figsize=size)
 
         if seq_end is None:
             seq_end = seq_start + self.p.Experiment.runtime
 
         ax = None
+        seq_length = ((self.p.Experiment.runtime / self.p.Encoding.num_repetitions)
+                      / n_cols)
 
-        for i_symbol in symbols:
-            if len(symbols) == 1:
-                ax = axs
+        for i_seq in range(n_cols):
+            if n_cols > 1:
+                x_lim_upper = x_lim_lower + (len(self.p.Experiment.sequences[0]) - 0.5) * self.p.Encoding.dt_stm + self.p.Encoding.t_exc_start
+            for i_symbol in symbols:
+
+                # x_lim_upper = (i_seq + 1) * seq_length - self.p.Encoding.dt_seq if n_cols > 1 else x_lim_upper
+
+                if len(symbols) == 1:
+                    ax = axs[i_seq]
+                elif n_cols == 1:
+                    ax = axs[i_symbol]
+                else:
+                    ax = axs[i_symbol, i_seq]
+
+                for neurons_i in neuron_types:
+                    # Retrieve and plot spikes from selected neurons
+                    spikes = deepcopy(self.neuron_events[neurons_i][i_symbol])
+                    if neurons_i == NeuronType.Inhibitory:
+                        spikes.append([])
+                    else:
+                        spikes.insert(0, [])
+                    if neurons_i == NeuronType.Dendrite:
+                        spikes_post = deepcopy(self.neuron_events[NeuronType.Soma][i_symbol])
+                        plot_dendritic_events(ax, spikes[1:], spikes_post,
+                                              tau_dap=self.p.Neurons.Dendrite.tau_dAP*self.p.Encoding.t_scaling_factor,
+                                              color=f"C{neurons_i.ID}", label=neurons_i.NAME.capitalize(),
+                                              seq_start=seq_start, seq_end=seq_end, epoch_end=x_lim_upper)
+                    else:
+                        line_widths = 1.5
+                        line_lengths = 1
+
+                        ax.eventplot(spikes, linewidths=line_widths, linelengths=line_lengths,
+                                     label=neurons_i.NAME.capitalize(), color=f"C{neurons_i.ID}")
+
+                # plot external spikes as reference lines
+                for spike_time_ext_sym_i in self.spike_times_ext[i_symbol]:
+                    ax.plot([spike_time_ext_sym_i, spike_time_ext_sym_i], [0.6, self.p.Network.num_neurons+0.4], c="grey",
+                            label="External")
+
+                # Configure the plot layout
+                ax.set_xlim(x_lim_lower, x_lim_upper)
+                ax.set_ylim(-1, self.p.Network.num_neurons + 1)
+
+                if i_seq < 1:
+                    ax.yaxis.set_ticks(range(self.p.Network.num_neurons + 2))
+                    ax.set_ylabel(id_to_symbol(i_symbol), weight='bold',
+                                  fontsize=self.p_plot.Events.Fontsize.subplot_labels)
+
+                    # Generate y-tick-labels based on number of neurons per symbol
+                    y_tick_labels = ['Inh', '', '0'] + ['' for _ in range(self.p.Network.num_neurons - 2)] + [
+                        str(self.p.Network.num_neurons - 1)]
+                    ax.set_yticklabels(y_tick_labels, rotation=45, fontsize=self.p_plot.Events.Fontsize.tick_labels)
+
+                if show_grid:
+                    ax.grid(True, which='both', axis='both')
+
+                if (x_lim_upper - x_lim_lower) / self.p.Encoding.dt_stm > 200:
+                    log.info("Minor ticks not set because the number of ticks would be too high.")
+                elif (x_lim_upper - x_lim_lower) / self.p.Encoding.dt_stm < 15:
+                    ax.xaxis.set_ticks(np.arange(x_lim_lower, x_lim_upper, self.p.Encoding.dt_stm / 2))
+
+            ax.tick_params(axis='x', labelsize=self.p_plot.Events.Fontsize.tick_labels)
+            if n_cols > 1:
+                fig.text(0.5, 0.01, "Time [ms]", ha="center", fontsize=self.p_plot.Events.Fontsize.axis_labels)
             else:
-                ax = axs[i_symbol]
+                ax.set_xlabel("Time [ms]", fontsize=self.p_plot.Events.Fontsize.axis_labels,
+                              labelpad=self.p_plot.Events.Padding.x_axis)
 
-            for neurons_i in neuron_types:
-                # Retrieve and plot spikes from selected neurons
-                spikes = deepcopy(self.neuron_events[neurons_i][i_symbol])
-                if neurons_i == NeuronType.Inhibitory:
-                    spikes.append([])
-                else:
-                    spikes.insert(0, [])
-                if neurons_i == NeuronType.Dendrite:
-                    spikes_post = deepcopy(self.neuron_events[NeuronType.Soma][i_symbol])
-                    plot_dendritic_events(ax, spikes[1:], spikes_post,
-                                          tau_dap=self.p.Neurons.Dendrite.tau_dAP*self.p.Encoding.t_scaling_factor,
-                                          color=f"C{neurons_i.ID}", label=neurons_i.NAME.capitalize(),
-                                          seq_start=seq_start, seq_end=seq_end)
-                else:
-                    line_widths = 1.5
-                    line_lengths = 1
+            x_lim_lower += (len(self.p.Experiment.sequences[0]) - 1) * self.p.Encoding.dt_stm + self.p.Encoding.dt_seq
 
-                    ax.eventplot(spikes, linewidths=line_widths, linelengths=line_lengths,
-                                 label=neurons_i.NAME.capitalize(), color=f"C{neurons_i.ID}")
 
-            # Configure the plot layout
-            ax.set_xlim(x_lim_lower, x_lim_upper)
-            ax.set_ylim(-1, self.p.Network.num_neurons + 1)
-            ax.yaxis.set_ticks(range(self.p.Network.num_neurons + 2))
-            ax.set_ylabel(id_to_symbol(i_symbol), weight='bold', fontsize=20)
-            if show_grid:
-                ax.grid(True, which='both', axis='both')
 
-            # Generate y-tick-labels based on number of neurons per symbol
-            y_tick_labels = ['Inh', '', '0'] + ['' for _ in range(self.p.Network.num_neurons - 2)] + [
-                str(self.p.Network.num_neurons - 1)]
-            ax.set_yticklabels(y_tick_labels, rotation=45, fontsize=18)
+        if n_cols > 1:
+            plt.subplots_adjust(wspace=self.p_plot.Events.Padding.w_space)
 
         # Create custom legend for all plots
         custom_lines = [Line2D([0], [0], color=f"C{n.ID}", label=n.NAME.capitalize(), lw=3) for n in neuron_types]
+        custom_lines.append(Line2D([0], [0], color=f"grey", label="External", lw=3))
 
-        ax.set_xlabel("Time [ms]", fontsize=26, labelpad=14)
-        if (x_lim_upper-x_lim_lower) / self.p.Encoding.dt_stm > 200:
-            log.info("Minor ticks not set because the number of ticks would be too high.")
-        elif (x_lim_upper-x_lim_lower) / self.p.Encoding.dt_stm < 15:
-            ax.xaxis.set_ticks(np.arange(x_lim_lower, x_lim_upper, self.p.Encoding.dt_stm / 2))
-        ax.tick_params(axis='x', labelsize=18)
-
-        plt.figlegend(handles=custom_lines, loc=(0.377, 0.885), ncol=3, labelspacing=0., fontsize=18, fancybox=True,
+        plt.figlegend(handles=custom_lines, loc=(0.75, 0.904), ncol=2, labelspacing=0.2,
+                      fontsize=self.p_plot.Events.Fontsize.legend, fancybox=True,
                       borderaxespad=4)
 
-        fig.text(0.01, 0.5, "Symbol & Neuron ID", va="center", rotation="vertical", fontsize=26)
+        fig.text(0.05, 0.5, "Symbol & Neuron ID", va="center", rotation="vertical",
+                 fontsize=self.p_plot.Events.Fontsize.axis_labels)
 
-        fig.suptitle(fig_title, x=0.5, y=0.99, fontsize=26)
+        fig.suptitle(fig_title, x=0.5, y=0.95, fontsize=self.p_plot.Events.Fontsize.title)
         fig.show()
 
         if file_path is not None:
@@ -745,11 +782,21 @@ class SHTMTotal(SHTMBase, ABC):
                     self.p.Experiment.episodes = self.experiment_episodes + t + 1
                     self.save_full_state()
 
+        # print performance results
+        self.print_performance_results()
+
         self.experiment_episodes += steps
         self.p.Experiment.episodes = self.experiment_episodes
 
         if self.p.Experiment.save_final or self.p.Experiment.save_auto:
             self.save_full_state()
+
+    def print_performance_results(self):
+        performance_results = self.performance.get_performance_dict(final_result=True,
+                                                                    running_avgs=self.p.Performance.running_avgs)
+        log.essens(f"Performance (0.5):  {performance_results['error_running-avg-0.5']}  |  "
+                   f"Epochs:  {performance_results['num-epochs']}")
+
 
     def __run_plasticity_singular(self, runtime, sim_start_time, dyn_exc_inh=False):
         log.info("Starting plasticity calculations")
@@ -959,6 +1006,10 @@ class SHTMTotal(SHTMBase, ABC):
                                  instance_id=instance_id)
 
         shtm = network_type(p=p)
+
+        shtm.p_plot = PlottingParameters(network_type=network_type)
+        shtm.p_plot.load_default_params()
+
         shtm.performance.load_data(shtm, experiment_type, experiment_id, experiment_num,
                                    experiment_subnum=experiment_subnum, instance_id=instance_id)
         data_weights, data_plasticity = shtm.load_network_data(experiment_type, experiment_num,

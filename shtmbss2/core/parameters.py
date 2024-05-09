@@ -236,11 +236,20 @@ class PlottingParametersBase(ParameterGroup):
         title: int = None
         legend: int = None
         axis_labels: int = None
+        subplot_labels: int = None
         tick_labels: int = None
+
+    class Padding(ParameterGroup):
+        subplot_labels: int = None
+        x_axis: int = None
+        w_space: float = None
 
 
 class PlottingParameters(Parameters):
     class Performance(PlottingParametersBase):
+        pass
+
+    class Events(PlottingParametersBase):
         pass
 
     def __init__(self, network_type):

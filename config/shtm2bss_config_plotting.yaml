@@ -7,3 +7,16 @@ performance:
     legend: 11
     axis_labels: 14
     tick_labels: 11
+events:
+  size: [24, 10]
+  dpi: 150
+  line_width: 3
+  fontsize:
+    title: 26
+    legend: 18
+    axis_labels: 26
+    subplot_labels: 20
+    tick_labels: 18
+  padding:
+    x_axis: 14
+    w_space: 0.04

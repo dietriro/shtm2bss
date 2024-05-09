@@ -8,7 +8,8 @@ def plot_membrane(membrane_recorded, label=None):
     plt.plot(membrane.times, membrane, alpha=0.5, label=label)
 
 
-def plot_dendritic_events(axis, spikes_dend, spikes_post, color, label, tau_dap, y_offset=1.0, seq_start=0, seq_end=None):
+def plot_dendritic_events(axis, spikes_dend, spikes_post, color, label, tau_dap, y_offset=1.0, seq_start=0,
+                          seq_end=None, epoch_end=None):
     for i_neuron in range(len(spikes_dend)):
         if len(spikes_dend[i_neuron]) <= 0:
             continue
@@ -36,6 +37,11 @@ def plot_dendritic_events(axis, spikes_dend, spikes_post, color, label, tau_dap,
 
             axis.plot([spike_dend_i, spike_post_i], [i_neuron + y_offset, i_neuron + y_offset], color=color,
                       label=label)
+
+            if epoch_end is not None:
+                axis.plot([spike_dend_i, epoch_end], [i_neuron + y_offset, i_neuron + y_offset], color=color,
+                          label=label, linewidth=6, alpha=0.2)
+
 
 
 def plot_panel_label(s, pos, ax, title='', size=10):

@@ -804,6 +804,9 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                         self.p.Experiment.episodes = self.experiment_episodes + t + 1
                         self.save_full_state()
 
+            # print performance results
+            self.print_performance_results()
+
             self.experiment_episodes += steps
             self.p.Experiment.episodes = self.experiment_episodes
 
