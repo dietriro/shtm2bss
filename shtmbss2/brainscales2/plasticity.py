@@ -125,13 +125,12 @@ class PlasticityOnChip(pynn.PlasticityRule):
             uint32_t seed = 1234;
 
             VectorRowFracSat8 causal_correlation_dendrite_to_soma;
-            size_t synapse_column_soma_to_dendrite_index = 0;
             size_t synapse_column_dendrite_to_soma_index = 0;
             for (size_t used_synapse_row_index = 0; used_synapse_row_index < synapse_rows[0].size(); ++used_synapse_row_index) {{
                 size_t const synapse_row_dendrite_to_soma_index = synapse_rows[2][used_synapse_row_index];
 
-                while(!synapses_soma_to_dendrite.columns.test(synapse_column_soma_to_dendrite_index)) {{
-                    synapse_column_soma_to_dendrite_index++;
+                while(!synapses_dendrite_to_soma.columns.test(synapse_column_dendrite_to_soma_index)) {{
+                    synapse_column_dendrite_to_soma_index++;
                 }}
 
                 // get causal correlations and reset accumulated signals
@@ -139,7 +138,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 VectorRowMod8 causal_correlation_dendrite_to_soma_raw;
                 get_causal_correlation(&causal_correlation_dendrite_to_soma_raw.even.data, &causal_correlation_dendrite_to_soma_raw.odd.data, synapse_row_dendrite_to_soma_index);
 
-                causal_correlation_dendrite_to_soma[synapse_column_soma_to_dendrite_index] = -(causal_correlation_dendrite_to_soma_raw.convert_contiguous() - correlation_baseline)[synapse_column_soma_to_dendrite_index];
+                causal_correlation_dendrite_to_soma[synapse_column_dendrite_to_soma_index] = -(causal_correlation_dendrite_to_soma_raw.convert_contiguous() - correlation_baseline)[synapse_column_dendrite_to_soma_index];
 
                 ++synapse_column_dendrite_to_soma_index;
             }}
@@ -216,7 +215,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
                         VectorRowFracSat8(0)),
                     VectorRowFracSat8(0));
 
-                permanence += vector_if(
+                auto homeostasis = vector_if(
                     column_mask, VectorIfCondition::greater,
                     vector_if(
                         causal_correlation_soma_to_soma - {self.correlation_threshold},
@@ -224,6 +223,10 @@ class PlasticityOnChip(pynn.PlasticityRule):
                         ({self.target_rate_h} - causal_correlation_dendrite_to_soma) * {self.lambda_h},
                         VectorRowFracSat8(0)),
                     VectorRowFracSat8(0));
+
+                permanence += homeostasis;
+
+
 
                 // TODO: * 255 seems wrong, since the result is required to be in [-128, 127)
                 permanence -= vector_if(column_mask, VectorIfCondition::greater,
