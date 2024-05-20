@@ -198,12 +198,13 @@ class GridSearch:
                        f"of {parameter_names}")
 
         if self.order_randomization:
-            id_order = np.random.choice(len(parameter_combinations), len(parameter_combinations), replace=False)
+            rnd = np.random.RandomState(100)
+            id_order = rnd.choice(len(parameter_combinations), len(parameter_combinations), replace=False)
         else:
             id_order = list(range(len(parameter_combinations)))
 
-        for run_i in id_order:
-            parameter_combination = parameter_combinations[run_i]
+        for run_i, param_id in enumerate(id_order):
+            parameter_combination = parameter_combinations[param_id]
 
             if self.continuation_id is not None:
                 if run_i < self.continuation_id:
