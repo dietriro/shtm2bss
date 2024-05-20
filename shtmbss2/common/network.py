@@ -642,7 +642,13 @@ class SHTMTotal(SHTMBase, ABC):
             # Plot all previous permanences as a line over time
             axs[i_plot].plot(range(len(permanences_plot)), permanences_plot)
 
-            axs[i_plot].set_ylabel(self.con_plastic[i_con].projection.label.split('_')[1], weight='bold')
+            if '>' in self.con_plastic[i_con].projection.label:
+                y_label = self.con_plastic[i_con].projection.label.split('_')[1]
+            else:
+                i_con_total = i_con + int(i_con > 3) + int(i_con > 7) + 1
+                y_label = (f"{id_to_symbol(int(i_con_total / self.p.Network.num_symbols))}>"
+                           f"{id_to_symbol(int(i_con_total % self.p.Network.num_symbols))}")
+            axs[i_plot].set_ylabel(y_label, weight='bold')
             axs[i_plot].grid(True, which='both', axis='both')
 
         axs[-1].set_xlabel("Number of learning phases")
