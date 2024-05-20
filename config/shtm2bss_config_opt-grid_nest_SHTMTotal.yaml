@@ -2,6 +2,7 @@ experiment:
   parameter_matching: 'all'
   fig_save: True
   num_instances: 3
+  order_randomization: True
 parameters:
   Plasticity.lambda_plus:
     enabled: False

@@ -41,6 +41,7 @@ class GridSearch:
         self.parameter_matching = None
         self.fig_save = None
         self.num_instances = None
+        self.order_randomization = None
 
         self.load_config()
 
@@ -49,6 +50,7 @@ class GridSearch:
         self.parameter_matching = self.config["experiment"]["parameter_matching"]
         self.fig_save = self.config["experiment"]["fig_save"]
         self.num_instances = self.config["experiment"]["num_instances"]
+        self.order_randomization = self.config["experiment"]["order_randomization"]
 
     def save_config(self):
         folder_path_experiment = get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
@@ -195,7 +197,14 @@ class GridSearch:
             log.essens(f"Starting grid-search for {num_combinations} parameter combinations "
                        f"of {parameter_names}")
 
-        for run_i, parameter_combination in enumerate(parameter_combinations):
+        if self.order_randomization:
+            id_order = np.random.choice(len(parameter_combinations), len(parameter_combinations), replace=False)
+        else:
+            id_order = list(range(len(parameter_combinations)))
+
+        for run_i in id_order:
+            parameter_combination = parameter_combinations[run_i]
+
             if self.continuation_id is not None:
                 if run_i < self.continuation_id:
                     continue
