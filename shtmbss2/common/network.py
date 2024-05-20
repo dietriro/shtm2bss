@@ -519,6 +519,14 @@ class SHTMBase(ABC):
             objects = get_referents(*need_referents)
         return size
 
+    def calc_runtime_single(self):
+        runtime_single = self.p.Encoding.t_exc_start
+        for seq in self.p.Experiment.sequences:
+            for element in seq[:-1]:
+                runtime_single += self.p.Encoding.dt_stm
+            runtime_single += self.p.Encoding.dt_seq
+        return runtime_single
+
     def __str__(self):
         return type(self).__name__
 

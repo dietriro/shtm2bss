@@ -72,6 +72,9 @@ class SHTMBase(network.SHTMBase, ABC):
         timer = pynn.plasticity_rules.Timer(start=start_time, period=period,
                                             num_periods=int((runtime - start_time) / period) + 1)
 
+        # calculate number of runs until plasticity rule is executed
+        num_runs = self.p.Plasticity.execution_start / self.calc_runtime_single()
+
         self.plasticity_rule = PlasticityOnChip(
             timer=timer,
             num_neurons=self.p.Network.num_symbols * self.p.Network.num_neurons,
@@ -85,7 +88,7 @@ class SHTMBase(network.SHTMBase, ABC):
             p_exc_exc=self.p.Synapses.p_exc_exc,
             delta_t_max=self.p.Plasticity.delta_t_max,
             tau_plus=self.p.Plasticity.tau_plus,
-            num_runs=60,
+            num_runs=num_runs,
             correlation_threshold=self.p.Plasticity.correlation_threshold
         )
 
