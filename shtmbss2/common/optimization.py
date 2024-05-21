@@ -62,7 +62,7 @@ class GridSearch:
                          optimized_parameter_ranges=None, fig_save=False):
         model = self.model_type(use_on_chip_plasticity=RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP,
                                 experiment_type=ExperimentType.OPT_GRID, instance_id=instance_id, seed_offset=0,
-                                **{**optimized_parameters, "Experiment.id": experiment_id})
+                                **{**optimized_parameters, "experiment.id": experiment_id})
         model.init_backend(offset=0)
 
         # set save_auto to false in order to minimize file lock timeouts
@@ -135,7 +135,7 @@ class GridSearch:
         # save performance and parameter data to overall sheet for experiment
         save_instance_setup(net=self.model_type, parameters=p,
                             performance=pf.get_performance_dict(final_result=True,
-                                                                running_avgs=p.Performance.running_avgs, decimals=3),
+                                                                running_avgs=p.performance.running_avgs, decimals=3),
                             experiment_num=self.experiment_num, experiment_subnum=experiment_subnum,
                             instance_id=None, optimized_parameters=optimized_parameters)
 

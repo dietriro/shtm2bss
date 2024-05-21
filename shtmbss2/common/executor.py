@@ -45,7 +45,7 @@ class ParallelExecutor:
 
         shtm = SHTMTotal(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
                          instance_id=process_id, seed_offset=seed_offset,
-                         **{**additional_parameters, "Experiment.id": experiment_id})
+                         **{**additional_parameters, "experiment.id": experiment_id})
         shtm.init_backend(offset=0)
 
         # set save_auto to false in order to minimize file lock timeouts
