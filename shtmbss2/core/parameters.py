@@ -14,8 +14,11 @@ class ParameterGroup:
         p_dict = dict()
         for v_name, v_instance in vars(self).items():
             if not (v_name.startswith('_') or inspect.isfunction(v_instance)):
-                if inspect.isclass(v_instance):
+                if not inspect.isclass(v_instance) and issubclass(type(v_instance), ParameterGroup):
                     p_dict[v_name] = v_instance.dict(exclude_none=exclude_none)
+                # ToDo: Possibly replace with more sophisticated test
+                elif v_name == "network_type":
+                    continue
                 else:
                     if exclude_none and p_dict_original[v_name] is None:
                         continue

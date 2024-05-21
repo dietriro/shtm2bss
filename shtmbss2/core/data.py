@@ -190,8 +190,8 @@ def save_setup(data, experiment_num, create_eval_file, do_update, file_path, sav
 def save_instance_setup(net, parameters, performance, experiment_num=None, experiment_subnum=None, instance_id=None,
                         optimized_parameters=None, **kwargs):
     params = flatten_dict(parameters.dict(exclude_none=True))
-    experiment_type = parameters.Experiment.type
-    experiment_id = parameters.Experiment.id
+    experiment_type = parameters.experiment.type
+    experiment_id = parameters.experiment.id
 
     folder_path_instance = get_experiment_folder(net, experiment_type, experiment_id, experiment_num,
                                                  experiment_subnum=experiment_subnum, instance_id=instance_id)
