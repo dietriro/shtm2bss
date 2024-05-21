@@ -9,11 +9,10 @@ from shtmbss2.core.data import load_config, get_experiment_folder, load_yaml
 class ParameterGroup:
     _to_evaluate: list = list()
 
-    @classmethod
-    def dict(cls, exclude_none=False):
-        p_dict_original = cls.__dict__
+    def dict(self, exclude_none=False):
+        p_dict_original = self.__dict__
         p_dict = dict()
-        for v_name, v_instance in vars(cls).items():
+        for v_name, v_instance in vars(self).items():
             if not (v_name.startswith('_') or inspect.isfunction(v_instance)):
                 if inspect.isclass(v_instance):
                     p_dict[v_name] = v_instance.dict(exclude_none=exclude_none)
@@ -23,26 +22,25 @@ class ParameterGroup:
                     p_dict[v_name] = p_dict_original[v_name]
         return p_dict
 
-    @classmethod
-    def evaluate(cls, recursive=True):
-        for param_name in cls._to_evaluate:
-            if hasattr(cls, param_name):
-                value = getattr(cls, param_name)
+    def evaluate(self, parameters, recursive=True):
+        for param_name in self._to_evaluate:
+            if hasattr(self, param_name):
+                value = getattr(self, param_name)
                 try:
                     value = eval(value)
                 except Exception as e:
                     log.warning(f"Could not evaluate parameter {param_name}.")
                     log.warning(e)
                     value = None
-                setattr(cls, param_name, value)
+                setattr(self, param_name, value)
             else:
-                log.warning(f"Could not find parameter {param_name} for class {cls.__str__}")
+                log.warning(f"Could not find parameter {param_name} for class {self.__str__}")
 
         if recursive:
-            for v_name, v_instance in vars(cls).items():
+            for v_name, v_instance in vars(self).items():
                 if not (v_name.startswith('_') or inspect.isfunction(v_instance)):
-                    if inspect.isclass(v_instance):
-                        v_instance.evaluate(recursive=recursive)
+                    if not inspect.isclass(v_instance) and issubclass(type(v_instance), ParameterGroup):
+                        v_instance.evaluate(parameters, recursive=recursive)
 
 
 class Parameters(ParameterGroup):
@@ -84,10 +82,10 @@ class Parameters(ParameterGroup):
     def set_params(self, category_obj, parameters):
         for name, value in parameters.items():
             if type(value) is dict:
-                if hasattr(category_obj, name.capitalize()):
-                    self.set_params(getattr(category_obj, name.capitalize()), value)
+                if hasattr(category_obj, name.lower()):
+                    self.set_params(getattr(category_obj, name.lower()), value)
                 else:
-                    log.warn(f"'{category_obj}' does not have an object '{name.capitalize()}'")
+                    log.warn(f"'{category_obj}' does not have an object '{name.lower()}'")
                     continue
             else:
                 if hasattr(category_obj, name):
@@ -95,166 +93,214 @@ class Parameters(ParameterGroup):
 
 
 class NetworkParameters(Parameters):
-    class Experiment(ParameterGroup):
-        type: str = None
-        id: str = None
-        sequences: list = None
-        seq_repetitions: int = None
-        runtime: float = None
-        episodes: int = None
-        run_add_calib: bool = None
-        save_final: bool = None
-        save_auto: bool = None
-        save_auto_epoches: int = None
-        generate_rand_seed_offset: bool = None
-        seed_offset: int = None
-        log_weights: bool = None
-        log_permanence: bool = None
-
-    class Plotting(ParameterGroup):
-        size: list = None
-        file_type: str = None
-        save_figure: bool = None
-
-    class Performance(ParameterGroup):
-        compute_performance: bool = None
-        method: str = None
-        running_avgs: list = None
-
-    class Network(ParameterGroup):
-        num_symbols: int = None
-        num_neurons: int = None
-        pattern_size: int = None
-
-    class Backend(ParameterGroup):
-        module_name: str = None
-        neuron_name: str = None
-
-    class Encoding(ParameterGroup):
-        dt_stm: float = None
-        dt_seq: float = None
-        t_exc_start: float = None
-        t_scaling_factor: float = None
-        num_repetitions: int = None
-
-    class Plasticity(ParameterGroup):
-        type: str = None
-        execution_start: float = None
-        execution_interval: float = None
-        learning_factor: float = None
-        weight_learning: bool = None
-        weight_learning_scale: float = None
-        permanence_init_min: float = None
-        permanence_init_max: float = None
-        permanence_max: float = None
-        permanence_threshold: float = None
-        correlation_threshold: int = None
-        w_mature: float = None
-        y: float = None
-        lambda_plus: float = None
-        lambda_minus: float = None
-        lambda_h: float = None
-        homeostasis_depression_rate: float = None
-        target_rate_h: float = None
-        tau_plus: float = None
-        tau_h: float = None
-        delta_t_min: float = None
-        delta_t_max: float = None
-        dt: float = None
-
-    class Neurons(ParameterGroup):
-        class Inhibitory(ParameterGroup):
-            c_m: float = None
-            v_rest: float = None
-            v_reset: float = None
-            v_thresh: float = None
-            tau_m: float = None
-            tau_syn_I: float = None
-            tau_syn_E: float = None
-            tau_refrac: float = None
-
-        class Excitatory(ParameterGroup):
-            c_m: float = None
-            v_rest: float = None
-            v_reset: float = None
-            v_thresh: float = None
-            tau_m: float = None
-            tau_syn_I: float = None
-            tau_syn_E: float = None
-            tau_syn_ext: float = None
-            tau_syn_den: float = None
-            tau_syn_inh: float = None
-            tau_refrac: float = None
-
-        class Dendrite(ParameterGroup):
-            I_p: float = None
-            tau_dAP: float = None
-            theta_dAP: float = None
-
-    class Synapses(ParameterGroup):
-        dyn_inh_weights: bool = None
-        dyn_weight_calculation: bool = None
-        w_exc_inh_dyn: float = None
-        w_ext_exc: float = None
-        w_exc_exc: float = None
-        w_exc_inh: float = None
-        w_inh_exc: float = None
-        p_exc_exc: float = None
-        receptor_ext_exc: str = None
-        receptor_exc_exc: str = None
-        receptor_exc_inh: str = None
-        receptor_inh_exc: str = None
-        delay_ext_exc: float = None
-        delay_exc_exc: float = None
-        delay_exc_inh: float = None
-        delay_inh_exc: float = None
-        j_ext_exc_psp: float = None
-        j_exc_inh_psp: float = None
-        j_inh_exc_psp: float = None
-        _to_evaluate: list = ["j_ext_exc_psp",
-                              "j_exc_inh_psp",
-                              "j_inh_exc_psp"]
-
-    class Calibration(ParameterGroup):
-        v_rest_calib: float = None
-        padi_bus_dacen_extension = None
-        correlation_amplitude = None
-        correlation_time_constant = None
-
     def __init__(self, network_type):
+        self.experiment = NetworkParameterGroups.Experiment()
+        self.plotting = NetworkParameterGroups.Plotting()
+        self.performance = NetworkParameterGroups.Performance()
+        self.network = NetworkParameterGroups.Network()
+        self.backend = NetworkParameterGroups.Backend()
+        self.encoding = NetworkParameterGroups.Encoding()
+        self.plasticity = NetworkParameterGroups.Plasticity()
+        self.neurons = NetworkParameterGroups.Neurons()
+        self.synapses = NetworkParameterGroups.Synapses()
+        self.calibration = NetworkParameterGroups.Calibration()
+
         super().__init__(network_type)
 
         self.config_type = ConfigType.NETWORK
 
 
 class PlottingParametersBase(ParameterGroup):
-    size: list = None
-    dpi: int = None
-    line_width: int = None
+    def __init__(self):
+        self.fontsize = PlottingParameterGroups.Fontsize()
+        self.padding = PlottingParameterGroups.Padding()
 
-    class Fontsize(ParameterGroup):
-        title: int = None
-        legend: int = None
-        axis_labels: int = None
-        subplot_labels: int = None
-        tick_labels: int = None
-
-    class Padding(ParameterGroup):
-        subplot_labels: int = None
-        x_axis: int = None
-        w_space: float = None
+        self.size: list = None
+        self.dpi: int = None
+        self.line_width: int = None
 
 
 class PlottingParameters(Parameters):
-    class Performance(PlottingParametersBase):
-        pass
-
-    class Events(PlottingParametersBase):
-        pass
-
     def __init__(self, network_type):
+        self.performance = PlottingParameterGroups.Performance()
+        self.events = PlottingParameterGroups.Events()
+
         super().__init__(network_type)
 
         self.config_type = ConfigType.PLOTTING
 
 
+### Network Parameters ###
+class NetworkParameterGroups:
+    class Experiment(ParameterGroup):
+        def __init__(self):
+            self.type: str = None
+            self.id: str = None
+            self.sequences: list = None
+            self.seq_repetitions: int = None
+            self.runtime: float = None
+            self.episodes: int = None
+            self.run_add_calib: bool = None
+            self.save_final: bool = None
+            self.save_auto: bool = None
+            self.save_auto_epoches: int = None
+            self.generate_rand_seed_offset: bool = None
+            self.seed_offset: int = None
+            self.log_weights: bool = None
+            self.log_permanence: bool = None
+
+    class Plotting(ParameterGroup):
+        def __init__(self):
+            self.size: list = None
+            self.file_type: str = None
+            self.save_figure: bool = None
+
+    class Performance(ParameterGroup):
+        def __init__(self):
+            self.compute_performance: bool = None
+            self.method: str = None
+            self.running_avgs: list = None
+
+    class Network(ParameterGroup):
+        def __init__(self):
+            self.num_symbols: int = None
+            self.num_neurons: int = None
+            self.pattern_size: int = None
+
+    class Backend(ParameterGroup):
+        def __init__(self):
+            self.module_name: str = None
+            self.neuron_name: str = None
+
+    class Encoding(ParameterGroup):
+        def __init__(self):
+            self.dt_stm: float = None
+            self.dt_seq: float = None
+            self.t_exc_start: float = None
+            self.t_scaling_factor: float = None
+            self.num_repetitions: int = None
+
+    class Plasticity(ParameterGroup):
+        def __init__(self):
+            self.type: str = None
+            self.execution_start: float = None
+            self.execution_interval: float = None
+            self.learning_factor: float = None
+            self.weight_learning: bool = None
+            self.weight_learning_scale: float = None
+            self.permanence_init_min: float = None
+            self.permanence_init_max: float = None
+            self.permanence_max: float = None
+            self.permanence_threshold: float = None
+            self.correlation_threshold: int = None
+            self.w_mature: float = None
+            self.y: float = None
+            self.lambda_plus: float = None
+            self.lambda_minus: float = None
+            self.lambda_h: float = None
+            self.homeostasis_depression_rate: float = None
+            self.target_rate_h: float = None
+            self.tau_plus: float = None
+            self.tau_h: float = None
+            self.delta_t_min: float = None
+            self.delta_t_max: float = None
+            self.dt: float = None
+
+    class Neurons(ParameterGroup):
+        def __init__(self):
+            self.inhibitory = NetworkParameterGroups.Inhibitory()
+            self.excitatory = NetworkParameterGroups.Excitatory()
+            self.dendrite = NetworkParameterGroups.Dendrite()
+
+    class Inhibitory(ParameterGroup):
+        def __init__(self):
+            self.c_m: float = None
+            self.v_rest: float = None
+            self.v_reset: float = None
+            self.v_thresh: float = None
+            self.tau_m: float = None
+            self.tau_syn_I: float = None
+            self.tau_syn_E: float = None
+            self.tau_refrac: float = None
+
+    class Excitatory(ParameterGroup):
+        def __init__(self):
+            self.c_m: float = None
+            self.v_rest: float = None
+            self.v_reset: float = None
+            self.v_thresh: float = None
+            self.tau_m: float = None
+            self.tau_syn_I: float = None
+            self.tau_syn_E: float = None
+            self.tau_syn_ext: float = None
+            self.tau_syn_den: float = None
+            self.tau_syn_inh: float = None
+            self.tau_refrac: float = None
+
+    class Dendrite(ParameterGroup):
+        def __init__(self):
+            self.I_p: float = None
+            self.tau_dAP: float = None
+            self.theta_dAP: float = None
+
+    class Synapses(ParameterGroup):
+        def __init__(self):
+            self.dyn_inh_weights: bool = None
+            self.dyn_weight_calculation: bool = None
+            self.w_exc_inh_dyn: float = None
+            self.w_ext_exc: float = None
+            self.w_exc_exc: float = None
+            self.w_exc_inh: float = None
+            self.w_inh_exc: float = None
+            self.p_exc_exc: float = None
+            self.receptor_ext_exc: str = None
+            self.receptor_exc_exc: str = None
+            self.receptor_exc_inh: str = None
+            self.receptor_inh_exc: str = None
+            self.delay_ext_exc: float = None
+            self.delay_exc_exc: float = None
+            self.delay_exc_inh: float = None
+            self.delay_inh_exc: float = None
+            self.j_ext_exc_psp: float = None
+            self.j_exc_inh_psp: float = None
+            self.j_inh_exc_psp: float = None
+        _to_evaluate: list = ["j_ext_exc_psp",
+                              "j_exc_inh_psp",
+                              "j_inh_exc_psp"]
+
+    class Calibration(ParameterGroup):
+        def __init__(self):
+            self.v_rest_calib: float = None
+            self.padi_bus_dacen_extension: int = None
+            self.correlation_amplitude: float = None
+            self.correlation_time_constant: int = None
+
+
+### Plotting Parameters ###
+class PlottingParameterGroups:
+    class Performance(PlottingParametersBase):
+        def __init__(self):
+            super().__init__()
+
+    class Events(PlottingParametersBase):
+        def __init__(self):
+            super().__init__()
+
+    class Fontsize(ParameterGroup):
+        def __init__(self):
+            self.title: int = None
+            self.sub_title: int = None
+            self.legend: int = None
+            self.axis_labels: int = None
+            self.subplot_labels: int = None
+            self.tick_labels: int = None
+
+    class Padding(ParameterGroup):
+        def __init__(self):
+            self.subplot_labels: int = None
+            self.x_axis: int = None
+            self.w_space: float = None
+            self.left: float = None
+            self.right: float = None
+            self.top: float = None
+            self.bottom: float = None

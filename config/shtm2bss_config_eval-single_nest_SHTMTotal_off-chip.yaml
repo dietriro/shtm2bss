@@ -1,9 +1,7 @@
 experiment:
-  id: 'baseline'
-  sequences: [[A, D, B, E], [F, D, B, C]]
-#  sequences: [['A', 'C', 'B'], ['D', 'C', 'B'], ['C', 'B', 'A'], ['B', 'D', 'A']]
-#  sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
-#  sequences: [['A', 'B', 'C']]
+  id: 'org_s2'
+  sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
+#  sequences: [[A, D, B, E], [F, D, B, C]]
 #  sequences: [['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U']]
   runtime: null
   episodes: 100
@@ -24,7 +22,7 @@ performance:
   method: "all_symbols"
   running_avgs: [ 0.25, 0.5, 0.75, 1.0 ]
 network:
-  num_symbols: 6
+  num_symbols: 4
   num_neurons: 15
   pattern_size: 3
 backend:
@@ -33,7 +31,7 @@ backend:
 encoding:
   dt_stm: 40
   dt_seq: 100
-  t_exc_start: 30
+  t_exc_start: 10
   t_scaling_factor: 1.
   num_repetitions: 1
 plasticity:
@@ -48,14 +46,14 @@ plasticity:
   permanence_max: 20.
   permanence_threshold: 10.
   correlation_threshold: 0.0005 # 0.06 for tau_+ = 20
-  w_mature: 0.1298
+  w_mature: 0.1298 # 0.1298
   y: 1
-  lambda_plus: 0.06   # 0.25 for int
-  lambda_minus: 0.0005    # 0.0007 for int
-  lambda_h: 0.024        # 0.03 for int
+  lambda_plus: 0.08   # 0.25 for int
+  lambda_minus: 0.0015    # 0.0007 for int
+  lambda_h: 0.014        # 0.03 for int
   homeostasis_depression_rate: 1.0
-  target_rate_h: 0.16   # 0.14 for int
-  tau_plus: 19      # 20 for int
+  target_rate_h: 1.0   # 0.14 for int
+  tau_plus: 20      # 20 for int
   tau_h: null       # computed during runtime based on sequence length
   delta_t_min: 4
   delta_t_max: 75
@@ -101,6 +99,6 @@ synapses:
   delay_exc_exc: 2
   delay_exc_inh: 0.1
   delay_inh_exc: 0.1
-  j_ext_exc_psp: 1.1 * NetworkParameters.Neurons.Excitatory.v_thresh
-  j_exc_inh_psp: 1.2 * NetworkParameters.Neurons.Inhibitory.v_thresh / NetworkParameters.Network.pattern_size
-  j_inh_exc_psp: -2 * NetworkParameters.Neurons.Excitatory.v_thresh
+  j_ext_exc_psp: 1.1 * parameters.neurons.excitatory.v_thresh
+  j_exc_inh_psp: 1.2 * parameters.neurons.inhibitory.v_thresh / parameters.network.pattern_size
+  j_inh_exc_psp: -2 * parameters.neurons.excitatory.v_thresh

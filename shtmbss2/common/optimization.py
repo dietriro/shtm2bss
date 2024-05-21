@@ -68,8 +68,8 @@ class GridSearch:
         model.init_backend(offset=0)
 
         # set save_auto to false in order to minimize file lock timeouts
-        model.p.Experiment.save_auto = False
-        model.p.Experiment.save_final = False
+        model.p.experiment.save_auto = False
+        model.p.experiment.save_final = False
         model.experiment_num = experiment_num
 
         if RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP:

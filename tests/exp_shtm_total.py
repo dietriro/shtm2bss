@@ -33,8 +33,8 @@ if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
     # TODO: remove once grenade supports dense inter-population-view projections
     neuronPermutation = []
     shtm = SHTMTotal(use_on_chip_plasticity=True)
-    alphabet_size = shtm.p.Network.num_symbols
-    num_neurons_per_symbol = shtm.p.Network.num_neurons
+    alphabet_size = shtm.p.network.num_symbols
+    num_neurons_per_symbol = shtm.p.network.num_neurons
     for a in range(alphabet_size):
         # dendrites
         for i in range(num_neurons_per_symbol):
@@ -46,7 +46,7 @@ if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
     for i in range(alphabet_size * num_neurons_per_symbol * 2, 512):
         neuronPermutation.append(i)
 
-    hardware_initialization(neuronPermutation=neuronPermutation)
+    hardware_initialization(neuron_permutation=neuronPermutation)
 elif RuntimeConfig.backend == Backends.NEST:
     from shtmbss2.nest.network import SHTMTotal
     

@@ -49,8 +49,8 @@ class ParallelExecutor:
         shtm.init_backend(offset=0)
 
         # set save_auto to false in order to minimize file lock timeouts
-        shtm.p.Experiment.save_auto = False
-        shtm.p.Experiment.save_final = False
+        shtm.p.experiment.save_auto = False
+        shtm.p.experiment.save_final = False
         shtm.experiment_num = experiment_num
 
         if RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP:

@@ -50,45 +50,45 @@ class Performance(ABC):
         pass
 
     def compute(self, neuron_events, method=PerformanceType.ALL_SYMBOLS, t_min=None):
-        log.info(f"Computing performance for {len(self.p.Experiment.sequences)} Sequences.")
+        log.info(f"Computing performance for {len(self.p.experiment.sequences)} Sequences.")
 
         ratio_fp_activation = 0.5
         ratio_fn_activation = 0.5
 
         if t_min is None:
-            t_min = self.p.Encoding.t_exc_start
+            t_min = self.p.encoding.t_exc_start
 
-        for i_seq, seq in enumerate(self.p.Experiment.sequences):
+        for i_seq, seq in enumerate(self.p.experiment.sequences):
             seq_performance = {metric: list() for metric in PerformanceMetrics.get_all()}
 
-            t_min += i_seq * self.p.Encoding.dt_seq + i_seq * self.p.Encoding.dt_stm
+            t_min += i_seq * self.p.encoding.dt_seq + i_seq * self.p.encoding.dt_stm
 
             for i_element, element in enumerate(seq[1:]):
                 if i_element > 0:
-                    t_min += self.p.Encoding.dt_stm
+                    t_min += self.p.encoding.dt_stm
 
                 if method == PerformanceType.LAST_SYMBOL and i_element < len(seq) - 2:
                     continue
 
                 # define min/max for time window of spikes
 
-                t_max = t_min + self.p.Encoding.dt_stm
+                t_max = t_min + self.p.encoding.dt_stm
 
                 log.debug(f"t_min = {t_min},  t_max = {t_max}")
 
                 # calculate target vector
-                output = np.zeros(self.p.Network.num_symbols)
-                target = np.zeros(self.p.Network.num_symbols)
+                output = np.zeros(self.p.network.num_symbols)
+                target = np.zeros(self.p.network.num_symbols)
                 target[SYMBOLS[element]] = 1
 
-                num_dAPs = np.zeros(self.p.Network.num_symbols)
-                num_som_spikes = np.zeros(self.p.Network.num_symbols)
+                num_dAPs = np.zeros(self.p.network.num_symbols)
+                num_som_spikes = np.zeros(self.p.network.num_symbols)
                 counter_correct = 0
 
-                t_min_next = t_min + self.p.Encoding.dt_stm
-                t_max_next = t_max + self.p.Encoding.dt_stm
+                t_min_next = t_min + self.p.encoding.dt_stm
+                t_max_next = t_max + self.p.encoding.dt_stm
 
-                for i_symbol in range(self.p.Network.num_symbols):
+                for i_symbol in range(self.p.network.num_symbols):
                     # get dAP's per subpopulation
                     num_dAPs[i_symbol] = np.sum([t_min < item < t_max for sublist in
                                                  neuron_events[NeuronType.Dendrite][i_symbol] for item in
@@ -100,10 +100,10 @@ class Performance(ABC):
                                                        sublist])
 
                     if (i_symbol != SYMBOLS[element] and
-                            num_dAPs[i_symbol] >= (ratio_fp_activation * self.p.Network.pattern_size)):
+                            num_dAPs[i_symbol] >= (ratio_fp_activation * self.p.network.pattern_size)):
                         output[i_symbol] = 1
                     elif (i_symbol == SYMBOLS[element] and
-                          num_dAPs[i_symbol] >= (ratio_fn_activation * self.p.Network.pattern_size)):
+                          num_dAPs[i_symbol] >= (ratio_fn_activation * self.p.network.pattern_size)):
                         counter_correct += 1
                         output[i_symbol] = 1
 
@@ -122,9 +122,11 @@ class Performance(ABC):
             for metric in PerformanceMetrics.get_all():
                 self.add_data_point(np.mean(seq_performance[metric]), metric, sequence_id=i_seq)
 
-    def plot(self, plt_config, statistic, sequences="mean"):
+    def plot(self, plt_config, statistic, sequences="mean", fig_title=""):
         """
 
+        :param fig_title:
+        :type fig_title:
         :param plt_config:
         :type plt_config: PlottingParameters
         :param statistic:
@@ -134,9 +136,9 @@ class Performance(ABC):
         :return:
         :rtype:
         """
-        fig, axs = plt.subplots(1, 3, figsize=plt_config.Performance.size, dpi=plt_config.Performance.dpi)
+        fig, axs = plt.subplots(1, 3, figsize=plt_config.performance.size, dpi=plt_config.performance.dpi)
 
-        plt.subplots_adjust(wspace=0.25)
+        fig.suptitle(fig_title, x=0.5, y=0.95, fontsize=plt_config.performance.fontsize.title)
 
         axs[0].set_ylabel("Prediction error")
         axs[0].set_xlabel("# Training Episodes")
@@ -144,39 +146,37 @@ class Performance(ABC):
         axs[1].set_ylabel("Rel. frequency")
         axs[1].set_xlabel("# Training Episodes")
 
-        target_pattern_size_line = [self.p.Network.pattern_size / self.p.Network.num_neurons
+        target_pattern_size_line = [self.p.network.pattern_size / self.p.network.num_neurons
                                     for _ in range(self.get_data_size())]
         axs[2].plot(target_pattern_size_line, linestyle="dashed", color=f"grey",
-                    label=f"Target pattern size ({self.p.Network.pattern_size})")
+                    label=f"Target pattern size ({self.p.network.pattern_size})")
         axs[2].set_ylabel("Rel. no. of active neurons")
         axs[2].set_xlabel("# Training Episodes")
 
         for i_plot, letter in enumerate(['A', 'B', 'C']):
             panel_label_pos = (-0.05, 1.14)
-            plot_panel_label(letter, panel_label_pos, axs[i_plot], size=plt_config.Performance.Fontsize.title)
+            plot_panel_label(letter, panel_label_pos, axs[i_plot], size=plt_config.performance.fontsize.sub_title)
 
-            axs[i_plot].title.set_size(plt_config.Performance.Fontsize.title)
-            axs[i_plot].xaxis.label.set_size(plt_config.Performance.Fontsize.axis_labels)
-            axs[i_plot].yaxis.label.set_size(plt_config.Performance.Fontsize.axis_labels)
-            axs[i_plot].tick_params(axis='both', labelsize=plt_config.Performance.Fontsize.tick_labels)
-
-        # fig.tight_layout()
+            axs[i_plot].title.set_size(plt_config.performance.fontsize.sub_title)
+            axs[i_plot].xaxis.label.set_size(plt_config.performance.fontsize.axis_labels)
+            axs[i_plot].yaxis.label.set_size(plt_config.performance.fontsize.axis_labels)
+            axs[i_plot].tick_params(axis='both', labelsize=plt_config.performance.fontsize.tick_labels)
 
         return fig, axs
 
     def plot_seq(self, axs, plt_config, perf_errors, perf_fps, perf_fns, num_active_somas_post, i_col=1):
         # Plot 1: Performance error
-        axs[0].plot(moving_average(perf_errors), color=f"C{i_col}", linewidth=plt_config.Performance.line_width)
+        axs[0].plot(moving_average(perf_errors), color=f"C{i_col}", linewidth=plt_config.performance.line_width)
 
         # Plot 2: False positives/negatives
         axs[1].plot(moving_average(perf_fps), color=f"C{i_col}", label="False-positives",
-                    linewidth=plt_config.Performance.line_width)
+                    linewidth=plt_config.performance.line_width)
         axs[1].plot(moving_average(perf_fns), linestyle="dashed", color=f"C{i_col}", label="False-negatives",
-                    linewidth=plt_config.Performance.line_width)
+                    linewidth=plt_config.performance.line_width)
 
         # Plot 3: Number of active neurons
-        rel_num_active_neurons = moving_average(np.array(num_active_somas_post) / self.p.Network.num_neurons)
-        axs[2].plot(rel_num_active_neurons, color=f"C{i_col}", linewidth=plt_config.Performance.line_width)
+        rel_num_active_neurons = moving_average(np.array(num_active_somas_post) / self.p.network.num_neurons)
+        axs[2].plot(rel_num_active_neurons, color=f"C{i_col}", linewidth=plt_config.performance.line_width)
 
         return axs
 
@@ -188,8 +188,8 @@ class Performance(ABC):
         axs[1].fill_between(x, moving_average(fp_low), moving_average(fp_up), facecolor='grey')
         axs[1].fill_between(x, moving_average(fn_low), moving_average(fn_up), facecolor='grey')
 
-        active_somas_low = moving_average(np.array(active_somas_low) / self.p.Network.num_neurons)
-        active_somas_up = moving_average(np.array(active_somas_up) / self.p.Network.num_neurons)
+        active_somas_low = moving_average(np.array(active_somas_low) / self.p.network.num_neurons)
+        active_somas_up = moving_average(np.array(active_somas_up) / self.p.network.num_neurons)
         axs[2].fill_between(x, active_somas_low, active_somas_up, facecolor='grey')
 
         return axs
@@ -204,9 +204,9 @@ class Performance(ABC):
         :return:
         :rtype:
         """
-        axs[0].legend(["Prediction error"], fontsize=plt_config.Performance.Fontsize.legend)
-        axs[1].legend(["False-positives", "False-negatives"], fontsize=plt_config.Performance.Fontsize.legend)
-        axs[2].legend(["Target", "Actual"], fontsize=plt_config.Performance.Fontsize.legend)
+        axs[0].legend(["Prediction error"], fontsize=plt_config.performance.fontsize.legend)
+        axs[1].legend(["False-positives", "False-negatives"], fontsize=plt_config.performance.fontsize.legend)
+        axs[2].legend(["Target", "Actual"], fontsize=plt_config.performance.fontsize.legend)
 
         return axs
 
@@ -234,7 +234,7 @@ class PerformanceSingle(Performance):
     def init_data(self):
         self.data = dict()
         for metric_name in PerformanceMetrics.get_all():
-            self.data[metric_name] = [[] for _ in self.p.Experiment.sequences]
+            self.data[metric_name] = [[] for _ in self.p.experiment.sequences]
 
     def load_data(self, net, experiment_type, experiment_id, experiment_num, experiment_subnum=None, instance_id=None):
         self.init_data()
@@ -316,7 +316,7 @@ class PerformanceSingle(Performance):
                                     self.get_statistic(statistic, PerformanceMetrics.FN),
                                     self.get_statistic(statistic, PerformanceMetrics.ACTIVE_SOMAS), i_col=1)
             elif sequences == "all":
-                sequence_range = range(len(self.p.Experiment.sequences))
+                sequence_range = range(len(self.p.experiment.sequences))
         elif type(sequences) in [range, list]:
             sequence_range = sequences
 
@@ -348,7 +348,7 @@ class PerformanceMulti(Performance):
         for i_inst in range(self.num_instances):
             data_inst = dict()
             for metric_name in PerformanceMetrics.get_all():
-                data_inst[metric_name] = [[] for _ in self.p.Experiment.sequences]
+                data_inst[metric_name] = [[] for _ in self.p.experiment.sequences]
             self.data.append(data_inst)
 
     def load_data(self, net, experiment_type, experiment_id, experiment_num, experiment_subnum=None, instance_id=None):
@@ -459,8 +459,8 @@ class PerformanceMulti(Performance):
         self.data[instance_id][metric][sequence_id].append(data_point)
 
     def plot(self, plt_config, statistic=StatisticalMetrics.MEDIAN, sequences=None, instances="statistic",
-             fig_show=True):
-        fig, axs = super().plot(plt_config, statistic=statistic, sequences=sequences)
+             fig_show=True, fig_title=""):
+        fig, axs = super().plot(plt_config, statistic=statistic, sequences=sequences, fig_title=fig_title)
 
         axs = self.plot_seq(axs, plt_config, self.get_statistic(statistic, PerformanceMetrics.ERROR),
                             self.get_statistic(statistic, PerformanceMetrics.FP),
@@ -492,5 +492,14 @@ class PerformanceMulti(Performance):
 
         if fig_show:
             fig.show()
+
+        # plt.subplots_adjust(wspace=0.3, bottom=0.15, top=0.8, left=0.05, right=0.98)
+
+        plt.subplots_adjust(wspace=plt_config.performance.padding.w_space,
+                            bottom=plt_config.performance.padding.bottom,
+                            top=plt_config.performance.padding.top,
+                            left=plt_config.performance.padding.left,
+                            right=plt_config.performance.padding.right,
+                            )
 
         return fig, axs

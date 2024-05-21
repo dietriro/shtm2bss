@@ -44,14 +44,14 @@ class SHTMBase(network.SHTMBase, ABC):
         super().load_params(**kwargs)
 
         # ToDo: Fix this and remove temporary hack
-        self.p.Neurons.Dendrite.theta_dAP = self.p.Neurons.Excitatory.v_thresh[NeuronType.Dendrite.ID]
-        self.p.Neurons.Dendrite.I_p = self.p.Neurons.Excitatory.v_reset[NeuronType.Dendrite.ID]
-        self.p.Neurons.Dendrite.tau_dAP = self.p.Neurons.Excitatory.tau_refrac[NeuronType.Dendrite.ID]
+        self.p.neurons.dendrite.theta_dAP = self.p.neurons.excitatory.v_thresh[NeuronType.Dendrite.ID]
+        self.p.neurons.dendrite.I_p = self.p.neurons.excitatory.v_reset[NeuronType.Dendrite.ID]
+        self.p.neurons.dendrite.tau_dAP = self.p.neurons.excitatory.tau_refrac[NeuronType.Dendrite.ID]
 
         patch_pynn_calibration(
-            self.p.Calibration.padi_bus_dacen_extension,
-            self.p.Calibration.correlation_amplitude,
-            self.p.Calibration.correlation_time_constant,
+            self.p.calibration.padi_bus_dacen_extension,
+            self.p.calibration.correlation_amplitude,
+            self.p.calibration.correlation_time_constant,
         )
 
     def init_plasticity_rule(self, start_time: float = None, period: float = None, runtime: float = 0.,
@@ -60,36 +60,36 @@ class SHTMBase(network.SHTMBase, ABC):
             raise ValueError("Mature weight needs to be in [0, 63].")
 
         if start_time is None:
-            start_time = self.p.Plasticity.execution_start
+            start_time = self.p.plasticity.execution_start
         else:
-            self.p.Plasticity.execution_start = start_time
+            self.p.plasticity.execution_start = start_time
 
         if period is None:
-            period = self.p.Plasticity.execution_interval
+            period = self.p.plasticity.execution_interval
         else:
-            self.p.Plasticity.execution_interval = period
+            self.p.plasticity.execution_interval = period
 
         timer = pynn.plasticity_rules.Timer(start=start_time, period=period,
                                             num_periods=int((runtime - start_time) / period) + 1)
 
         # calculate number of runs until plasticity rule is executed
-        num_runs = self.p.Plasticity.execution_start / self.calc_runtime_single()
+        num_runs = self.p.plasticity.execution_start / self.calc_runtime_single()
 
         self.plasticity_rule = PlasticityOnChip(
             timer=timer,
-            num_neurons=self.p.Network.num_symbols * self.p.Network.num_neurons,
-            permanence_threshold=int(self.p.Plasticity.permanence_threshold),
-            w_mature=int(self.p.Plasticity.w_mature),
-            target_rate_h=self.p.Plasticity.target_rate_h,
-            lambda_plus=self.p.Plasticity.lambda_plus,
-            lambda_minus=self.p.Plasticity.lambda_minus,
-            lambda_h=self.p.Plasticity.lambda_h,
-            learning_factor=self.p.Plasticity.learning_factor,
-            p_exc_exc=self.p.Synapses.p_exc_exc,
-            delta_t_max=self.p.Plasticity.delta_t_max,
-            tau_plus=self.p.Plasticity.tau_plus,
+            num_neurons=self.p.network.num_symbols * self.p.network.num_neurons,
+            permanence_threshold=int(self.p.plasticity.permanence_threshold),
+            w_mature=int(self.p.plasticity.w_mature),
+            target_rate_h=self.p.plasticity.target_rate_h,
+            lambda_plus=self.p.plasticity.lambda_plus,
+            lambda_minus=self.p.plasticity.lambda_minus,
+            lambda_h=self.p.plasticity.lambda_h,
+            learning_factor=self.p.plasticity.learning_factor,
+            p_exc_exc=self.p.synapses.p_exc_exc,
+            delta_t_max=self.p.plasticity.delta_t_max,
+            tau_plus=self.p.plasticity.tau_plus,
             num_runs=num_runs,
-            correlation_threshold=self.p.Plasticity.correlation_threshold
+            correlation_threshold=self.p.plasticity.correlation_threshold
         )
 
         # read-out permanence to retain between epochs
@@ -122,19 +122,19 @@ class SHTMBase(network.SHTMBase, ABC):
         for dendrites, somas in self.neurons_exc:
             self.init_neurons_exc_post_preprocess(dendrites, somas)
 
-        if self.p.Experiment.run_add_calib:
+        if self.p.experiment.run_add_calib:
             self.run_add_calibration()
 
     def init_all_neurons_exc(self, num_neurons=None):
-        all_dendrites, all_somas = self.init_neurons_exc(self.p.Network.num_symbols * self.p.Network.num_neurons)
+        all_dendrites, all_somas = self.init_neurons_exc(self.p.network.num_symbols * self.p.network.num_neurons)
         self.neurons_exc_all = (all_dendrites, all_somas)
 
         neurons_exc = list()
-        for i in range(self.p.Network.num_symbols):
+        for i in range(self.p.network.num_symbols):
             dendrites = pynn.PopulationView(all_dendrites,
-                                            slice(i * self.p.Network.num_neurons, (i + 1) * self.p.Network.num_neurons))
+                                            slice(i * self.p.network.num_neurons, (i + 1) * self.p.network.num_neurons))
             somas = pynn.PopulationView(all_somas,
-                                        slice(i * self.p.Network.num_neurons, (i + 1) * self.p.Network.num_neurons))
+                                        slice(i * self.p.network.num_neurons, (i + 1) * self.p.network.num_neurons))
             somas.record([RECORDING_VALUES[NeuronType.Soma][RecTypes.SPIKES]])
             dendrites.record([RECORDING_VALUES[NeuronType.Dendrite][RecTypes.SPIKES]])
             neurons_exc.append((dendrites, somas))
@@ -143,31 +143,31 @@ class SHTMBase(network.SHTMBase, ABC):
 
     def init_neurons_exc(self, num_neurons=None):
         if num_neurons is None:
-            num_neurons = self.p.Network.num_neurons
+            num_neurons = self.p.network.num_neurons
 
         # TODO: remove once pynn_brainscales supports float values directly (bug currently)
         # pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_I": 2.})
 
         dendrites = pynn.Population(num_neurons, pynn.cells.CalibHXNeuronCuba(
             plasticity_rule=self.plasticity_rule,
-            tau_m=self.p.Neurons.Excitatory.tau_m[0],
-            tau_syn_I=self.p.Neurons.Excitatory.tau_syn_I[0],
-            tau_syn_E=self.p.Neurons.Excitatory.tau_syn_E[0],
-            v_rest=self.p.Neurons.Excitatory.v_rest[0],
-            v_reset=self.p.Neurons.Excitatory.v_reset[0],
-            v_thresh=self.p.Neurons.Excitatory.v_thresh[0],
-            tau_refrac=self.p.Neurons.Excitatory.tau_refrac[0],
+            tau_m=self.p.neurons.excitatory.tau_m[0],
+            tau_syn_I=self.p.neurons.excitatory.tau_syn_I[0],
+            tau_syn_E=self.p.neurons.excitatory.tau_syn_E[0],
+            v_rest=self.p.neurons.excitatory.v_rest[0],
+            v_reset=self.p.neurons.excitatory.v_reset[0],
+            v_thresh=self.p.neurons.excitatory.v_thresh[0],
+            tau_refrac=self.p.neurons.excitatory.tau_refrac[0],
         ))
 
         somas = pynn.Population(num_neurons, pynn.cells.CalibHXNeuronCuba(
             plasticity_rule=self.plasticity_rule,
-            tau_m=self.p.Neurons.Excitatory.tau_m[1],
-            tau_syn_I=self.p.Neurons.Excitatory.tau_syn_I[1],
-            tau_syn_E=self.p.Neurons.Excitatory.tau_syn_E[1],
-            v_rest=self.p.Neurons.Excitatory.v_rest[1],
-            v_reset=self.p.Neurons.Excitatory.v_reset[1],
-            v_thresh=self.p.Neurons.Excitatory.v_thresh[1],
-            tau_refrac=self.p.Neurons.Excitatory.tau_refrac[1],
+            tau_m=self.p.neurons.excitatory.tau_m[1],
+            tau_syn_I=self.p.neurons.excitatory.tau_syn_I[1],
+            tau_syn_E=self.p.neurons.excitatory.tau_syn_E[1],
+            v_rest=self.p.neurons.excitatory.v_rest[1],
+            v_reset=self.p.neurons.excitatory.v_reset[1],
+            v_thresh=self.p.neurons.excitatory.v_thresh[1],
+            tau_refrac=self.p.neurons.excitatory.tau_refrac[1],
         ))
 
         return dendrites, somas
@@ -185,18 +185,18 @@ class SHTMBase(network.SHTMBase, ABC):
 
     def init_neurons_inh(self, num_neurons=None):
         if num_neurons is None:
-            num_neurons = self.p.Network.num_symbols
+            num_neurons = self.p.network.num_symbols
 
         pynn.cells.CalibHXNeuronCuba.default_parameters.update({"tau_syn_E": 2.})
 
         pop = pynn.Population(num_neurons, pynn.cells.CalibHXNeuronCuba(
-            tau_m=self.p.Neurons.Inhibitory.tau_m,
-            tau_syn_I=self.p.Neurons.Inhibitory.tau_syn_I,
-            tau_syn_E=self.p.Neurons.Inhibitory.tau_syn_E,
-            v_rest=self.p.Neurons.Inhibitory.v_rest,
-            v_reset=self.p.Neurons.Inhibitory.v_reset,
-            v_thresh=self.p.Neurons.Inhibitory.v_thresh,
-            tau_refrac=self.p.Neurons.Inhibitory.tau_refrac,
+            tau_m=self.p.neurons.inhibitory.tau_m,
+            tau_syn_I=self.p.neurons.inhibitory.tau_syn_I,
+            tau_syn_E=self.p.neurons.inhibitory.tau_syn_E,
+            v_rest=self.p.neurons.inhibitory.v_rest,
+            v_reset=self.p.neurons.inhibitory.v_reset,
+            v_thresh=self.p.neurons.inhibitory.v_thresh,
+            tau_refrac=self.p.neurons.inhibitory.tau_refrac,
         ))
 
         pop.record(RECORDING_VALUES[NeuronType.Inhibitory][RecTypes.SPIKES])
@@ -244,11 +244,11 @@ class SHTMBase(network.SHTMBase, ABC):
                 recorder.clear_flag = True
 
         # # Restart recording of spikes
-        # for i_symbol in range(self.p.Network.num_symbols):
+        # for i_symbol in range(self.p.network.num_symbols):
         #     somas = pynn.PopulationView(self.neurons_exc[i_symbol], slice(NeuronType.Soma.ID,
-        #                                                                   self.p.Network.num_neurons * 2, 2))
+        #                                                                   self.p.network.num_neurons * 2, 2))
         #     dendrites = pynn.PopulationView(self.neurons_exc[i_symbol], slice(NeuronType.Dendrite.ID,
-        #                                                                       self.p.Network.num_neurons * 2, 2))
+        #                                                                       self.p.network.num_neurons * 2, 2))
         #     somas.record([RECORDING_VALUES[NeuronType.Soma][RecTypes.SPIKES]])
         #     dendrites.record([RECORDING_VALUES[NeuronType.Dendrite][RecTypes.SPIKES]])
 
@@ -478,9 +478,9 @@ class SHTMPlasticity(SHTMSingleNeuron):
         dendrite, soma, ref_neuron = self.neurons_exc[0]
 
         if runtime is None:
-            runtime = self.p.Experiment.runtime
+            runtime = self.p.experiment.runtime
         else:
-            self.p.Experiment.runtime = runtime
+            self.p.experiment.runtime = runtime
 
         dendrite_v = []
         soma_v = []
@@ -548,14 +548,14 @@ class SHTMPlasticity(SHTMSingleNeuron):
         fig, (ax_pre, ax_d, ax_s, ax_p, ax_w) = plt.subplots(5, 1, sharex=True)
 
         times_dendrite = np.concatenate(
-            [np.array(self.vs[0][i].times) + self.p.Experiment.runtime * i for i in range(200)])
+            [np.array(self.vs[0][i].times) + self.p.experiment.runtime * i for i in range(200)])
         vs_dendrite = np.concatenate([np.array(self.vs[0][i]) for i in range(200)])
-        times_soma = np.concatenate([np.array(self.vs[1][i].times) + self.p.Experiment.runtime * i for i in range(200)])
+        times_soma = np.concatenate([np.array(self.vs[1][i].times) + self.p.experiment.runtime * i for i in range(200)])
         vs_soma = np.concatenate([np.array(self.vs[1][i]) for i in range(200)])
 
         ax_pre.eventplot(
             np.concatenate(
-                [np.array(self.pop_dendrite_in.get("spike_times").value) + i * self.p.Experiment.runtime for i in
+                [np.array(self.pop_dendrite_in.get("spike_times").value) + i * self.p.experiment.runtime for i in
                  range(200)]),
             label="pre", lw=.2)
         ax_pre.legend()
@@ -563,10 +563,10 @@ class SHTMPlasticity(SHTMSingleNeuron):
         ax_d.legend()
         ax_s.plot(times_soma, vs_soma, label="soma", lw=.2)
         ax_s.legend()
-        ax_p.plot(np.linspace(0., self.p.Experiment.runtime * 200., 200), self.permanences[:200], label="permanence")
+        ax_p.plot(np.linspace(0., self.p.experiment.runtime * 200., 200), self.permanences[:200], label="permanence")
         ax_p.set_ylabel("P [a.u.]")
         # ax_p.legend()
-        ax_w.plot(np.linspace(0., self.p.Experiment.runtime * 200., 200),
+        ax_w.plot(np.linspace(0., self.p.experiment.runtime * 200., 200),
                   np.array([w for w in np.array(self.weight[:200]).squeeze().T if any(w)]).T, label="weight")
         ax_w.set_ylabel("w [a.u.]")
         # ax_w.legend()
@@ -587,8 +587,8 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
         if RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP:
             neuron_permutation = list()
 
-            alphabet_size = self.p.Network.num_symbols
-            num_neurons_per_symbol = self.p.Network.num_neurons
+            alphabet_size = self.p.network.num_symbols
+            num_neurons_per_symbol = self.p.network.num_neurons
             for a in range(alphabet_size):
                 # dendrites
                 for i in range(num_neurons_per_symbol):
@@ -616,31 +616,31 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
             super().init_connections(exc_to_exc=exc_to_exc, exc_to_inh=exc_to_inh, debug=debug)
         else:
             self.ext_to_exc = []
-            for i in range(self.p.Network.num_symbols):
+            for i in range(self.p.network.num_symbols):
                 self.ext_to_exc.append(Projection(
                     PopulationView(self.neurons_ext, [i]),
                     self.get_neurons(NeuronType.Soma, symbol_id=i),
                     AllToAllConnector(),
-                    synapse_type=StaticSynapse(weight=self.p.Synapses.w_ext_exc, delay=self.p.Synapses.delay_ext_exc),
-                    receptor_type=self.p.Synapses.receptor_ext_exc))
+                    synapse_type=StaticSynapse(weight=self.p.synapses.w_ext_exc, delay=self.p.synapses.delay_ext_exc),
+                    receptor_type=self.p.synapses.receptor_ext_exc))
 
             self.exc_to_exc = []
             self.exc_to_exc_soma_to_soma_dummy = []
             self.exc_to_exc_dendrite_to_soma_dummy = []
-            num_connections = int(self.p.Network.num_neurons * self.p.Synapses.p_exc_exc)
-            weight = self.p.Synapses.w_exc_exc if exc_to_exc is None else exc_to_exc
-            seed = self.p.Experiment.seed_offset
+            num_connections = int(self.p.network.num_neurons * self.p.synapses.p_exc_exc)
+            weight = self.p.synapses.w_exc_exc if exc_to_exc is None else exc_to_exc
+            seed = self.p.experiment.seed_offset
             if self.instance_id is not None:
-                seed += self.instance_id * self.p.Network.num_symbols ** 2
+                seed += self.instance_id * self.p.network.num_symbols ** 2
             all_dendrites, all_somas = self.neurons_exc_all
             self.exc_to_exc.append(Projection(
                 all_somas,
                 all_dendrites,
                 AllToAllConnector(),
                 synapse_type=pynn.standardmodels.synapses.PlasticSynapse(weight=weight,
-                                                                         delay=self.p.Synapses.delay_exc_exc,
+                                                                         delay=self.p.synapses.delay_exc_exc,
                                                                          plasticity_rule=self.plasticity_rule),
-                receptor_type=self.p.Synapses.receptor_exc_exc,
+                receptor_type=self.p.synapses.receptor_exc_exc,
                 label=f"exc-exc_soma_to_dendrite"))
             self.exc_to_exc_soma_to_soma_dummy.append(Projection(
                 all_somas,
@@ -648,7 +648,7 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                 AllToAllConnector(),
                 synapse_type=pynn.standardmodels.synapses.PlasticSynapse(weight=0,
                                                                          plasticity_rule=self.plasticity_rule),
-                receptor_type=self.p.Synapses.receptor_exc_exc,
+                receptor_type=self.p.synapses.receptor_exc_exc,
                 label=f"exc-exc_soma_to_soma-dummy"))
             self.exc_to_exc_dendrite_to_soma_dummy.append(Projection(
                 all_dendrites,
@@ -656,36 +656,36 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                 AllToAllConnector(),
                 synapse_type=pynn.standardmodels.synapses.PlasticSynapse(weight=0,
                                                                          plasticity_rule=self.plasticity_rule),
-                receptor_type=self.p.Synapses.receptor_exc_exc,
+                receptor_type=self.p.synapses.receptor_exc_exc,
                 label=f"exc-exc_dendrite_to_soma-dummy"))
 
             self.exc_to_inh = []
-            for i in range(self.p.Network.num_symbols):
-                weight = self.p.Synapses.w_exc_inh if exc_to_inh is None else exc_to_inh[i]
-                weight = 0 if self.p.Synapses.dyn_inh_weights else weight
+            for i in range(self.p.network.num_symbols):
+                weight = self.p.synapses.w_exc_inh if exc_to_inh is None else exc_to_inh[i]
+                weight = 0 if self.p.synapses.dyn_inh_weights else weight
                 self.exc_to_inh.append(Projection(
                     self.get_neurons(NeuronType.Soma, symbol_id=i),
                     PopulationView(self.neurons_inh, [i]),
                     AllToAllConnector(),
-                    synapse_type=StaticSynapse(weight=weight, delay=self.p.Synapses.delay_exc_inh),
-                    receptor_type=self.p.Synapses.receptor_exc_inh))
+                    synapse_type=StaticSynapse(weight=weight, delay=self.p.synapses.delay_exc_inh),
+                    receptor_type=self.p.synapses.receptor_exc_inh))
 
             self.inh_to_exc = []
-            for i in range(self.p.Network.num_symbols):
+            for i in range(self.p.network.num_symbols):
                 self.inh_to_exc.append(Projection(
                     PopulationView(self.neurons_inh, [i]),
                     self.get_neurons(NeuronType.Soma, symbol_id=i),
                     AllToAllConnector(),
-                    synapse_type=StaticSynapse(weight=self.p.Synapses.w_inh_exc, delay=self.p.Synapses.delay_inh_exc),
-                    receptor_type=self.p.Synapses.receptor_inh_exc))
+                    synapse_type=StaticSynapse(weight=self.p.synapses.w_inh_exc, delay=self.p.synapses.delay_inh_exc),
+                    receptor_type=self.p.synapses.receptor_inh_exc))
 
             self.con_plastic = list()
-            for i in range(self.p.Network.num_symbols * (self.p.Network.num_symbols - 1)):
+            for i in range(self.p.network.num_symbols * (self.p.network.num_symbols - 1)):
                 self.con_plastic.append(OnChipPlasticityDummy(self.exc_to_exc[0], self, id=i))
 
     def __update_plasticity(self):
-        num_neurons_total = self.p.Network.num_neurons * self.p.Network.num_symbols
-        num_neurons = self.p.Network.num_neurons
+        num_neurons_total = self.p.network.num_neurons * self.p.network.num_symbols
+        num_neurons = self.p.network.num_neurons
 
         # calculate weights
         weights = self.exc_to_exc[0].get("weight", format="array")
@@ -706,8 +706,8 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
 
         # calculate values for each connection pair (symbol-i to symbol-k)
         i_plastic = 0
-        for i in range(self.p.Network.num_symbols):
-            for k in range(self.p.Network.num_symbols):
+        for i in range(self.p.network.num_symbols):
+            for k in range(self.p.network.num_symbols):
                 if i == k:
                     continue
 
@@ -726,23 +726,23 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                 i_plastic += 1
 
     def __set_dyn_inh_weights(self):
-        weight_mask = np.zeros((self.p.Network.num_symbols, self.p.Network.num_neurons))
-        runtime_seq_set = self.p.Experiment.runtime / self.p.Encoding.num_repetitions
+        weight_mask = np.zeros((self.p.network.num_symbols, self.p.network.num_neurons))
+        runtime_seq_set = self.p.experiment.runtime / self.p.encoding.num_repetitions
         unique_seq_set = list()
-        for seq in self.p.Experiment.sequences:
+        for seq in self.p.experiment.sequences:
             unique_seq_set += seq
         unique_seq_set = set(unique_seq_set)
 
         for symbol_i in unique_seq_set:
             i_symbol = SYMBOLS[symbol_i]
             for i_neuron, events_neuron_i in enumerate(self.neuron_events[NeuronType.Dendrite][i_symbol]):
-                for i_seq in range(len(self.p.Experiment.sequences)):
+                for i_seq in range(len(self.p.experiment.sequences)):
                     if len(events_neuron_i) > i_seq and events_neuron_i[i_seq] < runtime_seq_set:
                         weight_mask[i_symbol, i_neuron] = 1
 
             # set weights
-            # if np.sum(weight_mask[i_symbol]) >= self.p.Network.pattern_size:
-            self.exc_to_inh[i_symbol].set(weight=weight_mask[i_symbol] * self.p.Synapses.w_exc_inh)
+            # if np.sum(weight_mask[i_symbol]) >= self.p.network.pattern_size:
+            self.exc_to_inh[i_symbol].set(weight=weight_mask[i_symbol] * self.p.synapses.w_exc_inh)
 
         log.debug(f"Weight mask: {weight_mask}")
 
@@ -753,35 +753,35 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                         run_type=run_type)
         else:
             if runtime is None:
-                runtime = self.p.Experiment.runtime
+                runtime = self.p.experiment.runtime
             if steps is None:
-                steps = self.p.Experiment.episodes
-            self.p.Experiment.episodes = 0
+                steps = self.p.experiment.episodes
+            self.p.experiment.episodes = 0
 
             if type(runtime) is str:
                 if str(runtime).lower() == 'max':
-                    runtime = self.last_ext_spike_time + (self.p.Encoding.dt_seq - self.p.Encoding.t_exc_start)
+                    runtime = self.last_ext_spike_time + (self.p.encoding.dt_seq - self.p.encoding.t_exc_start)
             elif type(runtime) is float or type(runtime) is int:
                 pass
             elif runtime is None:
                 log.debug("No runtime specified. Setting runtime to last spike time + 2xdt_stm")
-                runtime = self.last_ext_spike_time + (self.p.Encoding.dt_seq - self.p.Encoding.t_exc_start)
+                runtime = self.last_ext_spike_time + (self.p.encoding.dt_seq - self.p.encoding.t_exc_start)
             else:
                 log.error("Error! Wrong runtime")
 
-            self.p.Experiment.runtime = runtime
+            self.p.experiment.runtime = runtime
 
             initial_permanences = lola.ExternalPPUMemoryBlock(
                 halco.ExternalPPUMemoryBlockSize(256 * 60))
             # TODO: support drawing initial values between min and max
             initial_permanences.bytes = [hal.ExternalPPUMemoryByte(
-                hal.ExternalPPUMemoryByte.Value(self.p.Plasticity.permanence_init_min))] * 256 * 60
+                hal.ExternalPPUMemoryByte.Value(self.p.plasticity.permanence_init_min))] * 256 * 60
             pynn.simulator.state.injected_config.ppu_symbols = {
                 "permanences": initial_permanences}
 
-            # run_length = self.p.Experiment.runtime / self.p.Encoding.num_repetitions
-            # performance_t_min = ((np.ceil(self.p.Plasticity.execution_start / run_length) - 2) * run_length
-            #                      + self.p.Encoding.t_exc_start)
+            # run_length = self.p.experiment.runtime / self.p.encoding.num_repetitions
+            # performance_t_min = ((np.ceil(self.p.plasticity.execution_start / run_length) - 2) * run_length
+            #                      + self.p.encoding.t_exc_start)
             performance_t_min = None
 
             for t in range(steps):
@@ -814,11 +814,11 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                 if store_plasticity_values:
                     self.__update_plasticity()
 
-                if self.p.Performance.compute_performance:
-                    self.performance.compute(neuron_events=self.neuron_events, method=self.p.Performance.method,
+                if self.p.performance.compute_performance:
+                    self.performance.compute(neuron_events=self.neuron_events, method=self.p.performance.method,
                                              t_min=performance_t_min)
 
-                if self.p.Synapses.dyn_inh_weights:
+                if self.p.synapses.dyn_inh_weights:
                     self.__set_dyn_inh_weights()
 
                 if plasticity_enabled:
@@ -830,25 +830,25 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
                     elif run_type == RunType.SINGLE:
                         self.__run_plasticity_singular(runtime, sim_start_time, dyn_exc_inh=dyn_exc_inh)
 
-                if self.p.Experiment.save_auto and self.p.Experiment.save_auto_epoches > 0:
-                    if (t + 1) % self.p.Experiment.save_auto_epoches == 0:
-                        self.p.Experiment.episodes = self.experiment_episodes + t + 1
+                if self.p.experiment.save_auto and self.p.experiment.save_auto_epoches > 0:
+                    if (t + 1) % self.p.experiment.save_auto_epoches == 0:
+                        self.p.experiment.episodes = self.experiment_episodes + t + 1
                         self.save_full_state()
 
             # print performance results
             self.print_performance_results()
 
             self.experiment_episodes += steps
-            self.p.Experiment.episodes = self.experiment_episodes
+            self.p.experiment.episodes = self.experiment_episodes
 
-            if self.p.Experiment.save_final or self.p.Experiment.save_auto:
+            if self.p.experiment.save_final or self.p.experiment.save_auto:
                 self.save_full_state()
 
     def plot_data_overview(self, data_types="all"):
         # define structure to hold all data
         plot_data = dict()
         # define total number of neurons
-        num_neurons_total = self.p.Network.num_neurons * self.p.Network.num_symbols
+        num_neurons_total = self.p.network.num_neurons * self.p.network.num_symbols
 
         # retrieve current data
         plot_data["cor_soma-soma"] = np.array(self.exc_to_exc_soma_to_soma_dummy[0].get_data("correlation")[-1].data)
@@ -879,17 +879,17 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
             axs[i_plot].imshow(data_arr, interpolation='nearest')
 
             # Major ticks
-            ticks_major = np.arange(self.p.Network.num_neurons/2, num_neurons_total, self.p.Network.num_neurons)
+            ticks_major = np.arange(self.p.network.num_neurons/2, num_neurons_total, self.p.network.num_neurons)
             axs[i_plot].set_xticks(ticks_major)
             axs[i_plot].set_yticks(ticks_major)
 
-            symbols = [id_to_symbol(sym_i) for sym_i in range(self.p.Network.num_symbols)]
+            symbols = [id_to_symbol(sym_i) for sym_i in range(self.p.network.num_symbols)]
             axs[i_plot].set_xticklabels(symbols)
             axs[i_plot].set_yticklabels(symbols)
 
             # Minor ticks
-            axs[i_plot].set_xticks(np.arange(-0.5, num_neurons_total + 0.5, self.p.Network.num_neurons), minor=True)
-            axs[i_plot].set_yticks(np.arange(-0.5, num_neurons_total + 0.5, self.p.Network.num_neurons), minor=True)
+            axs[i_plot].set_xticks(np.arange(-0.5, num_neurons_total + 0.5, self.p.network.num_neurons), minor=True)
+            axs[i_plot].set_yticks(np.arange(-0.5, num_neurons_total + 0.5, self.p.network.num_neurons), minor=True)
 
             axs[i_plot].grid(which='minor', color='w', linestyle='-', linewidth=1)
 
@@ -903,7 +903,7 @@ class SHTMTotal(SHTMBase, network.SHTMTotal):
 
     def plot_permanence_histogram(self, bin_width=5):
         # Get data
-        num_neurons_total = self.p.Network.num_neurons * self.p.Network.num_symbols
+        num_neurons_total = self.p.network.num_neurons * self.p.network.num_symbols
         soma_cor = np.array(self.exc_to_exc_soma_to_soma_dummy[0].get_data("correlation")[-1].data)
         soma_cor = soma_cor.reshape((num_neurons_total, num_neurons_total))
 
