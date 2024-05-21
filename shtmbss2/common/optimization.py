@@ -4,8 +4,6 @@ import itertools
 import yaml
 import matplotlib.pyplot as plt
 
-from pynn_brainscales import brainscales2 as pynn
-
 from shtmbss2.core.helpers import Process
 from shtmbss2.common.config import *
 from shtmbss2.core.data import (load_config, get_last_experiment_num, get_experiment_folder, get_last_instance,
