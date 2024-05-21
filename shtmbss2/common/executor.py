@@ -137,7 +137,7 @@ class ParallelExecutor:
             figure_path = join(get_experiment_folder(SHTMTotal, self.experiment_type, self.experiment_id,
                                                      self.experiment_num), "performance")
             for plot_file_type in RuntimeConfig.plot_file_types:
-                fig.savefig(f"{figure_path}.{plot_file_type}")
+                fig.savefig(f"{figure_path}.{plot_file_type}", dpi=p_plot.performance.dpi)
 
         log.handlers[LogHandler.STREAM].setLevel(logging.INFO)
 
