@@ -222,6 +222,7 @@ def save_instance_setup(net, parameters, performance, experiment_num=None, exper
 def save_experimental_setup(net, experiment_num=None, experiment_subnum=None, instance_id=None,
                             optimized_parameter_ranges=None, **kwargs):
     params = flatten_dict(net.p.dict(exclude_none=True))
+    params.pop("config_type")
     experiment_type = net.p.experiment.type
     experiment_id = net.p.experiment.id
 

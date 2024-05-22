@@ -40,6 +40,7 @@ class GridSearch:
         self.fig_save = None
         self.num_instances = None
         self.order_randomization = None
+        self.seed_offset = None
 
         self.load_config()
 
@@ -49,6 +50,10 @@ class GridSearch:
         self.fig_save = self.config["experiment"]["fig_save"]
         self.num_instances = self.config["experiment"]["num_instances"]
         self.order_randomization = self.config["experiment"]["order_randomization"]
+        if "seed_offset" in self.config["experiment"]:
+            self.seed_offset = self.config["experiment"]["seed_offset"]
+        else:
+            self.seed_offset = None
 
     def save_config(self):
         folder_path_experiment = get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
@@ -101,14 +106,14 @@ class GridSearch:
             plt.close(fig)
 
     def __run_experiment_multi(self, optimized_parameters, experiment_id, experiment_num, experiment_subnum, steps=None,
-                               optimized_parameter_ranges=None, fig_save=False):
+                               optimized_parameter_ranges=None, fig_save=False, seed_offset=None):
 
         # run experiments using parallel-executor
         pe = ParallelExecutor(num_instances=self.num_instances, experiment_id=experiment_id,
                               experiment_type=self.experiment_type, experiment_num=experiment_num,
                               experiment_subnum=experiment_subnum, parameter_ranges=optimized_parameter_ranges,
                               fig_save=False)
-        experiment_num = pe.run(steps=steps, additional_parameters=optimized_parameters)
+        experiment_num = pe.run(steps=steps, additional_parameters=optimized_parameters, seed_offset=seed_offset)
 
         # retrieve parameters for performed experiment
         p = NetworkParameters(network_type=self.model_type)
@@ -240,7 +245,7 @@ class GridSearch:
                     try:
                         self.__run_experiment_multi(parameters, self.experiment_id, self.experiment_num, run_i,
                                                     steps=steps, optimized_parameter_ranges=parameter_ranges,
-                                                    fig_save=self.fig_save)
+                                                    fig_save=self.fig_save, seed_offset=self.seed_offset)
                         success = True
                     except (RuntimeError, FileNotFoundError) as e:
                         success = False
