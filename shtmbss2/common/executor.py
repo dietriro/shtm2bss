@@ -72,7 +72,7 @@ class ParallelExecutor:
             time.sleep(0.1)
 
         lock.acquire(block=True)
-        shtm.save_full_state(optimized_parameter_ranges=parameter_ranges)
+        shtm.save_full_state(optimized_parameter_ranges=parameter_ranges, save_setup=experiment_subnum==0)
         lock.release()
 
         # signal other processes, that this process has finished the data saving process
@@ -93,7 +93,8 @@ class ParallelExecutor:
 
         processes = []
         for i_inst in range(self.num_instances):
-            log.essens(f'Starting network {i_inst}')
+            if self.experiment_subnum is None:
+                log.essens(f'Starting network {i_inst}')
             processes.append(Process(target=self.__run_experiment, args=(i_inst, file_save_status, lock,
                                                                          self.experiment_type,
                                                                          self.experiment_id,
@@ -113,7 +114,8 @@ class ParallelExecutor:
                 print(trc)
                 raise exc
 
-            log.essens(f"Finished simulation {i_inst + 1}/{self.num_instances}")
+            if self.experiment_subnum is None:
+                log.essens(f"Finished simulation {i_inst + 1}/{self.num_instances}")
 
         # save figure of performance
         if self.fig_save:

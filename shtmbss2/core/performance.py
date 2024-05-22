@@ -402,16 +402,6 @@ class PerformanceMulti(Performance):
                     metric = self.get_all(metric_name, instance_id=i_inst)
                     metric_means = np.mean(metric, axis=0)
 
-                    # find first training epoch from which error didn't fall below 0 anymore
-                    if not first_zero_finished:
-                        error = self.get_all(PerformanceMetrics.ERROR, instance_id=i_inst)
-                        error_max_reverse = np.flip(np.max(error, axis=0))
-                        error_max_reverse = np.cumsum(error_max_reverse)
-                        first_zero_id = np.argmax(error_max_reverse > 0)
-                        if first_zero_id > 0:
-                            performance[f"num-epochs_avg"] = (performance.get(f"num-epochs_avg", 0) +
-                                                          len(error_max_reverse) - first_zero_id)
-
                     # add running avgs to dict
                     for running_avg in running_avgs:
                         start_id = int(len(metric_means) * (1 - running_avg))
@@ -434,13 +424,24 @@ class PerformanceMulti(Performance):
                 performance[f"{metric_name}_last"] = np.round(performance[f"{metric_name}_last"] / self.num_instances,
                                                               decimals)
 
-                # compute average of num-epochs, if this is the first round
-                if not first_zero_finished:
-                    if performance.get(f"num-epochs_avg", 0) == 0:
-                        performance[f"num-epochs_avg"] = -1
-                    else:
-                        performance[f"num-epochs_avg"] = np.round(performance[f"num-epochs_avg"] / self.num_instances)
-                    first_zero_finished = True
+            num_success = 0
+            for i_inst in range(self.num_instances):
+                # find first training epoch from which error didn't fall below 0 anymore
+                error = self.get_all(PerformanceMetrics.ERROR, instance_id=i_inst)
+                error_max_reverse = np.flip(np.max(error, axis=0))
+                error_max_reverse = np.cumsum(error_max_reverse)
+                first_zero_id = np.argmax(error_max_reverse > 0)
+                if first_zero_id > 0:
+                    performance[f"num-epochs_avg"] = (performance.get(f"num-epochs_avg", 0) +
+                                                      len(error_max_reverse) - first_zero_id)
+                    num_success += 1
+
+            # compute average of num-epochs
+            if performance.get(f"num-epochs_avg", 0) == 0 or num_success < self.num_instances / 2:
+                performance[f"num-epochs_avg"] = -1
+            else:
+                performance[f"num-epochs_avg"] = int(np.round(performance[f"num-epochs_avg"] /
+                                                              num_success))
 
         else:
             performance = self.data

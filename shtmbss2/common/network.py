@@ -956,12 +956,12 @@ class SHTMTotal(SHTMBase, ABC):
 
         np.savez(file_path, **plasticity_dict)
 
-    def save_full_state(self, running_avg_perc=0.5, optimized_parameter_ranges=None):
+    def save_full_state(self, running_avg_perc=0.5, optimized_parameter_ranges=None, save_setup=False):
         log.debug("Saving full state of network and experiment.")
 
         if (self.p.experiment.type in
                 [ExperimentType.EVAL_MULTI, ExperimentType.OPT_GRID, ExperimentType.OPT_GRID_MULTI]):
-            if self.instance_id is not None and self.instance_id == 0:
+            if self.instance_id is not None and self.instance_id == 0 and save_setup:
                 self.experiment_num = save_experimental_setup(net=self, experiment_num=self.experiment_num,
                                                               experiment_subnum=self.experiment_subnum,
                                                               instance_id=self.instance_id,
