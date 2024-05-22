@@ -156,13 +156,13 @@ class GridSearch:
             if ("values" in parameter_config.keys() and parameter_config["values"] is not None
                     and type(parameter_config["values"]) is list and len(parameter_config["values"]) > 0):
                 parameter_values.append(parameter_config["values"])
-                parameter_ranges[f"Optimized-params.{parameter_name}"] = parameter_config["values"]
+                parameter_ranges[f"optimized-params.{parameter_name}"] = parameter_config["values"]
             else:
                 parameter_values.append(np.arange(start=parameter_config["min"],
                                                   stop=parameter_config["max"] + parameter_config["step"],
                                                   step=parameter_config["step"],
                                                   dtype=parameter_config["dtype"]).tolist())
-                parameter_ranges[f"Optimized-params.{parameter_name}"] = (parameter_config["min"],
+                parameter_ranges[f"optimized-params.{parameter_name}"] = (parameter_config["min"],
                                                                           parameter_config["max"],
                                                                           parameter_config["step"])
             parameter_names.append(parameter_name)
