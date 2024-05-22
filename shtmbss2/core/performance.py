@@ -396,6 +396,7 @@ class PerformanceMulti(Performance):
             running_avgs = [0.5]
         performance = dict()
         first_zero_finished = False
+        performance[f"num-epochs_avg"] = 0
         if final_result:
             for metric_name in PerformanceMetrics.get_all():
                 for i_inst in range(self.num_instances):
