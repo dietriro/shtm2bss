@@ -39,12 +39,12 @@ class ParallelExecutor:
     @staticmethod
     def __run_experiment(process_id, file_save_status, lock, experiment_type, experiment_id, experiment_num,
                          seed_offset, experiment_subnum=None, additional_parameters=None, parameter_ranges=None,
-                         steps=None):
+                         steps=None, p=None):
         if additional_parameters is None:
             additional_parameters = dict()
 
         shtm = SHTMTotal(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
-                         instance_id=process_id, seed_offset=seed_offset,
+                         instance_id=process_id, seed_offset=seed_offset, p=p,
                          **{**additional_parameters, "experiment.id": experiment_id})
         shtm.init_backend(offset=0)
 
@@ -78,7 +78,7 @@ class ParallelExecutor:
         # signal other processes, that this process has finished the data saving process
         file_save_status[process_id] = 1
 
-    def run(self, steps=None, additional_parameters=None):
+    def run(self, steps=None, additional_parameters=None, p=None):
 
         lock = mp.Lock()
         file_save_status = mp.Array("i", [0 for _ in range(self.num_instances)])
@@ -102,7 +102,7 @@ class ParallelExecutor:
                                                                          self.experiment_subnum,
                                                                          additional_parameters,
                                                                          self.parameter_ranges,
-                                                                         steps)))
+                                                                         steps, p)))
             processes[i_inst].start()
 
         for i_inst in range(self.num_instances):

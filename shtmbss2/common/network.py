@@ -65,9 +65,9 @@ class SHTMBase(ABC):
             self.optimized_parameters = None
 
         # Load pre-defined parameters
+        self.p_plot: PlottingParameters = PlottingParameters(network_type=self)
         if p is None:
             self.p: NetworkParameters = NetworkParameters(network_type=self)
-            self.p_plot: PlottingParameters = PlottingParameters(network_type=self)
             self.load_params(**kwargs)
         else:
             self.p: NetworkParameters = deepcopy(p)
