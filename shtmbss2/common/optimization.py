@@ -101,6 +101,7 @@ class GridSearch:
             figure_path = join(get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
                                                      experiment_num, instance_id=instance_id), "performance")
             fig.savefig(figure_path, dpi=p_plot.performance.dpi)
+            plt.close(fig)
 
             # close figure in order to make it garbage-collectable
             plt.close(fig)
@@ -136,6 +137,7 @@ class GridSearch:
                                                      experiment_num, experiment_subnum=experiment_subnum),
                                "performance")
             fig.savefig(figure_path, dpi=p_plot.performance.dpi)
+            plt.close(fig)
 
         # save performance and parameter data to overall sheet for experiment
         save_instance_setup(net=self.model_type, parameters=p,

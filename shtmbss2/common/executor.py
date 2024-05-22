@@ -2,6 +2,7 @@ import time
 import warnings
 import numpy as np
 import multiprocessing as mp
+import matplotlib.pyplot as plt
 
 from shtmbss2.core.helpers import Process
 from shtmbss2.common.config import *
@@ -142,6 +143,7 @@ class ParallelExecutor:
                                                      self.experiment_num), "performance")
             for plot_file_type in RuntimeConfig.plot_file_types:
                 fig.savefig(f"{figure_path}.{plot_file_type}", dpi=p_plot.performance.dpi)
+                plt.close(fig)
 
         log.handlers[LogHandler.STREAM].setLevel(logging.INFO)
 
