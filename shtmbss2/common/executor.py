@@ -78,7 +78,7 @@ class ParallelExecutor:
         # signal other processes, that this process has finished the data saving process
         file_save_status[process_id] = 1
 
-    def run(self, steps=None, additional_parameters=None, p=None):
+    def run(self, steps=None, additional_parameters=None, p=None, seed_time_offset=False):
 
         lock = mp.Lock()
         file_save_status = mp.Array("i", [0 for _ in range(self.num_instances)])
@@ -87,7 +87,10 @@ class ParallelExecutor:
         if self.experiment_num is None:
             self.experiment_num = get_last_experiment_num(SHTMTotal, self.experiment_id, self.experiment_type) + 1
 
-        seed_offset = int(time.time())
+        if seed_time_offset:
+            seed_offset = int(time.time())
+        else:
+            seed_offset = 0
 
         log.handlers[LogHandler.STREAM].setLevel(logging.ESSENS)
 
