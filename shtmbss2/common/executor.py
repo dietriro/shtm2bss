@@ -37,14 +37,15 @@ class ParallelExecutor:
 
         self.fig_save = fig_save
 
-    @staticmethod
-    def __run_experiment(process_id, file_save_status, lock, experiment_type, experiment_id, experiment_num,
+    # @staticmethod
+    def __run_experiment(self, process_id, file_save_status, lock, experiment_type, experiment_id, experiment_num,
                          seed_offset, experiment_subnum=None, additional_parameters=None, parameter_ranges=None,
                          steps=None, p=None):
         if additional_parameters is None:
             additional_parameters = dict()
 
-        shtm = SHTMTotal(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
+        shtm = SHTMTotal(use_on_chip_plasticity=RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP,
+                         experiment_type=experiment_type, experiment_subnum=experiment_subnum,
                          instance_id=process_id, seed_offset=seed_offset, p=p,
                          **{**additional_parameters, "experiment.id": experiment_id})
         shtm.init_backend(offset=0)
@@ -64,23 +65,27 @@ class ParallelExecutor:
         shtm.init_connections(debug=False)
         shtm.init_external_input()
 
+        if RuntimeConfig.backend == Backends.BRAIN_SCALES_2:
+            shtm.init_rec_exc()
+
         shtm.init_prerun()
 
-        shtm.run(steps=steps, plasticity_enabled=RuntimeConfig.plasticity_location != PlasticityLocation.ON_CHIP, run_type=RunType.SINGLE)
+        shtm.run(steps=steps, plasticity_enabled=RuntimeConfig.plasticity_location != PlasticityLocation.ON_CHIP,
+                 run_type=RunType.SINGLE)
 
         # wait until it's this processes turn to save data (order)
-        while process_id > 0 and file_save_status[process_id-1] < 1:
+        while process_id > 0 and file_save_status[process_id - 1] < 1:
             time.sleep(0.1)
 
         lock.acquire(block=True)
         shtm.save_full_state(optimized_parameter_ranges=parameter_ranges,
-                             save_setup=experiment_subnum==0 or (experiment_subnum is None and process_id == 0))
+                             save_setup=experiment_subnum == 0 or (experiment_subnum is None and process_id == 0))
         lock.release()
 
         # signal other processes, that this process has finished the data saving process
         file_save_status[process_id] = 1
 
-    def run(self, steps=None, additional_parameters=None, p=None, seed_offset=0):
+    def run(self, steps=None, additional_parameters=None, p=None, seed_offset=0, parallel=True):
 
         lock = mp.Lock()
         file_save_status = mp.Array("i", [0 for _ in range(self.num_instances)])
@@ -98,27 +103,41 @@ class ParallelExecutor:
         for i_inst in range(self.num_instances):
             if self.experiment_subnum is None:
                 log.essens(f'Starting network {i_inst}')
-            processes.append(Process(target=self.__run_experiment, args=(i_inst, file_save_status, lock,
-                                                                         self.experiment_type,
-                                                                         self.experiment_id,
-                                                                         self.experiment_num, seed_offset,
-                                                                         self.experiment_subnum,
-                                                                         additional_parameters,
-                                                                         self.parameter_ranges,
-                                                                         steps, p)))
-            processes[i_inst].start()
 
-        for i_inst in range(self.num_instances):
-            processes[i_inst].join()
+            if not parallel:
+                processes.append(Process(target=self.__run_experiment, args=(i_inst, file_save_status, lock,
+                                                                             self.experiment_type,
+                                                                             self.experiment_id,
+                                                                             self.experiment_num, seed_offset,
+                                                                             self.experiment_subnum,
+                                                                             additional_parameters,
+                                                                             self.parameter_ranges,
+                                                                             steps, p)))
+                processes[i_inst].start()
+            else:
+                proc = Process(target=self.__run_experiment, args=(i_inst, file_save_status, lock,
+                                                                   self.experiment_type,
+                                                                   self.experiment_id,
+                                                                   self.experiment_num, seed_offset,
+                                                                   self.experiment_subnum,
+                                                                   additional_parameters,
+                                                                   self.parameter_ranges,
+                                                                   steps, p))
+                proc.start()
+                proc.join()
 
-            # Check if an exception occurred in the sub-process, then raise this exception
-            if processes[i_inst].exception:
-                exc, trc = processes[i_inst].exception
-                print(trc)
-                raise exc
+        if parallel:
+            for i_inst in range(self.num_instances):
+                processes[i_inst].join()
 
-            if self.experiment_subnum is None:
-                log.essens(f"Finished simulation {i_inst + 1}/{self.num_instances}")
+                # Check if an exception occurred in the sub-process, then raise this exception
+                if processes[i_inst].exception:
+                    exc, trc = processes[i_inst].exception
+                    print(trc)
+                    raise exc
+
+                if self.experiment_subnum is None:
+                    log.essens(f"Finished simulation {i_inst + 1}/{self.num_instances}")
 
         # save figure of performance
         if self.fig_save:
