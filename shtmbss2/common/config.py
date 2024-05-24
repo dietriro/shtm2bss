@@ -105,6 +105,7 @@ class PerformanceMetrics(NamedStorage):
     FN = 'false_negative'
     ACTIVE_SOMAS = 'active_somas'
     # ACTIVE_DENDRITES = 'active_dendrite'
+    DD = 'duplicate_dendrites'
 
 
 class StatisticalMetrics(NamedStorage):

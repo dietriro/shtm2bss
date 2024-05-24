@@ -502,8 +502,8 @@ class SHTMBase(ABC):
             pickle.dump(fig, open(f'{file_path}.fig.pickle',
                                   'wb'))  # This is for Python 3 - py2 may need `file` instead of `open`
 
-    def plot_performance(self, statistic=StatisticalMetrics.MEAN, sequences="statistic"):
-        self.performance.plot(self.p_plot, statistic=statistic, sequences=sequences)
+    def plot_performance(self, statistic=StatisticalMetrics.MEAN, sequences="statistic", plot_dd=False):
+        self.performance.plot(self.p_plot, statistic=statistic, sequences=sequences, plot_dd=plot_dd)
 
     def getsize(self):
         """sum size of object & members."""

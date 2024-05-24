@@ -55,6 +55,13 @@ class Performance(ABC):
         ratio_fp_activation = 0.5
         ratio_fn_activation = 0.5
 
+        # calculate dendritic duplicate data for all symbols
+        num_dAPs_total = np.zeros((self.p.network.num_symbols, self.p.network.num_neurons))
+        for i_symbol in range(self.p.network.num_symbols):
+            for i_neuron in range(self.p.network.num_neurons):
+                num_dAPs_total[i_symbol, i_neuron] += len(neuron_events[NeuronType.Dendrite][i_symbol][i_neuron])
+        num_dAPs_sum = np.sum(np.heaviside(num_dAPs_total - 1, 0))
+
         if t_min is None:
             t_min = self.p.encoding.t_exc_start
 
@@ -62,6 +69,7 @@ class Performance(ABC):
             seq_performance = {metric: list() for metric in PerformanceMetrics.get_all()}
 
             t_min += i_seq * self.p.encoding.dt_seq + i_seq * self.p.encoding.dt_stm
+
 
             for i_element, element in enumerate(seq[1:]):
                 if i_element > 0:
@@ -107,6 +115,8 @@ class Performance(ABC):
                         counter_correct += 1
                         output[i_symbol] = 1
 
+                # num_dAPs_total += num_dAPs
+
                 # calculate Euclidean distance between output and target vector
                 # determine prediction error, FP and FN
                 error = np.sqrt(sum((output - target) ** 2))
@@ -119,12 +129,22 @@ class Performance(ABC):
                 seq_performance[PerformanceMetrics.ACTIVE_SOMAS].append(num_som_spikes[SYMBOLS[element]])
                 # seq_performance[PerformanceMetrics.ACTIVE_DENDRITES].append(num_dAPs[SYMBOLS[element]])
 
+            # calculate dAP error
+
             for metric in PerformanceMetrics.get_all():
+                if metric == PerformanceMetrics.DD:
+                    continue
                 self.add_data_point(np.mean(seq_performance[metric]), metric, sequence_id=i_seq)
 
-    def plot(self, plt_config, statistic, sequences="mean", fig_title=""):
+            # add dendritic duplicate data
+            self.add_data_point(np.mean(num_dAPs_sum), PerformanceMetrics.DD, sequence_id=i_seq)
+
+
+    def plot(self, plt_config, statistic, sequences="mean", fig_title="", plot_dd=False):
         """
 
+        :param plot_dd:
+        :type plot_dd:
         :param fig_title:
         :type fig_title:
         :param plt_config:
@@ -136,7 +156,7 @@ class Performance(ABC):
         :return:
         :rtype:
         """
-        fig, axs = plt.subplots(1, 3, figsize=plt_config.performance.size, dpi=plt_config.performance.dpi)
+        fig, axs = plt.subplots(1, 3+int(plot_dd), figsize=plt_config.performance.size, dpi=plt_config.performance.dpi)
 
         fig.suptitle(fig_title, x=0.5, y=0.95, fontsize=plt_config.performance.fontsize.title)
 
@@ -153,6 +173,9 @@ class Performance(ABC):
         axs[2].set_ylabel("Rel. no. of active neurons")
         axs[2].set_xlabel("# Training Episodes")
 
+        axs[2].set_ylabel("No. of dendrites no. spikes > 1")
+        axs[2].set_xlabel("# Training Episodes")
+
         for i_plot, letter in enumerate(['A', 'B', 'C']):
             panel_label_pos = (-0.05, 1.14)
             plot_panel_label(letter, panel_label_pos, axs[i_plot], size=plt_config.performance.fontsize.sub_title)
@@ -164,7 +187,8 @@ class Performance(ABC):
 
         return fig, axs
 
-    def plot_seq(self, axs, plt_config, perf_errors, perf_fps, perf_fns, num_active_somas_post, i_col=1):
+    def plot_seq(self, axs, plt_config, perf_errors, perf_fps, perf_fns, num_active_somas_post, perf_dds, plot_dd=False,
+                 i_col=1):
         # Plot 1: Performance error
         axs[0].plot(moving_average(perf_errors), color=f"C{i_col}", linewidth=plt_config.performance.line_width)
 
@@ -178,9 +202,14 @@ class Performance(ABC):
         rel_num_active_neurons = moving_average(np.array(num_active_somas_post) / self.p.network.num_neurons)
         axs[2].plot(rel_num_active_neurons, color=f"C{i_col}", linewidth=plt_config.performance.line_width)
 
+        if plot_dd:
+            axs[3].plot(moving_average(perf_dds), color=f"C{i_col}", label="Dendritic duplicates",
+                        linewidth=plt_config.performance.line_width)
+
         return axs
 
-    def plot_bounds(self, axs, error_low, error_up, fp_low, fp_up, fn_low, fn_up, active_somas_low, active_somas_up):
+    def plot_bounds(self, axs, error_low, error_up, fp_low, fp_up, fn_low, fn_up, active_somas_low, active_somas_up,
+                    dd_low, dd_up, plot_dd=False):
         x = range(self.get_data_size())
 
         axs[0].fill_between(x, moving_average(error_low), moving_average(error_up), facecolor='grey')
@@ -191,6 +220,9 @@ class Performance(ABC):
         active_somas_low = moving_average(np.array(active_somas_low) / self.p.network.num_neurons)
         active_somas_up = moving_average(np.array(active_somas_up) / self.p.network.num_neurons)
         axs[2].fill_between(x, active_somas_low, active_somas_up, facecolor='grey')
+
+        if plot_dd:
+            axs[3].fill_between(x, moving_average(dd_low), moving_average(dd_up), facecolor='grey')
 
         return axs
 
@@ -304,8 +336,8 @@ class PerformanceSingle(Performance):
     def add_data_point(self, data_point, metric, sequence_id):
         self.data[metric][sequence_id].append(data_point)
 
-    def plot(self, plt_config, statistic=StatisticalMetrics.MEAN, sequences="statistic", fig_show=False):
-        fig, axs = super().plot(plt_config, statistic=statistic, sequences=sequences)
+    def plot(self, plt_config, statistic=StatisticalMetrics.MEAN, sequences="statistic", fig_show=False, plot_dd=False):
+        fig, axs = super().plot(plt_config, statistic=statistic, sequences=sequences, plot_dd=plot_dd)
 
         sequence_range = None
 
@@ -314,7 +346,8 @@ class PerformanceSingle(Performance):
                 axs = self.plot_seq(axs, plt_config, self.get_statistic(statistic, PerformanceMetrics.ERROR),
                                     self.get_statistic(statistic, PerformanceMetrics.FP),
                                     self.get_statistic(statistic, PerformanceMetrics.FN),
-                                    self.get_statistic(statistic, PerformanceMetrics.ACTIVE_SOMAS), i_col=1)
+                                    self.get_statistic(statistic, PerformanceMetrics.ACTIVE_SOMAS),
+                                    self.get_statistic(statistic, PerformanceMetrics.DD), i_col=1, plot_dd=plot_dd)
             elif sequences == "all":
                 sequence_range = range(len(self.p.experiment.sequences))
         elif type(sequences) in [range, list]:
@@ -325,7 +358,8 @@ class PerformanceSingle(Performance):
                 self.plot_seq(axs, plt_config, self.get_all(PerformanceMetrics.ERROR, i_seq),
                               self.get_all(PerformanceMetrics.FP, i_seq),
                               self.get_all(PerformanceMetrics.FN, i_seq),
-                              self.get_all(PerformanceMetrics.ACTIVE_SOMAS, i_seq), i_col=i_seq)
+                              self.get_all(PerformanceMetrics.ACTIVE_SOMAS, i_seq),
+                              self.get_statistic(statistic, PerformanceMetrics.DD), i_col=1, plot_dd=plot_dd)
 
         axs = self.plot_legend(axs, plt_config=plt_config)
 
@@ -461,13 +495,15 @@ class PerformanceMulti(Performance):
         self.data[instance_id][metric][sequence_id].append(data_point)
 
     def plot(self, plt_config, statistic=StatisticalMetrics.MEDIAN, sequences=None, instances="statistic",
-             fig_show=True, fig_title=""):
-        fig, axs = super().plot(plt_config, statistic=statistic, sequences=sequences, fig_title=fig_title)
+             fig_show=True, fig_title="", plot_dd=False):
+        fig, axs = super().plot(plt_config, statistic=statistic, sequences=sequences, fig_title=fig_title,
+                                plot_dd=plot_dd)
 
         axs = self.plot_seq(axs, plt_config, self.get_statistic(statistic, PerformanceMetrics.ERROR),
                             self.get_statistic(statistic, PerformanceMetrics.FP),
                             self.get_statistic(statistic, PerformanceMetrics.FN),
-                            self.get_statistic(statistic, PerformanceMetrics.ACTIVE_SOMAS), i_col=1)
+                            self.get_statistic(statistic, PerformanceMetrics.ACTIVE_SOMAS),
+                            self.get_statistic(statistic, PerformanceMetrics.DD), i_col=1, plot_dd=plot_dd)
         if statistic == StatisticalMetrics.MEDIAN:
             axs = self.plot_bounds(axs,
                                    error_low=self.get_statistic(StatisticalMetrics.PERCENTILE, PerformanceMetrics.ERROR,
@@ -487,7 +523,12 @@ class PerformanceMulti(Performance):
                                                                        percentile=5),
                                    active_somas_up=self.get_statistic(StatisticalMetrics.PERCENTILE,
                                                                       PerformanceMetrics.ACTIVE_SOMAS,
-                                                                      percentile=95)
+                                                                      percentile=95),
+                                   dd_low=self.get_statistic(StatisticalMetrics.PERCENTILE, PerformanceMetrics.DD,
+                                                             percentile=5),
+                                   dd_up=self.get_statistic(StatisticalMetrics.PERCENTILE, PerformanceMetrics.DD,
+                                                            percentile=95),
+                                   plot_dd=plot_dd
                                    )
 
         axs = self.plot_legend(axs, plt_config=plt_config)
