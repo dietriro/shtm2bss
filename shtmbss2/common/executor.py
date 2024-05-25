@@ -85,7 +85,7 @@ class ParallelExecutor:
         # signal other processes, that this process has finished the data saving process
         file_save_status[process_id] = 1
 
-    def run(self, steps=None, additional_parameters=None, p=None, seed_offset=0, parallel=True):
+    def run(self, steps=None, additional_parameters=None, p=None, seed_offset=0, parallel=True, plot_perf_dd=False):
 
         lock = mp.Lock()
         file_save_status = mp.Array("i", [0 for _ in range(self.num_instances)])
@@ -157,7 +157,7 @@ class ParallelExecutor:
                          experiment_num=self.experiment_num)
 
             # save figure
-            fig, _ = pf.plot(p_plot, statistic=StatisticalMetrics.MEDIAN, fig_show=False)
+            fig, _ = pf.plot(p_plot, statistic=StatisticalMetrics.MEDIAN, fig_show=False, plot_dd=plot_perf_dd)
             figure_path = join(get_experiment_folder(SHTMTotal, self.experiment_type, self.experiment_id,
                                                      self.experiment_num), "performance")
             for plot_file_type in RuntimeConfig.plot_file_types:
