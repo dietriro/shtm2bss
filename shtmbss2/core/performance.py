@@ -55,15 +55,11 @@ class Performance(ABC):
         ratio_fp_activation = 0.5
         ratio_fn_activation = 0.5
 
-        # calculate dendritic duplicate data for all symbols
-        num_dAPs_total = np.zeros((self.p.network.num_symbols, self.p.network.num_neurons))
-        for i_symbol in range(self.p.network.num_symbols):
-            for i_neuron in range(self.p.network.num_neurons):
-                num_dAPs_total[i_symbol, i_neuron] += len(neuron_events[NeuronType.Dendrite][i_symbol][i_neuron])
-        num_dAPs_sum = np.sum(np.heaviside(num_dAPs_total - 1, 0))
-
         if t_min is None:
             t_min = self.p.encoding.t_exc_start
+
+        t_min_org = t_min
+        t_max_next = 0
 
         for i_seq, seq in enumerate(self.p.experiment.sequences):
             seq_performance = {metric: list() for metric in PerformanceMetrics.get_all()}
@@ -136,7 +132,17 @@ class Performance(ABC):
                     continue
                 self.add_data_point(np.mean(seq_performance[metric]), metric, sequence_id=i_seq)
 
-            # add dendritic duplicate data
+        # calculate dendritic duplicate data for all symbols
+        num_dAPs_total = np.zeros((self.p.network.num_symbols, self.p.network.num_neurons))
+        for i_symbol in range(self.p.network.num_symbols):
+            for i_neuron in range(self.p.network.num_neurons):
+                events_i = neuron_events[NeuronType.Dendrite][i_symbol][i_neuron]
+                num_dAPs_total[i_symbol, i_neuron] += np.sum(np.logical_and(events_i > t_min_org,
+                                                                            events_i < t_max_next))
+        num_dAPs_sum = np.sum(np.heaviside(num_dAPs_total - 1, 0))
+
+        # add dendritic duplicate data
+        for i_seq in range(len(self.p.experiment.sequences)):
             self.add_data_point(np.mean(num_dAPs_sum), PerformanceMetrics.DD, sequence_id=i_seq)
 
 
@@ -156,6 +162,9 @@ class Performance(ABC):
         :return:
         :rtype:
         """
+        fig_size = plt_config.performance.size
+        if plot_dd:
+            fig_size[0] = fig_size[0] / 3 * 4
         fig, axs = plt.subplots(1, 3+int(plot_dd), figsize=plt_config.performance.size, dpi=plt_config.performance.dpi)
 
         fig.suptitle(fig_title, x=0.5, y=0.95, fontsize=plt_config.performance.fontsize.title)
@@ -173,10 +182,15 @@ class Performance(ABC):
         axs[2].set_ylabel("Rel. no. of active neurons")
         axs[2].set_xlabel("# Training Episodes")
 
-        axs[2].set_ylabel("No. of dendrites no. spikes > 1")
-        axs[2].set_xlabel("# Training Episodes")
+        panels = ['A', 'B', 'C']
 
-        for i_plot, letter in enumerate(['A', 'B', 'C']):
+        if plot_dd:
+            axs[3].set_ylabel("No. of dendrites no. spikes > 1")
+            axs[3].set_xlabel("# Training Episodes")
+
+            panels.append('D')
+
+        for i_plot, letter in enumerate(panels):
             panel_label_pos = (-0.05, 1.14)
             plot_panel_label(letter, panel_label_pos, axs[i_plot], size=plt_config.performance.fontsize.sub_title)
 

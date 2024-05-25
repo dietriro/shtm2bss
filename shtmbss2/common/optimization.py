@@ -64,7 +64,7 @@ class GridSearch:
             yaml.dump(self.config, file)
 
     def __run_experiment(self, optimized_parameters, experiment_id, experiment_num, instance_id, steps=None,
-                         optimized_parameter_ranges=None, fig_save=False):
+                         optimized_parameter_ranges=None, fig_save=False, plot_perf_dd=True):
         model = self.model_type(use_on_chip_plasticity=RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP,
                                 experiment_type=ExperimentType.OPT_GRID, instance_id=instance_id, seed_offset=0,
                                 **{**optimized_parameters, "experiment.id": experiment_id})
@@ -97,7 +97,8 @@ class GridSearch:
 
         # save figure of performance
         if fig_save:
-            fig, _ = model.performance.plot(p_plot, statistic=StatisticalMetrics.MEDIAN, fig_show=False)
+            fig, _ = model.performance.plot(p_plot, statistic=StatisticalMetrics.MEDIAN, fig_show=False,
+                                            plot_dd=plot_perf_dd)
             figure_path = join(get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
                                                      experiment_num, instance_id=instance_id), "performance")
             fig.savefig(figure_path, dpi=p_plot.performance.dpi)
