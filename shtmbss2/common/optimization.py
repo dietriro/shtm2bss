@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from shtmbss2.core.helpers import Process
 from shtmbss2.common.config import *
 from shtmbss2.core.data import (load_config, get_last_experiment_num, get_experiment_folder, get_last_instance,
-                                save_instance_setup)
+                                save_instance_setup, load_yaml)
 from shtmbss2.common.executor import ParallelExecutor
 from shtmbss2.core.parameters import NetworkParameters, PlottingParameters
 from shtmbss2.core.performance import PerformanceMulti
@@ -43,10 +43,32 @@ class GridSearch:
         self.seed_offset = None
         self.plot_perf_dd = None
 
+        self.init_experiment_num()
+
         self.load_config()
 
+    def init_experiment_num(self):
+        # retrieve experiment num for new experiment
+        last_experiment_num = get_last_experiment_num(self.model_type, self.experiment_id, self.experiment_type)
+        if self.experiment_num is None:
+            self.experiment_num = last_experiment_num + 1
+
+        if self.experiment_num <= last_experiment_num:
+            self.continuation_id = get_last_instance(self.model_type, self.experiment_type, self.experiment_id,
+                                                     self.experiment_num)
+            if self.continuation_id > 1:
+                self.continuation_id -= 1
+
     def load_config(self):
-        self.config = load_config(self.model_type, self.experiment_type)
+        if self.continuation_id is not None:
+            # load config from existing experiment
+            config_path = get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
+                                                self.experiment_num)
+            config_name = f"config_{self.experiment_type}.yaml"
+            self.config = load_yaml(config_path, config_name)
+        else:
+            # load default config
+            self.config = load_config(self.model_type, self.experiment_type)
         self.parameter_matching = self.config["experiment"]["parameter_matching"]
         self.fig_save = self.config["experiment"]["fig_save"]
         self.num_instances = self.config["experiment"]["num_instances"]
@@ -67,7 +89,7 @@ class GridSearch:
         model = self.model_type(use_on_chip_plasticity=RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP,
                                 experiment_type=ExperimentType.OPT_GRID, experiment_id=experiment_id,
                                 experiment_num=experiment_num, instance_id=instance_id, seed_offset=0,
-                                **optimized_parameters)
+                                **{**optimized_parameters, "experiment.id": experiment_id})
         model.init_backend(offset=0)
 
         # set save_auto to false in order to minimize file lock timeouts
@@ -189,16 +211,9 @@ class GridSearch:
         elif self.experiment_type == ExperimentType.OPT_GRID_MULTI:
             RuntimeConfig.subnum_digits = len(str(num_combinations))
 
-        # retrieve experiment num for new experiment
-        last_experiment_num = get_last_experiment_num(self.model_type, self.experiment_id, self.experiment_type)
-        if self.experiment_num is None:
-            self.experiment_num = last_experiment_num + 1
 
-        if self.experiment_num <= last_experiment_num:
-            self.continuation_id = get_last_instance(self.model_type, self.experiment_type, self.experiment_id,
-                                                     self.experiment_num)
-            if self.continuation_id > 1:
-                self.continuation_id -= 1
+
+        if self.continuation_id is not None:
             log.essens(f"Continuing grid-search for {num_combinations - self.continuation_id} "
                        f"parameter combinations of {parameter_names}")
         else:
@@ -240,6 +255,7 @@ class GridSearch:
                         # Check if an exception occurred in the sub-process, then raise this exception
                         if proc.exception:
                             exc, trc = proc.exception
+                            print(trc)
                             raise exc
                     except RuntimeError as e:
                         log.error(f"RuntimeError encountered, running experiment {run_i} again")

@@ -117,36 +117,36 @@ class SHTMBase(ABC):
         np.random.seed(self.p.experiment.seed_offset + instance_offset)
 
     def load_params(self, experiment_type, experiment_id, experiment_num, instance_id, **kwargs):
-        if experiment_type == ExperimentType.OPT_GRID:
+        self.p_plot.load_default_params()
+        if experiment_type == ExperimentType.OPT_GRID and instance_id > 0:
             self.p.load_experiment_params(experiment_type=ExperimentType.OPT_GRID, experiment_id=experiment_id,
-                                          experiment_num=experiment_num, experiment_subnum=instance_id,
+                                          experiment_num=experiment_num, experiment_subnum=0,
                                           custom_params=kwargs)
         else:
             self.p.load_default_params(custom_params=kwargs)
-        self.p_plot.load_default_params()
 
-        self.p.evaluate(parameters=self.p, recursive=True)
+            self.p.evaluate(parameters=self.p, recursive=True)
 
-        if self.p.plasticity.tau_h is None:
-            self.p.plasticity.tau_h = self.__compute_time_constant_dendritic_rate(dt_stm=self.p.encoding.dt_stm,
-                                                                                  dt_seq=self.p.encoding.dt_seq,
-                                                                                  target_firing_rate=self.p.plasticity.y
-                                                                                  )
+            if self.p.plasticity.tau_h is None:
+                self.p.plasticity.tau_h = self.__compute_time_constant_dendritic_rate(dt_stm=self.p.encoding.dt_stm,
+                                                                                      dt_seq=self.p.encoding.dt_seq,
+                                                                                      target_firing_rate=self.p.plasticity.y
+                                                                                      )
 
-        # dynamically calculate new weights, scale by 1/1000 for "original" pynn-nest neurons
-        if self.p.synapses.dyn_weight_calculation:
-            self.p.synapses.w_ext_exc = psp_max_2_psc_max(self.p.synapses.j_ext_exc_psp,
-                                                          self.p.neurons.excitatory.tau_m,
-                                                          self.p.neurons.excitatory.tau_syn_ext,
-                                                          self.p.neurons.excitatory.c_m) / 1000
-            self.p.synapses.w_exc_inh = psp_max_2_psc_max(self.p.synapses.j_exc_inh_psp,
-                                                          self.p.neurons.inhibitory.tau_m,
-                                                          self.p.neurons.inhibitory.tau_syn_E,
-                                                          self.p.neurons.inhibitory.c_m)
-            self.p.synapses.w_inh_exc = abs(psp_max_2_psc_max(self.p.synapses.j_inh_exc_psp,
+            # dynamically calculate new weights, scale by 1/1000 for "original" pynn-nest neurons
+            if self.p.synapses.dyn_weight_calculation:
+                self.p.synapses.w_ext_exc = psp_max_2_psc_max(self.p.synapses.j_ext_exc_psp,
                                                               self.p.neurons.excitatory.tau_m,
-                                                              self.p.neurons.excitatory.tau_syn_inh,
-                                                              self.p.neurons.excitatory.c_m)) / 1000
+                                                              self.p.neurons.excitatory.tau_syn_ext,
+                                                              self.p.neurons.excitatory.c_m) / 1000
+                self.p.synapses.w_exc_inh = psp_max_2_psc_max(self.p.synapses.j_exc_inh_psp,
+                                                              self.p.neurons.inhibitory.tau_m,
+                                                              self.p.neurons.inhibitory.tau_syn_E,
+                                                              self.p.neurons.inhibitory.c_m)
+                self.p.synapses.w_inh_exc = abs(psp_max_2_psc_max(self.p.synapses.j_inh_exc_psp,
+                                                                  self.p.neurons.excitatory.tau_m,
+                                                                  self.p.neurons.excitatory.tau_syn_inh,
+                                                                  self.p.neurons.excitatory.c_m)) / 1000
 
     def init_network(self):
         self.init_neurons()
@@ -541,10 +541,11 @@ class SHTMBase(ABC):
 
 
 class SHTMTotal(SHTMBase, ABC):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, plasticity_cls=None,
-                 instance_id=None, seed_offset=None, p=None, **kwargs):
-        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, instance_id=instance_id,
-                         seed_offset=seed_offset, p=p, **kwargs)
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=None, experiment_num=None,
+                 experiment_subnum=None, plasticity_cls=None, instance_id=None, seed_offset=None, p=None, **kwargs):
+        super().__init__(experiment_type=experiment_type, experiment_id=experiment_id, experiment_num=experiment_num,
+                         experiment_subnum=experiment_subnum, instance_id=instance_id, seed_offset=seed_offset, p=p,
+                         **kwargs)
 
         self.con_plastic = None
         self.trace_dendrites = self.trace_dendrites = np.zeros(shape=(self.p.network.num_symbols,

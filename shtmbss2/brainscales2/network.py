@@ -31,17 +31,19 @@ RECORDING_VALUES = {
 
 class SHTMBase(network.SHTMBase, ABC):
 
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None,
-                 seed_offset=None, p=None, use_on_chip_plasticity=False, **kwargs):
-        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, instance_id=instance_id,
-                         seed_offset=seed_offset, p=p, **kwargs)
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=None, experiment_num=None,
+                 experiment_subnum=None, instance_id=None, seed_offset=None, p=None, use_on_chip_plasticity=False,
+                 **kwargs):
+        super().__init__(experiment_type=experiment_type, experiment_id=experiment_id, experiment_num=experiment_num,
+                         experiment_subnum=experiment_subnum, instance_id=instance_id, seed_offset=seed_offset, p=p,
+                         **kwargs)
         self.use_on_chip_plasticity = use_on_chip_plasticity
         self.exc_to_exc_soma_to_soma_dummy = None
         self.exc_to_exc_dendrite_to_soma_dummy = None
         self.plasticity_rule = None
 
-    def load_params(self, **kwargs):
-        super().load_params(**kwargs)
+    def load_params(self, experiment_type, experiment_id, experiment_num, instance_id, **kwargs):
+        super().load_params(experiment_type, experiment_id, experiment_num, instance_id, **kwargs)
 
         # ToDo: Fix this and remove temporary hack
         self.p.neurons.dendrite.theta_dAP = self.p.neurons.excitatory.v_thresh[NeuronType.Dendrite.ID]
@@ -575,11 +577,10 @@ class SHTMPlasticity(SHTMSingleNeuron):
 
 
 class SHTMTotal(SHTMBase, network.SHTMTotal):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None,
-                 seed_offset=None, p=None,
-                 **kwargs):
-        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
-                         plasticity_cls=Plasticity, instance_id=instance_id,
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=None, experiment_num=None,
+                 experiment_subnum=None, instance_id=None, seed_offset=None, p=None, **kwargs):
+        super().__init__(experiment_type=experiment_type, experiment_id=experiment_id, experiment_num=experiment_num,
+                         experiment_subnum=experiment_subnum, plasticity_cls=Plasticity, instance_id=instance_id,
                          seed_offset=seed_offset, p=p, **kwargs)
 
     def init_backend(self, offset=0):

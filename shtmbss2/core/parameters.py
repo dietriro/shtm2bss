@@ -68,7 +68,8 @@ class Parameters(ParameterGroup):
 
         log.debug(f"Successfully loaded parameters for '{self.network_type}'")
 
-        self.set_custom_params(custom_params)
+        if custom_params is not None:
+            self.set_custom_params(custom_params)
 
     def load_experiment_params(self, experiment_type, experiment_id, experiment_num, experiment_subnum=None,
                                instance_id=None, custom_params=None):
