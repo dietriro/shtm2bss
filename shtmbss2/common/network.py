@@ -57,8 +57,8 @@ BLACKLIST = type, ModuleType, FunctionType
 
 
 class SHTMBase(ABC):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None,
-                 seed_offset=None, p=None, **kwargs):
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=None, experiment_num=None,
+                 experiment_subnum=None, instance_id=None, seed_offset=None, p=None, **kwargs):
         if experiment_type == ExperimentType.OPT_GRID:
             self.optimized_parameters = kwargs
         else:
@@ -68,7 +68,7 @@ class SHTMBase(ABC):
         self.p_plot: PlottingParameters = PlottingParameters(network_type=self)
         if p is None:
             self.p: NetworkParameters = NetworkParameters(network_type=self)
-            self.load_params(**kwargs)
+            self.load_params(experiment_type, experiment_id, experiment_num, instance_id, **kwargs)
         else:
             self.p: NetworkParameters = deepcopy(p)
         self.p.experiment.type = experiment_type
@@ -91,7 +91,8 @@ class SHTMBase(ABC):
         self.last_ext_spike_time = None
         self.neuron_events = None
 
-        self.experiment_num = None
+        self.experiment_id = experiment_id
+        self.experiment_num = experiment_num
         self.experiment_subnum = experiment_subnum
         self.experiment_episodes = 0
         self.instance_id = instance_id
@@ -115,8 +116,13 @@ class SHTMBase(ABC):
             instance_offset = 0
         np.random.seed(self.p.experiment.seed_offset + instance_offset)
 
-    def load_params(self, **kwargs):
-        self.p.load_default_params(custom_params=kwargs)
+    def load_params(self, experiment_type, experiment_id, experiment_num, instance_id, **kwargs):
+        if experiment_type == ExperimentType.OPT_GRID:
+            self.p.load_experiment_params(experiment_type=ExperimentType.OPT_GRID, experiment_id=experiment_id,
+                                          experiment_num=experiment_num, experiment_subnum=instance_id,
+                                          custom_params=kwargs)
+        else:
+            self.p.load_default_params(custom_params=kwargs)
         self.p_plot.load_default_params()
 
         self.p.evaluate(parameters=self.p, recursive=True)

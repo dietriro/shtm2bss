@@ -1,5 +1,7 @@
 import csv
 import inspect
+import os.path
+
 import numpy as np
 import yaml
 import datetime
@@ -77,6 +79,14 @@ def get_experiment_folder(net, experiment_type, experiment_id, experiment_num, e
 
     if experiment_subnum is not None:
         folder_path = join(folder_path, f"{experiment_subnum:0{RuntimeConfig.subnum_digits}d}")
+        if not os.path.exists(folder_path):
+            log.debug(f"Folder '{folder_path}' does not exist. Trying different subnums {0, 1, ..., 5}.")
+            for subnum_digits in range(5):
+                folder_path = join(folder_path, f"{experiment_subnum:0{RuntimeConfig.subnum_digits}d}")
+                if os.path.exists(folder_path):
+                    break
+        if not os.path.exists(folder_path):
+            log.error(f"Folder '{folder_path}' does not exist. Could not find any existing subnum.")
     if instance_id is not None:
         folder_path = join(folder_path, f"{instance_id:0{RuntimeConfig.instance_digits}d}")
 

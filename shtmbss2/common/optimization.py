@@ -63,16 +63,16 @@ class GridSearch:
             yaml.dump(self.config, file)
 
     def __run_experiment(self, optimized_parameters, experiment_id, experiment_num, instance_id, steps=None,
-                         optimized_parameter_ranges=None, fig_save=False, plot_perf_dd=True):
+                         optimized_parameter_ranges=None, fig_save=False, plot_perf_dd=True, save_setup=False):
         model = self.model_type(use_on_chip_plasticity=RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP,
-                                experiment_type=ExperimentType.OPT_GRID, instance_id=instance_id, seed_offset=0,
-                                **{**optimized_parameters, "experiment.id": experiment_id})
+                                experiment_type=ExperimentType.OPT_GRID, experiment_id=experiment_id,
+                                experiment_num=experiment_num, instance_id=instance_id, seed_offset=0,
+                                **optimized_parameters)
         model.init_backend(offset=0)
 
         # set save_auto to false in order to minimize file lock timeouts
         model.p.experiment.save_auto = False
         model.p.experiment.save_final = False
-        model.experiment_num = experiment_num
 
         if RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP:
             model.init_plasticity_rule()
@@ -86,9 +86,11 @@ class GridSearch:
 
         model.init_prerun()
 
-        model.run(steps=steps, plasticity_enabled=RuntimeConfig.plasticity_location != PlasticityLocation.ON_CHIP, run_type=RunType.SINGLE)
+        model.run(steps=steps, plasticity_enabled=RuntimeConfig.plasticity_location != PlasticityLocation.ON_CHIP,
+                  run_type=RunType.SINGLE)
 
-        model.save_full_state(running_avg_perc=0.5, optimized_parameter_ranges=optimized_parameter_ranges)
+        model.save_full_state(running_avg_perc=0.5, optimized_parameter_ranges=optimized_parameter_ranges,
+                              save_setup=save_setup)
 
         # retrieve plotting parameters
         p_plot = PlottingParameters(network_type=self.model_type)
@@ -209,6 +211,7 @@ class GridSearch:
         else:
             id_order = list(range(len(parameter_combinations)))
 
+        setup_saved = False
         for run_i, param_id in enumerate(id_order):
             parameter_combination = parameter_combinations[param_id]
 
@@ -227,16 +230,16 @@ class GridSearch:
                 success = False
                 while not success:
                     try:
-                        p = Process(target=self.__run_experiment, args=(parameters, self.experiment_id,
+                        proc = Process(target=self.__run_experiment, args=(parameters, self.experiment_id,
                                                                         self.experiment_num, run_i, steps,
                                                                         parameter_ranges, self.fig_save,
-                                                                        self.plot_perf_dd))
-                        p.start()
-                        p.join()
+                                                                        self.plot_perf_dd, not setup_saved))
+                        proc.start()
+                        proc.join()
 
                         # Check if an exception occurred in the sub-process, then raise this exception
-                        if p.exception:
-                            exc, trc = p.exception
+                        if proc.exception:
+                            exc, trc = proc.exception
                             raise exc
                     except RuntimeError as e:
                         log.error(f"RuntimeError encountered, running experiment {run_i} again")
@@ -258,6 +261,8 @@ class GridSearch:
 
             log.essens(f"Finished grid-search run {run_i + 1}/{num_combinations}")
             log.essens(f"\tParameters: {parameter_combination}")
+
+            setup_saved = True
 
             if run_i == 0:
                 self.save_config()

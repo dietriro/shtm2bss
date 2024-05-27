@@ -51,25 +51,27 @@ class Parameters(ParameterGroup):
         self.network_type = network_type
         self.config_type = None
 
+    def set_custom_params(self, params):
+        # Set specific parameters loaded from individual configuration
+        for name, value in params.items():
+            category_objs = name.split('.')
+            category_obj = self
+            for category_name in category_objs[:-1]:
+                category_obj = getattr(category_obj, category_name)
+            setattr(category_obj, category_objs[-1], value)
+
+        log.debug(f"Successfully set parameters")
+
     def load_default_params(self, custom_params=None):
         default_params = load_config(self.network_type, config_type=self.config_type)
         self.set_params(self, default_params)
 
         log.debug(f"Successfully loaded parameters for '{self.network_type}'")
 
-        # Set specific parameters loaded from individual configuration
-        if custom_params is not None:
-            for name, value in custom_params.items():
-                category_objs = name.split('.')
-                category_obj = self
-                for category_name in category_objs[:-1]:
-                    category_obj = getattr(category_obj, category_name)
-                setattr(category_obj, category_objs[-1], value)
-
-        log.debug(f"Successfully set custom parameters for '{self.network_type}'")
+        self.set_custom_params(custom_params)
 
     def load_experiment_params(self, experiment_type, experiment_id, experiment_num, experiment_subnum=None,
-                               instance_id=None):
+                               instance_id=None, custom_params=None):
         if ((experiment_type == ExperimentType.EVAL_MULTI or experiment_type == ExperimentType.OPT_GRID_MULTI)
                 and instance_id is None):
             instance_id = 0
@@ -81,6 +83,9 @@ class Parameters(ParameterGroup):
         saved_params = load_yaml(experiment_folder_path, f"config_{self.config_type}.yaml")
 
         self.set_params(self, saved_params)
+
+        if custom_params is not None:
+            self.set_custom_params(custom_params)
 
     def set_params(self, category_obj, parameters):
         for name, value in parameters.items():
