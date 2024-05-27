@@ -229,9 +229,29 @@ class PlasticityOnChip(pynn.PlasticityRule):
 
 
                 // TODO: * 255 seems wrong, since the result is required to be in [-128, 127)
-                permanence -= vector_if(column_mask, VectorIfCondition::greater,
+                auto depression = vector_if(column_mask, VectorIfCondition::greater,
                     VectorRowFracSat8(std::min(static_cast<size_t>(127), static_cast<size_t>(({self.lambda_minus} * 255) * (pre_neuron_soma_num_spikes / {self.num_runs})))),
                                        VectorRowFracSat8(0));
+
+                permanence -= depression;
+                
+                permanence = vector_if(
+                        permanence,
+                        VectorIfCondition::greater_equal,
+                        permanence,
+                        VectorRowFracSat8(0));
+                
+                //auto permanence_tmp = vector_if(
+                //        permanence-60,
+                //        VectorIfCondition::greater_equal,
+                //        permanence-60,
+                //        VectorRowFracSat8(0));
+                        
+                //permanence_tmp = vector_if(
+                //        permanence_tmp-50,
+                //        VectorIfCondition::greater_equal,
+                //        VectorRowFracSat8(50),
+                //        permanence_tmp);
 
                 // update weights
                 auto weights = synapses_soma_to_dendrite.get_weights(synapse_row_soma_to_dendrite_index);
@@ -240,6 +260,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 weights = vector_if(permanence - {self.permanence_threshold}, VectorIfCondition::greater_equal, VectorRowMod8({self.w_mature}), VectorRowMod8(0));
 
                 // mask out recurrent connections
+                // auto weights = VectorRowMod8(permanence);
                 weights *= column_mask;
 
                 synapses_soma_to_dendrite.set_weights(weights, synapse_row_soma_to_dendrite_index);
