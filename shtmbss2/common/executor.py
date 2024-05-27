@@ -104,7 +104,7 @@ class ParallelExecutor:
             if self.experiment_subnum is None:
                 log.essens(f'Starting network {i_inst}')
 
-            if not parallel:
+            if parallel:
                 processes.append(Process(target=self.__run_experiment, args=(i_inst, file_save_status, lock,
                                                                              self.experiment_type,
                                                                              self.experiment_id,
