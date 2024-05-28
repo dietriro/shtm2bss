@@ -91,6 +91,7 @@ class SHTMBase(network.SHTMBase, ABC):
             delta_t_max=self.p.plasticity.delta_t_max,
             tau_plus=self.p.plasticity.tau_plus,
             num_runs=num_runs,
+            random_seed=self.random_seed,
             correlation_threshold=self.p.plasticity.correlation_threshold
         )
 
