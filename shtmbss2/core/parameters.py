@@ -51,6 +51,14 @@ class Parameters(ParameterGroup):
         self.network_type = network_type
         self.config_type = None
 
+    def get_custom_param(self, param_name):
+        # Set specific parameters loaded from individual configuration
+        category_objs = param_name.split('.')
+        category_obj = self
+        for category_name in category_objs:
+            category_obj = getattr(category_obj, category_name)
+        return category_obj
+
     def set_custom_params(self, params):
         # Set specific parameters loaded from individual configuration
         for name, value in params.items():
@@ -99,6 +107,26 @@ class Parameters(ParameterGroup):
             else:
                 if hasattr(category_obj, name):
                     setattr(category_obj, name, value)
+
+    @staticmethod
+    def print_parameter(d, name=""):
+        for key, value in d.items():
+            if type(value) is dict:
+                if name == "":
+                    new_name = key
+                else:
+                    new_name = f"{name}.{key}"
+                Parameters.print_parameter(value, new_name)
+                continue
+
+            if name == "":
+                new_name = key
+            else:
+                new_name = f"{name}.{key}"
+            print(f"""{new_name}:
+      name: ""
+      description: ""
+      original_value: """"")
 
 
 class NetworkParameters(Parameters):

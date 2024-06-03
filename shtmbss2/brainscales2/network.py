@@ -321,6 +321,23 @@ class SHTMBase(network.SHTMBase, ABC):
             return None
         return data
 
+    def get_neuron_data_from_matrix(self, source_data, neuron_id, return_original_arr=False):
+        cor = np.array(source_data)
+
+        data_arr_org = cor.reshape((60, 60))
+
+        y_start = neuron_id % self.p.network.num_symbols * self.p.network.num_neurons
+        y_end = y_start + self.p.network.num_neurons
+        x_start = int(neuron_id / self.p.network.num_symbols) * self.p.network.num_neurons
+        x_end = x_start + self.p.network.num_neurons
+
+        data_arr = data_arr_org[x_start:x_end, y_start:y_end]
+
+        if return_original_arr:
+            return data_arr, data_arr_org
+        else:
+            return data_arr
+
 
 class SHTMSingleNeuron(SHTMBase):
     def __init__(self, instance_id=None, seed_offset=None, **kwargs):

@@ -532,6 +532,39 @@ class SHTMBase(ABC):
             runtime_single += self.p.encoding.dt_seq
         return runtime_single
 
+    def calc_num_correlated_events(self, neuron_type_a, neuron_type_b, symbol_id, t_max, t_min=0):
+        """
+        Calculate number of correlated events within neurons of symbol_id
+
+        :param neuron_type_a:
+        :type neuron_type_a:
+        :param neuron_type_b:
+        :type neuron_type_b:
+        :param symbol_id:
+        :type symbol_id:
+        :param t_max:
+        :type t_max:
+        :param t_min:
+        :type t_min:
+        :return:
+        :rtype:
+        """
+
+        events_a = self.neuron_events[neuron_type_a][symbol_id]
+        events_b = self.neuron_events[neuron_type_b][symbol_id]
+
+        num_events = np.zeros(self.p.network.num_neurons)
+        for i_neuron, events_a_i in enumerate(events_a):
+            events_b_i = events_b[i_neuron]
+            for event_a_i in events_a_i:
+                if event_a_i > self.p.plasticity.execution_start:
+                    break
+                diff_arr = events_b_i - event_a_i
+                if len(np.where(np.logical_and(diff_arr > t_min, diff_arr < t_max))[0]) > 0:
+                    num_events[i_neuron] += 1
+
+        return num_events
+
     def __str__(self):
         return type(self).__name__
 

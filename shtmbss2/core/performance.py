@@ -185,7 +185,7 @@ class Performance(ABC):
         panels = ['A', 'B', 'C']
 
         if plot_dd:
-            axs[3].set_ylabel("No. of dendrites no. spikes > 1")
+            axs[3].set_ylabel("No. of duplicate dAP's")
             axs[3].set_xlabel("# Training Episodes")
 
             panels.append('D')
