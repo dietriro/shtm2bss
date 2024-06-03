@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from shtmbss2.core.helpers import Process
 from shtmbss2.common.config import *
 from shtmbss2.core.data import (load_config, get_last_experiment_num, get_experiment_folder, get_last_instance,
-                                save_instance_setup)
+                                save_instance_setup, load_yaml)
 from shtmbss2.common.executor import ParallelExecutor
 from shtmbss2.core.parameters import NetworkParameters, PlottingParameters
 from shtmbss2.core.performance import PerformanceMulti
@@ -41,19 +41,40 @@ class GridSearch:
         self.num_instances = None
         self.order_randomization = None
         self.seed_offset = None
+        self.plot_perf_dd = None
+
+        self.init_experiment_num()
 
         self.load_config()
 
+    def init_experiment_num(self):
+        # retrieve experiment num for new experiment
+        last_experiment_num = get_last_experiment_num(self.model_type, self.experiment_id, self.experiment_type)
+        if self.experiment_num is None:
+            self.experiment_num = last_experiment_num + 1
+
+        if self.experiment_num <= last_experiment_num:
+            self.continuation_id = get_last_instance(self.model_type, self.experiment_type, self.experiment_id,
+                                                     self.experiment_num)
+            if self.continuation_id > 1:
+                self.continuation_id -= 1
+
     def load_config(self):
-        self.config = load_config(self.model_type, self.experiment_type)
+        if self.continuation_id is not None:
+            # load config from existing experiment
+            config_path = get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
+                                                self.experiment_num)
+            config_name = f"config_{self.experiment_type}.yaml"
+            self.config = load_yaml(config_path, config_name)
+        else:
+            # load default config
+            self.config = load_config(self.model_type, self.experiment_type)
         self.parameter_matching = self.config["experiment"]["parameter_matching"]
         self.fig_save = self.config["experiment"]["fig_save"]
         self.num_instances = self.config["experiment"]["num_instances"]
         self.order_randomization = self.config["experiment"]["order_randomization"]
-        if "seed_offset" in self.config["experiment"]:
-            self.seed_offset = self.config["experiment"]["seed_offset"]
-        else:
-            self.seed_offset = None
+        self.seed_offset = self.config["experiment"].get("seed_offset", None)
+        self.plot_perf_dd = self.config["experiment"].get("plot_perf_dd", True)
 
     def save_config(self):
         folder_path_experiment = get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
@@ -64,16 +85,16 @@ class GridSearch:
             yaml.dump(self.config, file)
 
     def __run_experiment(self, optimized_parameters, experiment_id, experiment_num, instance_id, steps=None,
-                         optimized_parameter_ranges=None, fig_save=False):
+                         optimized_parameter_ranges=None, fig_save=False, plot_perf_dd=True, save_setup=False):
         model = self.model_type(use_on_chip_plasticity=RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP,
-                                experiment_type=ExperimentType.OPT_GRID, instance_id=instance_id, seed_offset=0,
+                                experiment_type=ExperimentType.OPT_GRID, experiment_id=experiment_id,
+                                experiment_num=experiment_num, instance_id=instance_id, seed_offset=0,
                                 **{**optimized_parameters, "experiment.id": experiment_id})
         model.init_backend(offset=0)
 
         # set save_auto to false in order to minimize file lock timeouts
         model.p.experiment.save_auto = False
         model.p.experiment.save_final = False
-        model.experiment_num = experiment_num
 
         if RuntimeConfig.plasticity_location == PlasticityLocation.ON_CHIP:
             model.init_plasticity_rule()
@@ -87,9 +108,11 @@ class GridSearch:
 
         model.init_prerun()
 
-        model.run(steps=steps, plasticity_enabled=RuntimeConfig.plasticity_location != PlasticityLocation.ON_CHIP, run_type=RunType.SINGLE)
+        model.run(steps=steps, plasticity_enabled=RuntimeConfig.plasticity_location != PlasticityLocation.ON_CHIP,
+                  run_type=RunType.SINGLE)
 
-        model.save_full_state(running_avg_perc=0.5, optimized_parameter_ranges=optimized_parameter_ranges)
+        model.save_full_state(running_avg_perc=0.5, optimized_parameter_ranges=optimized_parameter_ranges,
+                              save_setup=save_setup)
 
         # retrieve plotting parameters
         p_plot = PlottingParameters(network_type=self.model_type)
@@ -97,7 +120,8 @@ class GridSearch:
 
         # save figure of performance
         if fig_save:
-            fig, _ = model.performance.plot(p_plot, statistic=StatisticalMetrics.MEDIAN, fig_show=False)
+            fig, _ = model.performance.plot(p_plot, statistic=StatisticalMetrics.MEDIAN, fig_show=False,
+                                            plot_dd=plot_perf_dd)
             figure_path = join(get_experiment_folder(self.model_type, self.experiment_type, self.experiment_id,
                                                      experiment_num, instance_id=instance_id), "performance")
             fig.savefig(figure_path, dpi=p_plot.performance.dpi)
@@ -107,14 +131,15 @@ class GridSearch:
             plt.close(fig)
 
     def __run_experiment_multi(self, optimized_parameters, experiment_id, experiment_num, experiment_subnum, steps=None,
-                               optimized_parameter_ranges=None, fig_save=False, seed_offset=None):
+                               optimized_parameter_ranges=None, fig_save=False, seed_offset=None, plot_perf_dd=True):
 
         # run experiments using parallel-executor
         pe = ParallelExecutor(num_instances=self.num_instances, experiment_id=experiment_id,
                               experiment_type=self.experiment_type, experiment_num=experiment_num,
                               experiment_subnum=experiment_subnum, parameter_ranges=optimized_parameter_ranges,
                               fig_save=False)
-        experiment_num = pe.run(steps=steps, additional_parameters=optimized_parameters, seed_offset=seed_offset)
+        experiment_num = pe.run(steps=steps, additional_parameters=optimized_parameters, seed_offset=seed_offset,
+                                plot_perf_dd=plot_perf_dd)
 
         # retrieve parameters for performed experiment
         p = NetworkParameters(network_type=self.model_type)
@@ -186,16 +211,9 @@ class GridSearch:
         elif self.experiment_type == ExperimentType.OPT_GRID_MULTI:
             RuntimeConfig.subnum_digits = len(str(num_combinations))
 
-        # retrieve experiment num for new experiment
-        last_experiment_num = get_last_experiment_num(self.model_type, self.experiment_id, self.experiment_type)
-        if self.experiment_num is None:
-            self.experiment_num = last_experiment_num + 1
 
-        if self.experiment_num <= last_experiment_num:
-            self.continuation_id = get_last_instance(self.model_type, self.experiment_type, self.experiment_id,
-                                                     self.experiment_num)
-            if self.continuation_id > 1:
-                self.continuation_id -= 1
+
+        if self.continuation_id is not None:
             log.essens(f"Continuing grid-search for {num_combinations - self.continuation_id} "
                        f"parameter combinations of {parameter_names}")
         else:
@@ -208,6 +226,7 @@ class GridSearch:
         else:
             id_order = list(range(len(parameter_combinations)))
 
+        setup_saved = False
         for run_i, param_id in enumerate(id_order):
             parameter_combination = parameter_combinations[param_id]
 
@@ -226,15 +245,17 @@ class GridSearch:
                 success = False
                 while not success:
                     try:
-                        p = Process(target=self.__run_experiment, args=(parameters, self.experiment_id,
+                        proc = Process(target=self.__run_experiment, args=(parameters, self.experiment_id,
                                                                         self.experiment_num, run_i, steps,
-                                                                        parameter_ranges, self.fig_save))
-                        p.start()
-                        p.join()
+                                                                        parameter_ranges, self.fig_save,
+                                                                        self.plot_perf_dd, not setup_saved))
+                        proc.start()
+                        proc.join()
 
                         # Check if an exception occurred in the sub-process, then raise this exception
-                        if p.exception:
-                            exc, trc = p.exception
+                        if proc.exception:
+                            exc, trc = proc.exception
+                            print(trc)
                             raise exc
                     except RuntimeError as e:
                         log.error(f"RuntimeError encountered, running experiment {run_i} again")
@@ -247,7 +268,8 @@ class GridSearch:
                     try:
                         self.__run_experiment_multi(parameters, self.experiment_id, self.experiment_num, run_i,
                                                     steps=steps, optimized_parameter_ranges=parameter_ranges,
-                                                    fig_save=self.fig_save, seed_offset=self.seed_offset)
+                                                    fig_save=self.fig_save, seed_offset=self.seed_offset,
+                                                    plot_perf_dd=self.plot_perf_dd)
                         success = True
                     except (RuntimeError, FileNotFoundError) as e:
                         success = False
@@ -255,6 +277,8 @@ class GridSearch:
 
             log.essens(f"Finished grid-search run {run_i + 1}/{num_combinations}")
             log.essens(f"\tParameters: {parameter_combination}")
+
+            setup_saved = True
 
             if run_i == 0:
                 self.save_config()

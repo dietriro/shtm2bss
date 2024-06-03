@@ -57,8 +57,8 @@ BLACKLIST = type, ModuleType, FunctionType
 
 
 class SHTMBase(ABC):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None,
-                 seed_offset=None, p=None, **kwargs):
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=None, experiment_num=None,
+                 experiment_subnum=None, instance_id=None, seed_offset=None, p=None, **kwargs):
         if experiment_type == ExperimentType.OPT_GRID:
             self.optimized_parameters = kwargs
         else:
@@ -68,7 +68,7 @@ class SHTMBase(ABC):
         self.p_plot: PlottingParameters = PlottingParameters(network_type=self)
         if p is None:
             self.p: NetworkParameters = NetworkParameters(network_type=self)
-            self.load_params(**kwargs)
+            self.load_params(experiment_type, experiment_id, experiment_num, instance_id, **kwargs)
         else:
             self.p: NetworkParameters = deepcopy(p)
         self.p.experiment.type = experiment_type
@@ -91,7 +91,8 @@ class SHTMBase(ABC):
         self.last_ext_spike_time = None
         self.neuron_events = None
 
-        self.experiment_num = None
+        self.experiment_id = experiment_id
+        self.experiment_num = experiment_num
         self.experiment_subnum = experiment_subnum
         self.experiment_episodes = 0
         self.instance_id = instance_id
@@ -115,32 +116,39 @@ class SHTMBase(ABC):
             instance_offset = 0
         np.random.seed(self.p.experiment.seed_offset + instance_offset)
 
-    def load_params(self, **kwargs):
-        self.p.load_default_params(custom_params=kwargs)
+        self.random_seed = 1234
+
+    def load_params(self, experiment_type, experiment_id, experiment_num, instance_id, **kwargs):
         self.p_plot.load_default_params()
+        if experiment_type == ExperimentType.OPT_GRID and instance_id > 0:
+            self.p.load_experiment_params(experiment_type=ExperimentType.OPT_GRID, experiment_id=experiment_id,
+                                          experiment_num=experiment_num, experiment_subnum=0,
+                                          custom_params=kwargs)
+        else:
+            self.p.load_default_params(custom_params=kwargs)
 
-        self.p.evaluate(parameters=self.p, recursive=True)
+            self.p.evaluate(parameters=self.p, recursive=True)
 
-        if self.p.plasticity.tau_h is None:
-            self.p.plasticity.tau_h = self.__compute_time_constant_dendritic_rate(dt_stm=self.p.encoding.dt_stm,
-                                                                                  dt_seq=self.p.encoding.dt_seq,
-                                                                                  target_firing_rate=self.p.plasticity.y
-                                                                                  )
+            if self.p.plasticity.tau_h is None:
+                self.p.plasticity.tau_h = self.__compute_time_constant_dendritic_rate(dt_stm=self.p.encoding.dt_stm,
+                                                                                      dt_seq=self.p.encoding.dt_seq,
+                                                                                      target_firing_rate=self.p.plasticity.y
+                                                                                      )
 
-        # dynamically calculate new weights, scale by 1/1000 for "original" pynn-nest neurons
-        if self.p.synapses.dyn_weight_calculation:
-            self.p.synapses.w_ext_exc = psp_max_2_psc_max(self.p.synapses.j_ext_exc_psp,
-                                                          self.p.neurons.excitatory.tau_m,
-                                                          self.p.neurons.excitatory.tau_syn_ext,
-                                                          self.p.neurons.excitatory.c_m) / 1000
-            self.p.synapses.w_exc_inh = psp_max_2_psc_max(self.p.synapses.j_exc_inh_psp,
-                                                          self.p.neurons.inhibitory.tau_m,
-                                                          self.p.neurons.inhibitory.tau_syn_E,
-                                                          self.p.neurons.inhibitory.c_m)
-            self.p.synapses.w_inh_exc = abs(psp_max_2_psc_max(self.p.synapses.j_inh_exc_psp,
+            # dynamically calculate new weights, scale by 1/1000 for "original" pynn-nest neurons
+            if self.p.synapses.dyn_weight_calculation:
+                self.p.synapses.w_ext_exc = psp_max_2_psc_max(self.p.synapses.j_ext_exc_psp,
                                                               self.p.neurons.excitatory.tau_m,
-                                                              self.p.neurons.excitatory.tau_syn_inh,
-                                                              self.p.neurons.excitatory.c_m)) / 1000
+                                                              self.p.neurons.excitatory.tau_syn_ext,
+                                                              self.p.neurons.excitatory.c_m) / 1000
+                self.p.synapses.w_exc_inh = psp_max_2_psc_max(self.p.synapses.j_exc_inh_psp,
+                                                              self.p.neurons.inhibitory.tau_m,
+                                                              self.p.neurons.inhibitory.tau_syn_E,
+                                                              self.p.neurons.inhibitory.c_m)
+                self.p.synapses.w_inh_exc = abs(psp_max_2_psc_max(self.p.synapses.j_inh_exc_psp,
+                                                                  self.p.neurons.excitatory.tau_m,
+                                                                  self.p.neurons.excitatory.tau_syn_inh,
+                                                                  self.p.neurons.excitatory.c_m)) / 1000
 
     def init_network(self):
         self.init_neurons()
@@ -303,7 +311,7 @@ class SHTMBase(ABC):
         pass
 
     def plot_events(self, neuron_types="all", symbols="all", size=None, x_lim_lower=None, x_lim_upper=None, seq_start=0,
-                    seq_end=None, fig_title="", file_path=None, window="initial", show_grid=False, separate_seqs=False):
+                    seq_end=None, fig_title="", file_path=None, run_id=None, show_grid=False, separate_seqs=False):
         if size is None:
             size = (12, 10)
 
@@ -314,18 +322,16 @@ class SHTMBase(ABC):
         else:
             return
 
-        if window in ["initial", "final"]:
+        if run_id is None:
             max_time = self.p.experiment.runtime
         else:
-            max_time = pynn.get_current_time()
+            single_run_length = self.calc_runtime_single() - self.p.encoding.t_exc_start
+            x_lim_lower = run_id * single_run_length
+            x_lim_upper = (run_id + 1) * single_run_length - self.p.encoding.dt_seq * 0.9
+            max_time = x_lim_upper
 
         if x_lim_lower is None:
-            if window == "initial":
-                x_lim_lower = 0.
-            elif window == "final":
-                x_lim_lower = self.p.experiment.runtime - (self.p.experiment.runtime / self.p.encoding.num_repetitions)
-            else:
-                x_lim_lower = pynn.get_current_time() - self.p.experiment.runtime
+            x_lim_lower = 0.
         if x_lim_upper is None:
             x_lim_upper = max_time
 
@@ -344,15 +350,11 @@ class SHTMBase(ABC):
             seq_end = seq_start + self.p.experiment.runtime
 
         ax = None
-        seq_length = ((self.p.experiment.runtime / self.p.encoding.num_repetitions)
-                      / n_cols)
 
         for i_seq in range(n_cols):
             if n_cols > 1:
                 x_lim_upper = x_lim_lower + (len(self.p.experiment.sequences[0]) - 0.5) * self.p.encoding.dt_stm + self.p.encoding.t_exc_start
             for i_symbol in symbols:
-
-                # x_lim_upper = (i_seq + 1) * seq_length - self.p.encoding.dt_seq if n_cols > 1 else x_lim_upper
 
                 if len(symbols) == 1:
                     ax = axs[i_seq]
@@ -409,11 +411,6 @@ class SHTMBase(ABC):
                     ax.xaxis.set_ticks(np.arange(x_lim_lower, x_lim_upper, self.p.encoding.dt_stm / 2))
 
             ax.tick_params(axis='x', labelsize=self.p_plot.events.fontsize.tick_labels)
-            if n_cols > 1:
-                fig.text(0.5, 0.01, "Time [ms]", ha="center", fontsize=self.p_plot.events.fontsize.axis_labels)
-            else:
-                ax.set_xlabel("Time [ms]", fontsize=self.p_plot.events.fontsize.axis_labels,
-                              labelpad=self.p_plot.events.padding.x_axis)
 
             x_lim_lower += (len(self.p.experiment.sequences[0]) - 1) * self.p.encoding.dt_stm + self.p.encoding.dt_seq
 
@@ -422,18 +419,20 @@ class SHTMBase(ABC):
         if n_cols > 1:
             plt.subplots_adjust(wspace=self.p_plot.events.padding.w_space)
 
+        fig.text(0.5, 0.01, "Time [ms]", ha="center", fontsize=self.p_plot.events.fontsize.axis_labels)
+
         # Create custom legend for all plots
         custom_lines = [Line2D([0], [0], color=f"C{n.ID}", label=n.NAME.capitalize(), lw=3) for n in neuron_types]
         custom_lines.append(Line2D([0], [0], color=f"grey", label="External", lw=3))
 
-        plt.figlegend(handles=custom_lines, loc=(0.75, 0.904), ncol=2, labelspacing=0.2,
+        plt.figlegend(handles=custom_lines, loc=(0.715, 0.904), ncol=2, labelspacing=0.2,
                       fontsize=self.p_plot.events.fontsize.legend, fancybox=True,
                       borderaxespad=4)
 
         fig.text(0.05, 0.5, "Symbol & Neuron ID", va="center", rotation="vertical",
                  fontsize=self.p_plot.events.fontsize.axis_labels)
 
-        fig.suptitle(fig_title, x=0.5, y=0.95, fontsize=self.p_plot.events.fontsize.title)
+        fig.suptitle(fig_title, x=0.39, y=0.95, fontsize=self.p_plot.events.fontsize.title)
         fig.show()
 
         if file_path is not None:
@@ -502,8 +501,8 @@ class SHTMBase(ABC):
             pickle.dump(fig, open(f'{file_path}.fig.pickle',
                                   'wb'))  # This is for Python 3 - py2 may need `file` instead of `open`
 
-    def plot_performance(self, statistic=StatisticalMetrics.MEAN, sequences="statistic"):
-        self.performance.plot(self.p_plot, statistic=statistic, sequences=sequences)
+    def plot_performance(self, statistic=StatisticalMetrics.MEAN, sequences="statistic", plot_dd=False):
+        self.performance.plot(self.p_plot, statistic=statistic, sequences=sequences, plot_dd=plot_dd)
 
     def getsize(self):
         """sum size of object & members."""
@@ -530,15 +529,49 @@ class SHTMBase(ABC):
             runtime_single += self.p.encoding.dt_seq
         return runtime_single
 
+    def calc_num_correlated_events(self, neuron_type_a, neuron_type_b, symbol_id, t_max, t_min=0):
+        """
+        Calculate number of correlated events within neurons of symbol_id
+
+        :param neuron_type_a:
+        :type neuron_type_a:
+        :param neuron_type_b:
+        :type neuron_type_b:
+        :param symbol_id:
+        :type symbol_id:
+        :param t_max:
+        :type t_max:
+        :param t_min:
+        :type t_min:
+        :return:
+        :rtype:
+        """
+
+        events_a = self.neuron_events[neuron_type_a][symbol_id]
+        events_b = self.neuron_events[neuron_type_b][symbol_id]
+
+        num_events = np.zeros(self.p.network.num_neurons)
+        for i_neuron, events_a_i in enumerate(events_a):
+            events_b_i = events_b[i_neuron]
+            for event_a_i in events_a_i:
+                if event_a_i > self.p.plasticity.execution_start:
+                    break
+                diff_arr = events_b_i - event_a_i
+                if len(np.where(np.logical_and(diff_arr > t_min, diff_arr < t_max))[0]) > 0:
+                    num_events[i_neuron] += 1
+
+        return num_events
+
     def __str__(self):
         return type(self).__name__
 
 
 class SHTMTotal(SHTMBase, ABC):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, plasticity_cls=None,
-                 instance_id=None, seed_offset=None, p=None, **kwargs):
-        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, instance_id=instance_id,
-                         seed_offset=seed_offset, p=p, **kwargs)
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=None, experiment_num=None,
+                 experiment_subnum=None, plasticity_cls=None, instance_id=None, seed_offset=None, p=None, **kwargs):
+        super().__init__(experiment_type=experiment_type, experiment_id=experiment_id, experiment_num=experiment_num,
+                         experiment_subnum=experiment_subnum, instance_id=instance_id, seed_offset=seed_offset, p=p,
+                         **kwargs)
 
         self.con_plastic = None
         self.trace_dendrites = self.trace_dendrites = np.zeros(shape=(self.p.network.num_symbols,
@@ -798,6 +831,9 @@ class SHTMTotal(SHTMBase, ABC):
                 if (t + 1) % self.p.experiment.save_auto_epoches == 0:
                     self.p.experiment.episodes = self.experiment_episodes + t + 1
                     self.save_full_state()
+
+            if self.p.plasticity.learning_rate_decay is not None:
+                self.p.plasticity.learning_factor *= self.p.plasticity.learning_rate_decay
 
         # print performance results
         self.print_performance_results()

@@ -31,17 +31,19 @@ RECORDING_VALUES = {
 
 class SHTMBase(network.SHTMBase, ABC):
 
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None,
-                 seed_offset=None, p=None, use_on_chip_plasticity=False, **kwargs):
-        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, instance_id=instance_id,
-                         seed_offset=seed_offset, p=p, **kwargs)
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=None, experiment_num=None,
+                 experiment_subnum=None, instance_id=None, seed_offset=None, p=None, use_on_chip_plasticity=False,
+                 **kwargs):
+        super().__init__(experiment_type=experiment_type, experiment_id=experiment_id, experiment_num=experiment_num,
+                         experiment_subnum=experiment_subnum, instance_id=instance_id, seed_offset=seed_offset, p=p,
+                         **kwargs)
         self.use_on_chip_plasticity = use_on_chip_plasticity
         self.exc_to_exc_soma_to_soma_dummy = None
         self.exc_to_exc_dendrite_to_soma_dummy = None
         self.plasticity_rule = None
 
-    def load_params(self, **kwargs):
-        super().load_params(**kwargs)
+    def load_params(self, experiment_type, experiment_id, experiment_num, instance_id, **kwargs):
+        super().load_params(experiment_type, experiment_id, experiment_num, instance_id, **kwargs)
 
         # ToDo: Fix this and remove temporary hack
         self.p.neurons.dendrite.theta_dAP = self.p.neurons.excitatory.v_thresh[NeuronType.Dendrite.ID]
@@ -89,6 +91,7 @@ class SHTMBase(network.SHTMBase, ABC):
             delta_t_max=self.p.plasticity.delta_t_max,
             tau_plus=self.p.plasticity.tau_plus,
             num_runs=num_runs,
+            random_seed=self.random_seed,
             correlation_threshold=self.p.plasticity.correlation_threshold
         )
 
@@ -317,6 +320,23 @@ class SHTMBase(network.SHTMBase, ABC):
             log.error(f"Error retrieving neuron data! Unknown value_type: '{value_type}'.")
             return None
         return data
+
+    def get_neuron_data_from_matrix(self, source_data, neuron_id, return_original_arr=False):
+        cor = np.array(source_data)
+
+        data_arr_org = cor.reshape((60, 60))
+
+        y_start = neuron_id % self.p.network.num_symbols * self.p.network.num_neurons
+        y_end = y_start + self.p.network.num_neurons
+        x_start = int(neuron_id / self.p.network.num_symbols) * self.p.network.num_neurons
+        x_end = x_start + self.p.network.num_neurons
+
+        data_arr = data_arr_org[x_start:x_end, y_start:y_end]
+
+        if return_original_arr:
+            return data_arr, data_arr_org
+        else:
+            return data_arr
 
 
 class SHTMSingleNeuron(SHTMBase):
@@ -575,11 +595,10 @@ class SHTMPlasticity(SHTMSingleNeuron):
 
 
 class SHTMTotal(SHTMBase, network.SHTMTotal):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None,
-                 seed_offset=None, p=None,
-                 **kwargs):
-        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
-                         plasticity_cls=Plasticity, instance_id=instance_id,
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=None, experiment_num=None,
+                 experiment_subnum=None, instance_id=None, seed_offset=None, p=None, **kwargs):
+        super().__init__(experiment_type=experiment_type, experiment_id=experiment_id, experiment_num=experiment_num,
+                         experiment_subnum=experiment_subnum, plasticity_cls=Plasticity, instance_id=instance_id,
                          seed_offset=seed_offset, p=p, **kwargs)
 
     def init_backend(self, offset=0):

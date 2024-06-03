@@ -1,25 +1,52 @@
 experiment:
   parameter_matching: 'all'
   fig_save: True
-  num_instances: 3
-  order_randomization: True
+  num_instances: 10
+  order_randomization: False
+  seed_offset: 0
+  plot_perf_dd: True
 parameters:
-  Plasticity.lambda_plus:
+  plasticity.lambda_plus:
     enabled: False
     min: 0.02
-    max: 0.04
+    max: 0.14
     step: 0.01
     dtype: float
-  Plasticity.lambda_minus:
-    enabled: True
-    min: 0.001
-    max: 0.102
+  plasticity.lambda_minus:
+    enabled: False
+    min: 0.0005
+    max: 0.004
     step: 0.0005
     dtype: float
-  Synapses.p_exc_exc:
+  plasticity.lambda_h:
     enabled: True
-    values: [0.2, 0.4]
+    min: 0.004
+    max: 0.08
+    step: 0.004
+    dtype: float
+  plasticity.target_rate_h:
+    enabled: True
+    min: 0.02
+    max: 0.4
+    step: 0.04
+    dtype: float
+  plasticity.tau_plus:
+    enabled: True
+    min: 10
+    max: 30
+    step: 2
+    dtype: int
+  synapses.p_exc_exc:
+    enabled: False
+    # values: [0.2, 0.4]
     min: 0.001
     max: 0.002
     step: 0.0005
+    dtype: float
+  plasticity.homeostasis_depression_rate:
+    enabled: False
+    # values: [0.2, 0.4]
+    min: 0.8
+    max: 1.0
+    step: 0.025
     dtype: float

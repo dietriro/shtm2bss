@@ -85,3 +85,24 @@ def psp_max_2_psc_max(psp_max, tau_m, tau_s, C_m):
                 (tau_m / tau_s) ** (-tau_s / (tau_m - tau_s))
             )
     )
+
+
+class Latex:
+    @staticmethod
+    def print_title(title, num_cols=3):
+        print("\hline")
+        print(f"\multicolumn{{{num_cols}}}{{c}}{{\\bfseries {title}}} \\\\ ")
+        print("\hline")
+
+    @staticmethod
+    def print_row(row, order=None, comment=None, hline=False):
+        if order is not None:
+            new_row = [row[i] for i in order]
+        else:
+            new_row = row
+        output = ' & '.join(new_row) + ' \\\\'
+        if comment is not None:
+            output += f'  % {comment}'
+        print(output)
+        if hline:
+            print('\\hline')

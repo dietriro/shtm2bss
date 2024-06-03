@@ -6,8 +6,8 @@ import pygrenade_vx as grenade
 
 class PlasticityOnChip(pynn.PlasticityRule):
     def __init__(self, timer: pynn.Timer, num_neurons: int, permanence_threshold: int, w_mature: int, target_rate_h,
-                 lambda_plus, lambda_minus, lambda_h, learning_factor, delta_t_max, tau_plus, num_runs, p_exc_exc=0.2,
-                 correlation_threshold=0):
+                 lambda_plus, lambda_minus, lambda_h, learning_factor, delta_t_max, tau_plus, num_runs, random_seed,
+                 p_exc_exc=0.2, correlation_threshold=0):
         # observables recorded for each invocation of rule during experiment
         # [weights, permanences, one correlation]
         obsv_data = pynn.PlasticityRule.ObservablePerSynapse()
@@ -30,6 +30,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
         self.threshold = np.exp(-delta_t_max / tau_plus)
         self.correlation_threshold = correlation_threshold
         self.num_runs = num_runs
+        self.random_seed = random_seed
 
     def get_placement(self):
         if self._simulator.state.grenade_network_graph is None or not \
@@ -122,7 +123,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 return;
             }}
 
-            uint32_t seed = 1234;
+            uint32_t seed = {self.random_seed};
 
             VectorRowFracSat8 causal_correlation_dendrite_to_soma;
             size_t synapse_column_dendrite_to_soma_index = 0;
@@ -229,9 +230,29 @@ class PlasticityOnChip(pynn.PlasticityRule):
 
 
                 // TODO: * 255 seems wrong, since the result is required to be in [-128, 127)
-                permanence -= vector_if(column_mask, VectorIfCondition::greater,
+                auto depression = vector_if(column_mask, VectorIfCondition::greater,
                     VectorRowFracSat8(std::min(static_cast<size_t>(127), static_cast<size_t>(({self.lambda_minus} * 255) * (pre_neuron_soma_num_spikes / {self.num_runs})))),
                                        VectorRowFracSat8(0));
+
+                permanence -= depression;
+                
+                permanence = vector_if(
+                        permanence,
+                        VectorIfCondition::greater_equal,
+                        permanence,
+                        VectorRowFracSat8(0));
+                
+                //auto permanence_tmp = vector_if(
+                //        permanence-60,
+                //        VectorIfCondition::greater_equal,
+                //        permanence-60,
+                //        VectorRowFracSat8(0));
+                        
+                //permanence_tmp = vector_if(
+                //        permanence_tmp-50,
+                //        VectorIfCondition::greater_equal,
+                //        VectorRowFracSat8(50),
+                //        permanence_tmp);
 
                 // update weights
                 auto weights = synapses_soma_to_dendrite.get_weights(synapse_row_soma_to_dendrite_index);
@@ -240,6 +261,7 @@ class PlasticityOnChip(pynn.PlasticityRule):
                 weights = vector_if(permanence - {self.permanence_threshold}, VectorIfCondition::greater_equal, VectorRowMod8({self.w_mature}), VectorRowMod8(0));
 
                 // mask out recurrent connections
+                // auto weights = VectorRowMod8(permanence);
                 weights *= column_mask;
 
                 synapses_soma_to_dendrite.set_weights(weights, synapse_row_soma_to_dendrite_index);

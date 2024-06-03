@@ -51,25 +51,36 @@ class Parameters(ParameterGroup):
         self.network_type = network_type
         self.config_type = None
 
+    def get_custom_param(self, param_name):
+        # Set specific parameters loaded from individual configuration
+        category_objs = param_name.split('.')
+        category_obj = self
+        for category_name in category_objs:
+            category_obj = getattr(category_obj, category_name)
+        return category_obj
+
+    def set_custom_params(self, params):
+        # Set specific parameters loaded from individual configuration
+        for name, value in params.items():
+            category_objs = name.split('.')
+            category_obj = self
+            for category_name in category_objs[:-1]:
+                category_obj = getattr(category_obj, category_name)
+            setattr(category_obj, category_objs[-1], value)
+
+        log.debug(f"Successfully set parameters")
+
     def load_default_params(self, custom_params=None):
         default_params = load_config(self.network_type, config_type=self.config_type)
         self.set_params(self, default_params)
 
         log.debug(f"Successfully loaded parameters for '{self.network_type}'")
 
-        # Set specific parameters loaded from individual configuration
         if custom_params is not None:
-            for name, value in custom_params.items():
-                category_objs = name.split('.')
-                category_obj = self
-                for category_name in category_objs[:-1]:
-                    category_obj = getattr(category_obj, category_name)
-                setattr(category_obj, category_objs[-1], value)
-
-        log.debug(f"Successfully set custom parameters for '{self.network_type}'")
+            self.set_custom_params(custom_params)
 
     def load_experiment_params(self, experiment_type, experiment_id, experiment_num, experiment_subnum=None,
-                               instance_id=None):
+                               instance_id=None, custom_params=None):
         if ((experiment_type == ExperimentType.EVAL_MULTI or experiment_type == ExperimentType.OPT_GRID_MULTI)
                 and instance_id is None):
             instance_id = 0
@@ -82,6 +93,9 @@ class Parameters(ParameterGroup):
 
         self.set_params(self, saved_params)
 
+        if custom_params is not None:
+            self.set_custom_params(custom_params)
+
     def set_params(self, category_obj, parameters):
         for name, value in parameters.items():
             if type(value) is dict:
@@ -93,6 +107,26 @@ class Parameters(ParameterGroup):
             else:
                 if hasattr(category_obj, name):
                     setattr(category_obj, name, value)
+
+    @staticmethod
+    def print_parameter(d, name=""):
+        for key, value in d.items():
+            if type(value) is dict:
+                if name == "":
+                    new_name = key
+                else:
+                    new_name = f"{name}.{key}"
+                Parameters.print_parameter(value, new_name)
+                continue
+
+            if name == "":
+                new_name = key
+            else:
+                new_name = f"{name}.{key}"
+            print(f"""{new_name}:
+      name: ""
+      description: ""
+      original_value: """"")
 
 
 class NetworkParameters(Parameters):
@@ -139,6 +173,7 @@ class NetworkParameterGroups:
         def __init__(self):
             self.type: str = None
             self.id: str = None
+            self.opt_id: str = None
             self.sequences: list = None
             self.seq_repetitions: int = None
             self.runtime: float = None
@@ -189,6 +224,7 @@ class NetworkParameterGroups:
             self.execution_start: float = None
             self.execution_interval: float = None
             self.learning_factor: float = None
+            self.learning_rate_decay: float = None
             self.weight_learning: bool = None
             self.weight_learning_scale: float = None
             self.permanence_init_min: float = None
