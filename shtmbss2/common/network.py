@@ -411,11 +411,6 @@ class SHTMBase(ABC):
                     ax.xaxis.set_ticks(np.arange(x_lim_lower, x_lim_upper, self.p.encoding.dt_stm / 2))
 
             ax.tick_params(axis='x', labelsize=self.p_plot.events.fontsize.tick_labels)
-            if n_cols > 1:
-                fig.text(0.5, 0.01, "Time [ms]", ha="center", fontsize=self.p_plot.events.fontsize.axis_labels)
-            else:
-                ax.set_xlabel("Time [ms]", fontsize=self.p_plot.events.fontsize.axis_labels,
-                              labelpad=self.p_plot.events.padding.x_axis)
 
             x_lim_lower += (len(self.p.experiment.sequences[0]) - 1) * self.p.encoding.dt_stm + self.p.encoding.dt_seq
 
@@ -423,6 +418,8 @@ class SHTMBase(ABC):
 
         if n_cols > 1:
             plt.subplots_adjust(wspace=self.p_plot.events.padding.w_space)
+
+        fig.text(0.5, 0.01, "Time [ms]", ha="center", fontsize=self.p_plot.events.fontsize.axis_labels)
 
         # Create custom legend for all plots
         custom_lines = [Line2D([0], [0], color=f"C{n.ID}", label=n.NAME.capitalize(), lw=3) for n in neuron_types]
