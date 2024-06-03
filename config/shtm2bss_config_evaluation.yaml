@@ -1,24 +1,32 @@
-fig-01:
-  plotting:
-    performance:
-
-  models:
-    0:
-      s1:
-        backend: nest
-        experiment_type: multi
-        experiment_id: org_s1_all-sym
-        experiment_num: 1
-      s2:
-        backend: nest
-        experiment_type: multi
-        experiment_id: org_s2_all-sym
-        experiment_num: 1
-#    1:
-#      backend: nest
-#      experiment_type: multi
-#      experiment_id: bss2_s1_all-sym
-#      experiment_num: 1
-fig-02:
-  backend: nest
-  experiment_type: multi
+onchip:
+  exp_ids:
+    - bss2-onchip_w-diw_s1_01
+    - bss2-onchip_w-diw_s1_03
+    - bss2-onchip_wo-diw_s1_01
+    # - bss2-onchip_wo-diw_s1_02
+    - org_s1_01
+  backends:
+    - bss2
+    - bss2
+    - bss2
+    # - bss2
+    - nest
+  target_keys:
+    - num-epochs_avg
+    - error_running-avg-1.0
+    - active_somas_last
+    - duplicate_dendrites_last
+offchip:
+  exp_ids:
+    - bss2_s1_03
+    - bss2_s1_02
+    - bss2_s1_01
+    - org_s1_01
+    - bss2_s2_03
+    - bss2_s2_02
+    - bss2_s2_01
+    - org_s2_01
+  target_keys:
+    - num-epochs_avg
+    - error_running-avg-1.0
+    - active_somas_last
