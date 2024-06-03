@@ -311,7 +311,7 @@ class SHTMBase(ABC):
         pass
 
     def plot_events(self, neuron_types="all", symbols="all", size=None, x_lim_lower=None, x_lim_upper=None, seq_start=0,
-                    seq_end=None, fig_title="", file_path=None, window="initial", show_grid=False, separate_seqs=False):
+                    seq_end=None, fig_title="", file_path=None, run_id=None, show_grid=False, separate_seqs=False):
         if size is None:
             size = (12, 10)
 
@@ -322,18 +322,16 @@ class SHTMBase(ABC):
         else:
             return
 
-        if window in ["initial", "final"]:
+        if run_id is None:
             max_time = self.p.experiment.runtime
         else:
-            max_time = pynn.get_current_time()
+            single_run_length = self.calc_runtime_single() - self.p.encoding.t_exc_start
+            x_lim_lower = run_id * single_run_length
+            x_lim_upper = (run_id + 1) * single_run_length - self.p.encoding.dt_seq * 0.9
+            max_time = x_lim_upper
 
         if x_lim_lower is None:
-            if window == "initial":
-                x_lim_lower = 0.
-            elif window == "final":
-                x_lim_lower = self.p.experiment.runtime - (self.p.experiment.runtime / self.p.encoding.num_repetitions)
-            else:
-                x_lim_lower = pynn.get_current_time() - self.p.experiment.runtime
+            x_lim_lower = 0.
         if x_lim_upper is None:
             x_lim_upper = max_time
 
@@ -352,15 +350,11 @@ class SHTMBase(ABC):
             seq_end = seq_start + self.p.experiment.runtime
 
         ax = None
-        seq_length = ((self.p.experiment.runtime / self.p.encoding.num_repetitions)
-                      / n_cols)
 
         for i_seq in range(n_cols):
             if n_cols > 1:
                 x_lim_upper = x_lim_lower + (len(self.p.experiment.sequences[0]) - 0.5) * self.p.encoding.dt_stm + self.p.encoding.t_exc_start
             for i_symbol in symbols:
-
-                # x_lim_upper = (i_seq + 1) * seq_length - self.p.encoding.dt_seq if n_cols > 1 else x_lim_upper
 
                 if len(symbols) == 1:
                     ax = axs[i_seq]
