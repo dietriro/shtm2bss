@@ -196,6 +196,7 @@ class NetworkParameterGroups:
             self.execution_start: float = None
             self.execution_interval: float = None
             self.learning_factor: float = None
+            self.learning_rate_decay: float = None
             self.weight_learning: bool = None
             self.weight_learning_scale: float = None
             self.permanence_init_min: float = None

@@ -116,7 +116,7 @@ class SHTMBase(ABC):
             instance_offset = 0
         np.random.seed(self.p.experiment.seed_offset + instance_offset)
 
-        self.random_seed = self.p.experiment.seed_offset + instance_offset
+        self.random_seed = 1234
 
     def load_params(self, experiment_type, experiment_id, experiment_num, instance_id, **kwargs):
         self.p_plot.load_default_params()
@@ -434,14 +434,14 @@ class SHTMBase(ABC):
         custom_lines = [Line2D([0], [0], color=f"C{n.ID}", label=n.NAME.capitalize(), lw=3) for n in neuron_types]
         custom_lines.append(Line2D([0], [0], color=f"grey", label="External", lw=3))
 
-        plt.figlegend(handles=custom_lines, loc=(0.75, 0.904), ncol=2, labelspacing=0.2,
+        plt.figlegend(handles=custom_lines, loc=(0.715, 0.904), ncol=2, labelspacing=0.2,
                       fontsize=self.p_plot.events.fontsize.legend, fancybox=True,
                       borderaxespad=4)
 
         fig.text(0.05, 0.5, "Symbol & Neuron ID", va="center", rotation="vertical",
                  fontsize=self.p_plot.events.fontsize.axis_labels)
 
-        fig.suptitle(fig_title, x=0.5, y=0.95, fontsize=self.p_plot.events.fontsize.title)
+        fig.suptitle(fig_title, x=0.39, y=0.95, fontsize=self.p_plot.events.fontsize.title)
         fig.show()
 
         if file_path is not None:
@@ -807,6 +807,9 @@ class SHTMTotal(SHTMBase, ABC):
                 if (t + 1) % self.p.experiment.save_auto_epoches == 0:
                     self.p.experiment.episodes = self.experiment_episodes + t + 1
                     self.save_full_state()
+
+            if self.p.plasticity.learning_rate_decay is not None:
+                self.p.plasticity.learning_factor *= self.p.plasticity.learning_rate_decay
 
         # print performance results
         self.print_performance_results()
