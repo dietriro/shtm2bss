@@ -1,0 +1,341 @@
+table:
+  column_names: [Name, Value, Description]
+parameters:
+
+
+#  experiment.neuron_type:
+#    name: "Neuron"
+#    description: "the type of the neuron"
+#    original_value:
+#  experiment.plasticity_type:
+#    name: "$$"
+#    description: ""
+#    original_value:
+  experiment.id:
+    name: "$EX_{ID}$"
+    description: "the experiment identifier"
+    original_value:
+  experiment.sequences:
+    name: "s"
+    description: "the sequences used for this experiment"
+    original_value:
+  experiment.runtime:
+    name: "r"
+    description: "the total (simulated/emulated) runtime of one epoch"
+    original_value:
+  experiment.episodes:
+    name: "$K$"
+    description: "number of training epochs"
+    original_value:
+  experiment.seed_offset:
+    name: "random seed"
+    description: "the random seed used for generating the network(s)"
+    original_value:
+  performance.method:
+    name: "PF"
+    description: "the method for calculating the performance (all symbols / last symbol)"
+    original_value:
+
+
+  network.num_symbols:
+    name: "$N_S/N_I$"
+    description: "number of symbols / number of inhibitory neurons per subpopulation"
+    original_value: ""
+  network.num_neurons:
+    name: "$N_E$"
+    description: "number of excitatory neurons per subpopulation"
+    original_value: ""
+  network.pattern_size:
+    name: "PS"
+    description: "target percentage of active excitatory neurons per population"
+    original_value: ""
+
+
+  encoding.dt_stm:
+    name: "$\\Delta T_{stm}$"
+    description: "inter-stimulus interval"
+    original_value:
+  encoding.dt_seq:
+    name: "$\\Delta T_{sew}$"
+    description: "inter-sequence interval"
+    original_value:
+  encoding.t_exc_start:
+    name: "$\\Delta T_{srt}$"
+    description: "time of first external stimulus"
+    original_value:
+#  encoding.t_scaling_factor:
+#    name: "$$"
+#    description: ""
+#    original_value:
+  encoding.num_repetitions:
+    name: "$N_r$"
+    description: "number of repetitions during one epoch"
+    original_value:
+
+
+  plasticity.type:
+    name: "-"
+    description: "plasticity type (BSS-2/original)"
+    original_value:
+  plasticity.execution_start:
+    name: "$t_{plex}$"
+    description: "time elapsed until on-chip plasticity is executed"
+    original_value:
+  plasticity.permanence_init_min:
+    name: "$P_{0, min}$"
+    description: "minimal initial permanence"
+    original_value:
+  plasticity.permanence_init_max:
+    name: "$P_{0, max}$"
+    description: "maximal initial permanence"
+    original_value:
+  plasticity.permanence_max:
+    name: "$P_{max}$"
+    description: "maximum permanence"
+    original_value:
+  plasticity.permanence_threshold:
+    name: "$\\theta_P$"
+    description: "synapse maturity threshold"
+    original_value:
+  plasticity.correlation_threshold:
+    name: "$\\theta_C$"
+    description: "correlation threshold used for BSS-2 plasticity"
+    original_value:
+  plasticity.w_mature:
+    name: "$W_{EE}$"
+    description: "weight of mature EE connections"
+    original_value:
+  plasticity.y:
+    name: "$y_i$"
+    description: "depression decrement"
+    original_value:
+  plasticity.lambda_plus:
+    name: "$\\lambda_+$"
+    description: "potentiation rate"
+    original_value:
+  plasticity.lambda_minus:
+    name: "$\\lambda_-$"
+    description: "depression rate"
+    original_value:
+  plasticity.lambda_h:
+    name: "$\\lambda_h$"
+    description: "homeostasis rate"
+    original_value:
+#  plasticity.homeostasis_depression_rate:
+#    name: "$$"
+#    description: ""
+#    original_value:
+  plasticity.target_rate_h:
+    name: "$z^*$"
+    description: "target dAP activity"
+    original_value:
+  plasticity.tau_plus:
+    name: "$\\tau_+$"
+    description: "potentiation time constant"
+    original_value:
+  plasticity.tau_h:
+    name: "$\\tau_h$"
+    description: "homeostasis time constant"
+    original_value:
+  plasticity.delta_t_min:
+    name: "$\\Delta t_{min}$"
+    description: "minimum time lag between pairs of pre- and postsynaptic spikes at which synapses are potentiated"
+    original_value:
+  plasticity.delta_t_max:
+    name: "$\\Delta t_{max}$"
+    description: "maximum time lag between pairs of pre- and postsynaptic spikes at which synapses are potentiated"
+    original_value:
+  plasticity.dt:
+    name: "$\\Delta t$"
+    description: "time resolution"
+    original_value:
+
+
+  neurons.inhibitory.c_m:
+    name: "$C_m$"
+    description: "membrane capacity"
+    original_value:
+  neurons.inhibitory.v_rest:
+    name: "$V_r$"
+    description: "resting potential"
+    original_value:
+  neurons.inhibitory.v_reset:
+    name: "$V_s$"
+    description: "reset potential"
+    original_value:
+  neurons.inhibitory.v_thresh:
+    name: "$V_\\theta$"
+    description: "spike threshold"
+    original_value:
+  neurons.inhibitory.tau_m:
+    name: "$\\tau_m$"
+    description: "membrane time constant"
+    original_value:
+#  neurons.inhibitory.tau_syn_I:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  neurons.inhibitory.tau_syn_E:
+#    name: "$$"
+#    description: ""
+#    original_value:
+  neurons.inhibitory.tau_refrac:
+    name: "$\\tau_r$"
+    description: "absolute refractory period"
+    original_value:
+
+  neurons.excitatory.c_m:
+    name: "$C_m$"
+    description: "membrane capacity"
+    original_value:
+  neurons.excitatory.v_rest:
+    name: "$V_r$"
+    description: "resting potential"
+    original_value:
+  neurons.excitatory.v_reset:
+    name: "$V_s$"
+    description: "reset potential"
+    original_value:
+  neurons.excitatory.v_thresh:
+    name: "$V_\\theta$"
+    description: "spike threshold"
+    original_value:
+  neurons.excitatory.tau_m:
+    name: "$\\tau_m$"
+    description: "membrane time constant"
+    original_value:
+#  neurons.excitatory.tau_syn_I:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  neurons.excitatory.tau_syn_E:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  neurons.excitatory.tau_syn_ext:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  neurons.excitatory.tau_syn_den:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  neurons.excitatory.tau_syn_inh:
+#    name: "$$"
+#    description: ""
+#    original_value:
+  neurons.excitatory.tau_refrac:
+    name: "$\\tau_r$"
+    description: "absolute refractory period"
+    original_value:
+
+  neurons.dendrite.I_p:
+    name: "$I_{dAP}$"
+    description: "dAP current plateau"
+    original_value:
+  neurons.dendrite.tau_dAP:
+    name: "$\\tau_{dAP}$"
+    description: "dAP duration"
+    original_value:
+  neurons.dendrite.theta_dAP:
+    name: "$\\theta_{dAP}$"
+    description: "dAP threshold"
+    original_value:
+
+
+  synapses.dyn_inh_weights:
+    name: "$DIW$"
+    description: "dynamic excitatory-inhibitory weights"
+    original_value:
+#  synapses.dyn_weight_calculation:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  synapses.w_exc_inh_dyn:
+#    name: "$$"
+#    description: ""
+#    original_value:
+  synapses.w_ext_exc:
+    name: "$W_{EX}$"
+    description: "weight of external-excitatory connections"
+    original_value:
+  synapses.w_exc_exc:
+    name: "$W_{EE}$"
+    description: "weight of soma-dendrite (excitatory) connections"
+    original_value:
+  synapses.w_exc_inh:
+    name: "$W_{EI}$"
+    description: "weight of excitatory-inhibitory connections"
+    original_value:
+  synapses.w_inh_exc:
+    name: "$W_{IE}$"
+    description: "weight of inhibitory-excitatory connections"
+    original_value:
+  synapses.p_exc_exc:
+    name: "$P_{con}$"
+    description: "connection probability for EE connections"
+    original_value:
+#  synapses.receptor_ext_exc:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  synapses.receptor_exc_exc:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  synapses.receptor_exc_inh:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  synapses.receptor_inh_exc:
+#    name: "$$"
+#    description: ""
+#    original_value:
+  synapses.delay_ext_exc:
+    name: "$d_{EX}$"
+    description: "delay of external (excitatory) connections"
+    original_value:
+  synapses.delay_exc_exc:
+    name: "$d_{EE}$"
+    description: "delay of soma-dendrite connections"
+    original_value:
+  synapses.delay_exc_inh:
+    name: "$d_{EI}$"
+    description: "delay of excitatory-inhibitory connections"
+    original_value:
+  synapses.delay_inh_exc:
+    name: "$d_{IE}$"
+    description: "delay of inhibitory-excitatory connections"
+    original_value:
+#  synapses.j_ext_exc_psp:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  synapses.j_exc_inh_psp:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  synapses.j_inh_exc_psp:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  calibration.v_rest_calib:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  calibration.padi_bus_dacen_extension:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  calibration.correlation_amplitude:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  calibration.correlation_time_constant:
+#    name: "$$"
+#    description: ""
+#    original_value:
+#  config_type:
+#    name: "$$"
+#    description: ""
+#    original_value:

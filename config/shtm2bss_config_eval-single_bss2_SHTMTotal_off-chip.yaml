@@ -1,8 +1,9 @@
 experiment:
   id: 'test'
+  opt_id: ''
   sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
+  # sequences: [['B', 'D'], ['B', 'A']]
   # sequences: [['D', 'A'], ['D', 'A']]
-  # sequences: [['A', 'C', 'B'], ['D', 'C', 'B'], ['A', 'D', 'C'], ['B', 'D', 'C']]
   runtime: null
   episodes: 100
   run_add_calib: False
@@ -27,7 +28,7 @@ network:
   pattern_size: 4
 encoding:
   dt_stm: 20.e-3
-  dt_seq: 50.e-3
+  dt_seq: 100.e-3
   t_exc_start: 15.e-3
   t_scaling_factor: 1.e-3
   num_repetitions: 1
@@ -36,10 +37,11 @@ plasticity:
   execution_start: 39.
   execution_interval: 40.
   learning_factor: 1.0
+  learning_rate_decay: null
   weight_learning: False
   weight_learning_scale: 1
-  permanence_init_min: 5
-  permanence_init_max: 5
+  permanence_init_min: 0
+  permanence_init_max: 8
   permanence_max: 20.
   permanence_threshold: 10.
   w_mature: 50
@@ -71,14 +73,14 @@ neurons:
     tau_syn_E: [2, 5]
     tau_refrac: [30, 5]
 synapses:
-  dyn_inh_weights: False
+  dyn_inh_weights: True
   dyn_weight_calculation: False
   w_exc_inh_dyn: null
   w_ext_exc: 65
   w_exc_exc: 0.0
   w_exc_inh: 28
   w_inh_exc: -400
-  p_exc_exc: 0.4
+  p_exc_exc: 0.35
   receptor_ext_exc: "excitatory"
   receptor_exc_exc: "excitatory"
   receptor_exc_inh: "excitatory"

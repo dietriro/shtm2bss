@@ -1,0 +1,24 @@
+fig-01:
+  plotting:
+    performance:
+
+  models:
+    0:
+      s1:
+        backend: nest
+        experiment_type: multi
+        experiment_id: org_s1_all-sym
+        experiment_num: 1
+      s2:
+        backend: nest
+        experiment_type: multi
+        experiment_id: org_s2_all-sym
+        experiment_num: 1
+#    1:
+#      backend: nest
+#      experiment_type: multi
+#      experiment_id: bss2_s1_all-sym
+#      experiment_num: 1
+fig-02:
+  backend: nest
+  experiment_type: multi

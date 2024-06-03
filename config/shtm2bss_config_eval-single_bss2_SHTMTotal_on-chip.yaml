@@ -1,8 +1,10 @@
 experiment:
-  id: 'test'
+  id: 'bss2-onchip_w-diw_s1'
+  # opt_id: "SHTMTotal_no-calib_on-chip_03_0165"
+  opt_id: "SHTMTotal_no-calib_on-chip_no-dyn-inh_01_0"
   sequences: [['A', 'C', 'B'], ['D', 'C', 'B']]
+  # sequences: [['B', 'D'], ['B', 'A']]
   # sequences: [['D', 'A'], ['D', 'A']]
-  # sequences: [['A', 'C', 'B'], ['D', 'C', 'B'], ['A', 'D', 'C'], ['B', 'D', 'C']]
   runtime: null
   episodes: 100
   run_add_calib: False
@@ -30,25 +32,26 @@ encoding:
   dt_seq: 600.e-3
   t_exc_start: 15.e-3
   t_scaling_factor: 1.e-3
-  num_repetitions: 200
+  num_repetitions: 100
 plasticity:
   type: 'original'
-  execution_start: 39.
-  execution_interval: 40.
-  learning_factor: 1.5
+  execution_start: 78.  # 78.
+  execution_interval: 80.  # 80.
+  learning_factor: 1.0
+  learning_rate_decay: null
   weight_learning: False
   weight_learning_scale: 1
   permanence_init_min: 5
   permanence_init_max: 5
   permanence_max: 20.
-  permanence_threshold: 128.
+  permanence_threshold: 40
   correlation_threshold: 80
   w_mature: 50
   y: 1
-  lambda_plus: 102 # 102 = 0.08 * 1270
-  lambda_minus: 0.002 # 2: 127 = 0.0015 * 1270, max: 127, min: 0
-  lambda_h: 18 # 18 = 0.014 * 1270
-  target_rate_h: 25
+  lambda_plus: 16 # 20 | 102 = 0.08 * 1270
+  lambda_minus: 0.006 # 0.006 | 2: 127 = 0.0015 * 1270, max: 127, min: 0
+  lambda_h: 12 # 16 | 18 = 0.014 * 1270
+  target_rate_h: 100
   tau_plus: 10.e-3
   tau_h: null
   delta_t_min: 2.e-3
@@ -72,12 +75,12 @@ neurons:
     tau_syn_E: [2, 5]
     tau_refrac: [30, 5]
 synapses:
-  dyn_inh_weights: False
+  dyn_inh_weights: True
   dyn_weight_calculation: False
   w_exc_inh_dyn: null
-  w_ext_exc: 65
+  w_ext_exc: 52    # dyn-w = 52
   w_exc_exc: 0.0
-  w_exc_inh: 28
+  w_exc_inh: 45    # dyn-w = 45
   w_inh_exc: -400
   p_exc_exc: 0.4
   receptor_ext_exc: "excitatory"
