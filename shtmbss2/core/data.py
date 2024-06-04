@@ -1,5 +1,7 @@
 import csv
 import inspect
+import os.path
+
 import numpy as np
 import yaml
 import datetime
@@ -20,12 +22,22 @@ def load_yaml(path_yaml, file_name_yaml):
     return data
 
 
-def load_config(network_type, experiment_type=ExperimentType.EVAL_SINGLE):
+def load_config(network_type, experiment_type=ExperimentType.EVAL_SINGLE, config_type=ConfigType.NETWORK):
     if not inspect.isclass(network_type):
         network_type = type(network_type)
 
-    config_file_name = (f"{RuntimeConfig.config_prefix}_{experiment_type}_"
-                        f"{RuntimeConfig.backend}_{network_type.__name__}.yaml")
+    if config_type == ConfigType.NETWORK:
+        if experiment_type == ExperimentType.EVAL_SINGLE:
+            plasticity_location = f"_{RuntimeConfig.plasticity_location}"
+        else:
+            plasticity_location = ""
+        config_file_name = (f"{RuntimeConfig.config_prefix}_{experiment_type}_"
+                            f"{RuntimeConfig.backend}_{network_type.__name__}{plasticity_location}.yaml")
+    elif config_type == ConfigType.PLOTTING:
+        config_file_name = f"{RuntimeConfig.config_prefix}_{config_type}.yaml"
+    else:
+        log.error(f"Unknown config type '{config_type}'. Aborting.")
+        return None
     return load_yaml(PATH_CONFIG, config_file_name)
 
 
@@ -64,13 +76,22 @@ def get_experiment_folder(net, experiment_type, experiment_id, experiment_num, e
     folder_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend],
                        str(EXPERIMENT_SUBFOLDERS[experiment_type]),
                        folder_name)
+    folder_path_ret = folder_path
 
     if experiment_subnum is not None:
-        folder_path = join(folder_path, f"{experiment_subnum:0{RuntimeConfig.subnum_digits}d}")
+        folder_path_ret = join(folder_path, f"{experiment_subnum:0{RuntimeConfig.subnum_digits}d}")
+        if not os.path.exists(folder_path_ret):
+            log.debug(f"Folder '{folder_path}' does not exist. Trying different subnums {0, 1, ..., 5}.")
+            for subnum_digits in range(5):
+                folder_path_ret = join(folder_path, f"{experiment_subnum:0{subnum_digits}d}")
+                if os.path.exists(folder_path_ret):
+                    break
+        if not os.path.exists(folder_path):
+            log.error(f"Folder '{folder_path}' does not exist. Could not find any existing subnum.")
     if instance_id is not None:
-        folder_path = join(folder_path, f"{instance_id:0{RuntimeConfig.instance_digits}d}")
+        folder_path_ret = join(folder_path, f"{instance_id:0{RuntimeConfig.instance_digits}d}")
 
-    return folder_path
+    return folder_path_ret
 
 
 def save_setup(data, experiment_num, create_eval_file, do_update, file_path, save_categories=False, max_decimals=5,
@@ -180,8 +201,8 @@ def save_setup(data, experiment_num, create_eval_file, do_update, file_path, sav
 def save_instance_setup(net, parameters, performance, experiment_num=None, experiment_subnum=None, instance_id=None,
                         optimized_parameters=None, **kwargs):
     params = flatten_dict(parameters.dict(exclude_none=True))
-    experiment_type = parameters.Experiment.type
-    experiment_id = parameters.Experiment.id
+    experiment_type = parameters.experiment.type
+    experiment_id = parameters.experiment.id
 
     folder_path_instance = get_experiment_folder(net, experiment_type, experiment_id, experiment_num,
                                                  experiment_subnum=experiment_subnum, instance_id=instance_id)
@@ -212,8 +233,9 @@ def save_instance_setup(net, parameters, performance, experiment_num=None, exper
 def save_experimental_setup(net, experiment_num=None, experiment_subnum=None, instance_id=None,
                             optimized_parameter_ranges=None, **kwargs):
     params = flatten_dict(net.p.dict(exclude_none=True))
-    experiment_type = net.p.Experiment.type
-    experiment_id = net.p.Experiment.id
+    params.pop("config_type")
+    experiment_type = net.p.experiment.type
+    experiment_id = net.p.experiment.id
 
     file_path = join(EXPERIMENT_FOLDERS[RuntimeConfig.backend], EXPERIMENT_SETUP_FILE_NAME[experiment_type])
 

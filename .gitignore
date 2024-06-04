@@ -2,6 +2,10 @@
 .idea/
 ./venv
 
+# Evaluation
+plasticity.npz
+weights.npz
+
 *.aux
 *.log
 *.toc

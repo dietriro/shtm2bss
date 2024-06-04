@@ -28,22 +28,22 @@ MCNeuron = pynn.NativeCellType
 
 class SHTMBase(network.SHTMBase, ABC):
 
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None,
-                 seed_offset=None, p=None,
-                 **kwargs):
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=None, experiment_num=None,
+                 experiment_subnum=None, instance_id=None, seed_offset=None, p=None, **kwargs):
         global MCNeuron
 
-        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum, instance_id=instance_id,
-                         seed_offset=seed_offset, p=p, **kwargs)
+        super().__init__(experiment_type=experiment_type, experiment_id=experiment_id, experiment_num=experiment_num,
+                         experiment_subnum=experiment_subnum, instance_id=instance_id, seed_offset=seed_offset, p=p,
+                         **kwargs)
 
         if not RuntimeConfig.backend_initialization:
-            nest.Install(self.p.Backend.module_name)
+            nest.Install(self.p.backend.module_name)
             RuntimeConfig.backend_initialization = True
-        MCNeuron = pynn.native_cell_type(self.p.Backend.neuron_name)
+        MCNeuron = pynn.native_cell_type(self.p.backend.neuron_name)
 
     def init_all_neurons_exc(self, num_neurons=None):
         neurons_exc = list()
-        for i in range(self.p.Network.num_symbols):
+        for i in range(self.p.network.num_symbols):
             # create all neurons for symbol i
             neurons_symbol = self.init_neurons_exc(num_neurons=num_neurons, symbol_id=i)
 
@@ -65,24 +65,24 @@ class SHTMBase(network.SHTMBase, ABC):
 
     def init_neurons_exc(self, num_neurons=None, symbol_id=None):
         if num_neurons is None:
-            num_neurons = self.p.Network.num_neurons
+            num_neurons = self.p.network.num_neurons
 
         # ToDo: Replace MCNeuron parameters with actual parameters from file
         all_neurons = pynn.Population(num_neurons, MCNeuron(
-            theta_dAP=self.p.Neurons.Dendrite.theta_dAP,
-            I_p=self.p.Neurons.Dendrite.I_p,
-            tau_dAP=self.p.Neurons.Dendrite.tau_dAP,
-            C_m=self.p.Neurons.Excitatory.c_m,
-            E_L=self.p.Neurons.Excitatory.v_rest,
-            V_reset=self.p.Neurons.Excitatory.v_reset,
-            V_th=self.p.Neurons.Excitatory.v_thresh,
-            tau_m=self.p.Neurons.Excitatory.tau_m,
-            tau_syn1=self.p.Neurons.Excitatory.tau_syn_ext,
-            tau_syn2=self.p.Neurons.Excitatory.tau_syn_den,
-            tau_syn3=self.p.Neurons.Excitatory.tau_syn_inh,
-            t_ref=self.p.Neurons.Excitatory.tau_refrac
+            theta_dAP=self.p.neurons.dendrite.theta_dAP,
+            I_p=self.p.neurons.dendrite.I_p,
+            tau_dAP=self.p.neurons.dendrite.tau_dAP,
+            C_m=self.p.neurons.excitatory.c_m,
+            E_L=self.p.neurons.excitatory.v_rest,
+            V_reset=self.p.neurons.excitatory.v_reset,
+            V_th=self.p.neurons.excitatory.v_thresh,
+            tau_m=self.p.neurons.excitatory.tau_m,
+            tau_syn1=self.p.neurons.excitatory.tau_syn_ext,
+            tau_syn2=self.p.neurons.excitatory.tau_syn_den,
+            tau_syn3=self.p.neurons.excitatory.tau_syn_inh,
+            t_ref=self.p.neurons.excitatory.tau_refrac
         ), initial_values={
-            "V_m": self.p.Neurons.Excitatory.v_rest,
+            "V_m": self.p.neurons.excitatory.v_rest,
             # "I_dend": 0
         }, label=f"exc_{id_to_symbol(symbol_id)}")
 
@@ -90,22 +90,22 @@ class SHTMBase(network.SHTMBase, ABC):
 
     def init_neurons_inh(self, num_neurons=None):
         if num_neurons is None:
-            num_neurons = self.p.Network.num_symbols
+            num_neurons = self.p.network.num_symbols
 
         # cm, i_offset, tau_m, tau_refrac, tau_syn_E, tau_syn_I, v_reset, v_rest, v_thresh
 
         # ToDo: Replace LIF parameters with actual parameters from file
         pop = pynn.Population(num_neurons, pynn.IF_curr_exp(
-            cm=self.p.Neurons.Inhibitory.c_m,
-            v_rest=self.p.Neurons.Inhibitory.v_rest,
-            v_reset=self.p.Neurons.Inhibitory.v_reset,
-            v_thresh=self.p.Neurons.Inhibitory.v_thresh,
-            tau_m=self.p.Neurons.Inhibitory.tau_m,
-            tau_syn_I=self.p.Neurons.Inhibitory.tau_syn_I,
-            tau_syn_E=self.p.Neurons.Inhibitory.tau_syn_E,
-            tau_refrac=self.p.Neurons.Inhibitory.tau_refrac * ms,
+            cm=self.p.neurons.inhibitory.c_m,
+            v_rest=self.p.neurons.inhibitory.v_rest,
+            v_reset=self.p.neurons.inhibitory.v_reset,
+            v_thresh=self.p.neurons.inhibitory.v_thresh,
+            tau_m=self.p.neurons.inhibitory.tau_m,
+            tau_syn_I=self.p.neurons.inhibitory.tau_syn_I,
+            tau_syn_E=self.p.neurons.inhibitory.tau_syn_E,
+            tau_refrac=self.p.neurons.inhibitory.tau_refrac * ms,
         ), initial_values={
-            "v": self.p.Neurons.Inhibitory.v_rest
+            "v": self.p.neurons.inhibitory.v_rest
         })
 
         pop.record([RECORDING_VALUES[NeuronType.Inhibitory][RecTypes.SPIKES],
@@ -119,9 +119,9 @@ class SHTMBase(network.SHTMBase, ABC):
         if init_recorder:
             self.neurons_ext.record(["spikes"])
 
-    def reset(self):
+    def reset(self, store_to_cache=False):
         # ToDo: Have a look if we can keep pynn from running 'store_to_cache' - this takes about a second for 5 epochs
-        pynn.reset(store_to_cache=False)
+        pynn.reset(store_to_cache=store_to_cache)
         # re-initialize external input, but not the recorders (doesn't work with nest)
         self.init_external_input(init_recorder=False, init_performance=False)
 
@@ -158,7 +158,7 @@ class SHTMBase(network.SHTMBase, ABC):
                     data[:, 1] *= neurons.recorder.sampling_interval
                 else:
                     spike_list = spike_ids.tolist()
-                    spikes = [[] for _ in range(self.p.Network.num_neurons)]
+                    spikes = [[] for _ in range(self.p.network.num_neurons)]
                     for spike_time, spike_id in spike_list:
                         spikes[int(spike_id)].append(spike_time)
                     for i_spikes in range(len(spikes)):
@@ -212,7 +212,7 @@ class SHTMBase(network.SHTMBase, ABC):
     #         return
     #
     #     if window == "initial":
-    #         max_time = self.p.Experiment.runtime
+    #         max_time = self.p.experiment.runtime
     #     else:
     #         max_time = get_current_time()
     #
@@ -220,22 +220,22 @@ class SHTMBase(network.SHTMBase, ABC):
     #         if window == "initial":
     #             x_lim_lower = 0.
     #         else:
-    #             x_lim_lower = get_current_time() - self.p.Experiment.runtime
+    #             x_lim_lower = get_current_time() - self.p.experiment.runtime
     #     if x_lim_upper is None:
     #         x_lim_upper = max_time
     #
     #     if type(symbols) is str and symbols == "all":
-    #         symbols = range(self.p.Network.num_symbols)
+    #         symbols = range(self.p.network.num_symbols)
     #     elif type(symbols) is list:
     #         pass
     #
     #     if len(symbols) == 1:
     #         fig, axs = plt.subplots(figsize=size)
     #     else:
-    #         fig, axs = plt.subplots(self.p.Network.num_symbols, 1, sharex="all", figsize=size)
+    #         fig, axs = plt.subplots(self.p.network.num_symbols, 1, sharex="all", figsize=size)
     #
     #     if seq_end is None:
-    #         seq_end = seq_start + self.p.Experiment.runtime
+    #         seq_end = seq_start + self.p.experiment.runtime
     #
     #     ax = None
     #
@@ -264,7 +264,7 @@ class SHTMBase(network.SHTMBase, ABC):
     #                 spikes_post = [s.base for s in self.get_neuron_data(neuron_type=NeuronType.Soma,
     #                                                                     neurons=neurons,
     #                                                                     value_type=RecTypes.SPIKES)]
-    #                 plot_dendritic_events(ax, spikes[1:], spikes_post, tau_dap=self.p.Neurons.Dendrite.tau_dAP,
+    #                 plot_dendritic_events(ax, spikes[1:], spikes_post, tau_dap=self.p.neurons.dendrite.tau_dAP,
     #                                       color=f"C{neurons_i.ID}", label=neurons_i.NAME.capitalize(),
     #                                       seq_start=seq_start, seq_end=seq_end)
     #             else:
@@ -276,21 +276,21 @@ class SHTMBase(network.SHTMBase, ABC):
     #
     #         # Configure the plot layout
     #         ax.set_xlim(x_lim_lower, x_lim_upper)
-    #         ax.set_ylim(-1, self.p.Network.num_neurons + 1)
-    #         ax.yaxis.set_ticks(range(self.p.Network.num_neurons + 2))
+    #         ax.set_ylim(-1, self.p.network.num_neurons + 1)
+    #         ax.yaxis.set_ticks(range(self.p.network.num_neurons + 2))
     #         ax.set_ylabel(self.id_to_letter(i_symbol), weight='bold', fontsize=20)
     #         # ax.grid(True, which='both', axis='both')
     #
     #         # Generate y-tick-labels based on number of neurons per symbol
-    #         y_tick_labels = ['Inh', '', '0'] + ['' for k in range(self.p.Network.num_neurons - 2)] + [
-    #             str(self.p.Network.num_neurons - 1)]
+    #         y_tick_labels = ['Inh', '', '0'] + ['' for k in range(self.p.network.num_neurons - 2)] + [
+    #             str(self.p.network.num_neurons - 1)]
     #         ax.set_yticklabels(y_tick_labels, rotation=45, fontsize=18)
     #
     #     # Create custom legend for all plots
     #     custom_lines = [Line2D([0], [0], color=f"C{n.ID}", label=n.NAME.capitalize(), lw=3) for n in neuron_types]
     #
     #     ax.set_xlabel("Time [ms]", fontsize=26, labelpad=14)
-    #     ax.xaxis.set_ticks(np.arange(x_lim_lower, x_lim_upper, self.p.Encoding.dt_stm/2))
+    #     ax.xaxis.set_ticks(np.arange(x_lim_lower, x_lim_upper, self.p.encoding.dt_stm/2))
     #     ax.tick_params(axis='x', labelsize=18)
     #
     #     plt.figlegend(handles=custom_lines, loc=(0.377, 0.885), ncol=3, labelspacing=0., fontsize=18, fancybox=True,
@@ -315,7 +315,7 @@ class SHTMBase(network.SHTMBase, ABC):
     #         size = (12, 10)
     #
     #     if type(neuron_range) is str and neuron_range == 'all':
-    #         neuron_range = range(self.p.Network.num_neurons)
+    #         neuron_range = range(self.p.network.num_neurons)
     #     elif type(neuron_range) is list:
     #         pass
     #     else:
@@ -366,11 +366,11 @@ class SHTMBase(network.SHTMBase, ABC):
 
 
 class SHTMTotal(SHTMBase, network.SHTMTotal):
-    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_subnum=None, instance_id=None,
-                 seed_offset=None, p=None,
-                 **kwargs):
-        super().__init__(experiment_type=experiment_type, experiment_subnum=experiment_subnum,
-                         plasticity_cls=Plasticity, instance_id=instance_id, seed_offset=seed_offset, p=p, **kwargs)
+    def __init__(self, experiment_type=ExperimentType.EVAL_SINGLE, experiment_id=None, experiment_num=None,
+                 experiment_subnum=None, instance_id=None, seed_offset=None, p=None, **kwargs):
+        super().__init__(experiment_type=experiment_type, experiment_id=experiment_id, experiment_num=experiment_num,
+                         experiment_subnum=experiment_subnum, plasticity_cls=Plasticity, instance_id=instance_id,
+                         seed_offset=seed_offset, p=p, **kwargs)
 
 
 class Plasticity(network.Plasticity):

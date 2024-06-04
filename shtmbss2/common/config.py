@@ -44,8 +44,8 @@ class RecTypes:
 
 class NamedStorage:
     @classmethod
-    def get_all(cls):
-        return [v for n, v in vars(cls).items() if not (n.startswith('_') or callable(v))]
+    def get_all(cls, case=str):
+        return [case(v) for n, v in vars(cls).items() if not (n.startswith('_') or callable(v))]
 
 
 class Backends(NamedStorage):
@@ -65,12 +65,28 @@ class FileType(NamedStorage):
     OPTIMIZATION = 'optimization'
 
 
+class PlotFileType(NamedStorage):
+    PDF = "pdf"
+    PNG = "png"
+    JPG = "jpg"
+
+
 class ExperimentType(NamedStorage):
     EVAL_SINGLE = 'eval-single'
     EVAL_MULTI = 'eval-multi'
     OPT_GRID = 'opt-grid'
     OPT_GRID_MULTI = 'opt-grid-multi'
     INSTANCE = 'instance'
+
+
+class ConfigType(NamedStorage):
+    NETWORK = 'network'
+    PLOTTING = 'plotting'
+
+
+class PlasticityLocation(NamedStorage):
+    ON_CHIP = 'on-chip'
+    OFF_CHIP = 'off-chip'
 
 
 class ParameterMatchingType(NamedStorage):
@@ -89,6 +105,7 @@ class PerformanceMetrics(NamedStorage):
     FN = 'false_negative'
     ACTIVE_SOMAS = 'active_somas'
     # ACTIVE_DENDRITES = 'active_dendrite'
+    DD = 'duplicate_dendrites'
 
 
 class StatisticalMetrics(NamedStorage):
@@ -105,8 +122,10 @@ class LogHandler(NamedStorage):
 
 class RuntimeConfig(NamedStorage):
     backend = None
+    plasticity_location = PlasticityLocation.OFF_CHIP
     backend_initialization = False
     config_prefix = "shtm2bss_config"
+    plot_file_types = [PlotFileType.PNG, PlotFileType.PDF]
     subnum_digits = 2
     instance_digits = 2
     saved_weights = ["exc_to_exc", "exc_to_inh"]
