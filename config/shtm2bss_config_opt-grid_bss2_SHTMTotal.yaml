@@ -1,0 +1,68 @@
+experiment:
+  parameter_matching: 'all'
+  fig_save: True
+  num_instances: 1
+  order_randomization: True
+  seed_offset: 0
+  plot_perf_dd: True
+parameters:
+  plasticity.lambda_plus:
+    enabled: True
+    min: 14
+    max: 18
+    step: 2
+    dtype: int
+  plasticity.lambda_minus:
+    enabled: False
+    min: 0.004
+    max: 0.008
+    step: 0.002
+    dtype: float
+  plasticity.lambda_h:
+    enabled: True
+    min: 8
+    max: 16
+    step: 2
+    dtype: int
+  plasticity.target_rate_h:
+    enabled: True
+    min: 60
+    max: 100
+    step: 20
+    dtype: int
+  plasticity.permanence_threshold:
+    enabled: True
+    min: 40
+    max: 80
+    step: 20
+    dtype: int
+  plasticity.correlation_threshold:
+    enabled: True
+    min: 70
+    max: 90
+    step: 10
+    dtype: int
+  synapses.w_ext_exc:
+    enabled: False
+    min: 46
+    max: 58
+    step: 2
+    dtype: float
+  synapses.w_exc_inh:
+    enabled: False
+    min: 30
+    max: 50
+    step: 5
+    dtype: int
+  synapses.w_inh_exc:
+    enabled: False
+    min: -360
+    max: -280
+    step: 10
+    dtype: float
+  synapses.p_exc_exc:
+    enabled: False
+    min: 0.3
+    max: 0.4
+    step: 0.05
+    dtype: float
