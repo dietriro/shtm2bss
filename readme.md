@@ -1,6 +1,6 @@
-# Spiking HTM for PyNN
+# Spiking HTM on BrainScaleS-2
 
-## Installation
+## Installation (NEST Simulation)
 
 Please make sure that the 'make' package is installed in your system.
 
@@ -57,4 +57,5 @@ pip install .
 
 ## To-Do's
 
+- [ ] Add instructions for BSS-2 installation/use
 - [ ] Add additional folders to installation (setup.py): config, data
