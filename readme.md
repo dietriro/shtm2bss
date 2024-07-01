@@ -1,5 +1,10 @@
 # Spiking HTM on BrainScaleS-2
 
+## Branches
+
+- main - Contains all code and the most relevant data
+- data - Contains all code and all data (from grid searches)
+
 ## Installation (NEST Simulation)
 
 Please make sure that the 'make' package is installed in your system.
